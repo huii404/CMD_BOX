@@ -16,25 +16,43 @@ void SystemOptimizer::windowsTelemetry() { sc.runAdmin("reg add \"HKLM\\SOFTWARE
 void SystemOptimizer::reduceShutdownTime() { sc.runCMD("reg add \"HKCU\\Control Panel\\Desktop\" /v \"WaitToKillAppTimeout\" /t REG_SZ /d \"2000\" /f"); }
 
 void SystemOptimizer::cleanDiskPro() {
-    sc.runCMD("cmd /c del /s /f /q \"%temp%\\*\" & rd /s /q \"%temp%\" & md \"%temp%\"");
-    sc.runCMD("cmd /c del /s /f /q \"%systemroot%\\temp\\*\" & rd /s /q \"%systemroot%\\temp\" & md \"%systemroot%\\temp\"");
-    sc.runCMD("cmd /c del /s /f /q \"%systemroot%\\Prefetch\\*\"");
+    sc.runCMD("cmd /c del /s /f /q \"I%temp%\\*\" & rd /s /q \"%temp%\" & md \"%temp%\"");
     sc.runCMD("cleanmgr /sagerun:1");
-    sc.runAdmin("dism /online /cleanup-image /startcomponentcleanup", true);
     sc.runCMD("cmd /c del /f /s /q \"%AppData%\\Microsoft\\Windows\\Recent\\*\"");
     sc.runCMD("powershell -NoProfile -Command \"Clear-RecycleBin -Force -ErrorAction SilentlyContinue\"");
-    sc.runAdmin("powershell -Command \"Get-DeliveryOptimizationStatus | Remove-DeliveryOptimizationCache -Confirm:$false\"", true);
     sc.runCMD("del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\Temp\\*\"");
     sc.runCMD("del /f /s /q \"%AppData%\\Local\\Microsoft\\Windows\\WER\\*\"");
     sc.runCMD("del /f /s /q \"%LocalAppData%\\Low\\Microsoft\\CryptnetUrlCache\\*\"");
     sc.runCMD("del /f /s /q \"%LocalAppData%\\D3DSCache\\*\"");
-    sc.runAdmin("netsh branchcache flush", true);
-    sc.runAdmin("powershell -Command \"Stop-Service -Name FontCache -Force; del /f /s /q $env:windir\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\* ; Start-Service -Name FontCache\"", true);
-    sc.runAdmin("dism /online /cleanup-image /analyzecomponentstore", true);
-    sc.runAdmin("dism /online /cleanup-image /startcomponentcleanup /resetbase", true);
     sc.runCMD("del /f /s /q %windir%\\WindowsUpdate.log");
-    sc.runAdmin("powershell -Command \"Get-EventLog -LogName * | ForEach { Clear-EventLog $_.Log }\"", true);
     sc.runCMD("taskkill /f /im explorer.exe & del /f /q %LocalAppData%\\IconCache.db & start explorer.exe");
+
+    string tempBatPath = "CleanDisk.bat";
+    ofstream batFile(tempBatPath);
+    
+    if (batFile.is_open()) {
+        batFile << "@echo off\n";
+        batFile << "chcp 65001 > nul\n"; // Đảm bảo không lỗi font 
+        batFile << "del /s /f /q \"%systemroot%\\temp\\*\" & rd /s /q \"%systemroot%\\temp\" & md \"%systemroot%\\temp\"\n";
+        batFile << "del /s /f /q \"%systemroot%\\Prefetch\\*\"\n";
+        batFile << "dism /online /cleanup-image /startcomponentcleanup\n";
+        batFile << "powershell -Command \"Get-DeliveryOptimizationStatus | Remove-DeliveryOptimizationCache -Confirm:$false\"\n";
+        batFile << "netsh branchcache flush\n";
+        batFile << "powershell -Command \"Stop-Service -Name FontCache -Force; del /f /s /q $env:windir\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\* ; Start-Service -Name FontCache\"\n";
+        batFile << "dism /online /cleanup-image /analyzecomponentstore\n";
+        batFile << "dism /online /cleanup-image /startcomponentcleanup /resetbase\n";
+        batFile << "powershell -Command \"Get-EventLog -LogName * | ForEach { Clear-EventLog $_.Log }\"\n";
+        
+        batFile.close();
+
+        cout << "\n[i] Dang yeu cau quyen Admin de thuc thi cac lenh he thong..." << endl;
+        sc.runAdmin(tempBatPath, true);
+
+        Sleep(500); 
+        std::filesystem::remove(tempBatPath);
+    } else {
+        cout << "[!] Khong the tao file bat tam thoi cho tien trinh Admin!" << endl;
+    }
 }
 
 void SystemOptimizer::cleanDiskBase() {
@@ -102,9 +120,7 @@ void SystemOptimizer::disableAllStartupApps() {
 }
 
 void SystemOptimizer::updateAllApps() {
-    cout << "[...] Đang cập nhật toàn bộ ứng dụng qua Winget...\n";
     sc.runCMD("winget upgrade --all --silent");
-    cout << "[OK] Cập nhật hoàn tất.\n";
 }
 
 void SystemOptimizer::fixWindowsUpdate() {

@@ -7,12 +7,6 @@ using namespace std;
 Manager::Manager(SystemCore &s) : sc(s) {}
 
 
-
-
-
-
-
-
 bool Manager::ServiceControlAPI(string serviceName, DWORD startupType, bool stopService) {
     SC_HANDLE scm = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
     if (!scm) return false;

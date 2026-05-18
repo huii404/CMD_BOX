@@ -15,7 +15,7 @@ class AppUI : public SystemCore {
     Internet internet;
     Information info;
     Manager manager;
-    SystemOptimizer opt; // Gộp Maintenance, Explorer, Optimal
+    SystemOptimizer opt;
     UtilityTools tools;
 
     bool titleSet = false;
@@ -100,7 +100,7 @@ public:
         cout << "[1] Tải và cài đặt ứng dụng (Chrome, Zalo, Discord...)\n";
         cout << "[2] Xóa app rác (Bloatware)\n";
         cout << "[3] Xóa cache trình duyệt (Chrome, Edge, CocCoc...)\n";
-        cout << "[4] Nâng cấp bản Windows (Home -> Pro -> ...)\n";
+        cout << "[4] Chuyển bản Windows (Home -> Pro -> ...)\n";
         cout << "[0] Quay lại\n";
         cout << "[Chọn]: ";
     }
@@ -192,8 +192,7 @@ public:
                     if (sub == 3) tools.autoPasteData();
                     if (sub == 4) {
                         cls();
-                        cout << "\n[1] Tạo 1 mã QR\n[2] Tạo nhiều mã QR\n[0] Back\n[Chọn]: ";
-                        int qrChoice = readInt("");
+                        int qrChoice = readInt("\n[1] Tạo 1 mã QR\n[2] Tạo nhiều mã QR\n[0] Back\n[Chọn]: ");
                         if (qrChoice == 0) continue;
                         if (qrChoice == 1) {
                             string line;
@@ -203,8 +202,7 @@ public:
                             tools.ShowQR(line);
                         }
                         if (qrChoice == 2) {
-                            cout << "Số lượng QR: ";
-                            int n = readInt("");
+                            int n = readInt("Số lượng QR: ");
                             tools.ShowN_QR(n);
                         }
                     }
