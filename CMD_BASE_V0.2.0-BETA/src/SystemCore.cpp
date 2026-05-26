@@ -97,7 +97,7 @@ bool SystemCore::runAdmin(const string &cmd, bool silent) {
     sei.fMask     = SEE_MASK_NOCLOSEPROCESS;
 
     if (ShellExecuteExW(&sei)) {
-        cout << "[OK] Dang chay lenh voi quyen Admin...\n";
+        cout << "[OK] Đang chạy lệnh với quyền Admin...\n";
         if (sei.hProcess) {
             WaitForSingleObject(sei.hProcess, INFINITE);
             CloseHandle(sei.hProcess);
@@ -105,8 +105,8 @@ bool SystemCore::runAdmin(const string &cmd, bool silent) {
         return true;
     } else {
         DWORD err = GetLastError();
-        if (err == ERROR_CANCELLED) cout << "[!] Nguoi dung tu choi cap quyen Admin.\n";
-        else                        cout << "[!] Khong the lay quyen Admin. (Ma loi: " << err << ")\n";
+        if (err == ERROR_CANCELLED) cout << "[!] Người dùng từ chối cấp quyền Admin.\n";
+        else                        cout << "[!] Không thể lấy quyền Admin. (Mã lỗi: " << err << ")\n";
         return false;
     }
 }

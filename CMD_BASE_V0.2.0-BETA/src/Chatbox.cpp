@@ -88,7 +88,7 @@ void Chatbox::chatboxWorker() {
             HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
             GetConsoleScreenBufferInfo(hConsole, &csbi);
             
-            // ÉP TỌA ĐỘ CỐ ĐỊNH: Dòng số 5 là khoảng không gian trống dành riêng cho Chatbox
+            // ÉP TỌA ĐỘ CỐ ĐỊNH: Dòng số 2 là khoảng không gian trống dành riêng cho Chatbox
             COORD chatPos = {0, 2}; 
             SetConsoleCursorPosition(hConsole, chatPos);
             

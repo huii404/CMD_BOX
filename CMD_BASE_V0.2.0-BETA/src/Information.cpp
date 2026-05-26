@@ -43,29 +43,6 @@ void Information::showNetworkDetails() {
     }
 }
 
-void Information::showInstalledSoftware() {
-    sc.cls();
-    cout << "┌────────────────────────────────────────────────────────┐\n";
-    cout << "│           KIỂM TRA PHẦN MỀM ĐÃ CÀI ĐẶT TRÊN OS         │\n";
-    cout << "└────────────────────────────────────────────────────────┘\n";
-    cout << "[1] Liệt kê ứng dụng chính thức (Qua Registry mở rộng)\n";
-    cout << "[2] Quét sâu toàn bộ các gói phần mềm hệ thống (Dùng WMIC)\n";
-    cout << "[0] Quay lại\n";
-    int choice = sc.readInt("Chọn tính năng: ");
-    
-    if (choice == 1) {
-        cout << "\n[*] Đang đọc Registry ứng dụng, vui lòng đợi...\n";
-        // Tận dụng hàm getAppLicenses bồ đã viết hoặc quét thêm
-        string apps = getAppLicenses();
-        cout << "-> Các app phát hiện: " << apps << "\n";
-    } 
-    else if (choice == 2) {
-        cout << "\n[*] Đang chạy lệnh kết xuất danh sách phần mềm từ WMIC...\n";
-        // Lệnh cmd từ tài liệu tham khảo để lọc tên và phiên bản ứng dụng
-        sc.runCMD("wmic product get name,version");
-    }
-}
-
 
 void Information::showDashboard() {
     double totalRAM, freeRAM;
@@ -114,8 +91,6 @@ void Information::showDashboard() {
     drawHorizontalLine((char)192, (char)193, (char)217, widths);
     sc.setColor(7);
 }
-
-
 
 
 // ================= CÁC HÀM API CHUYỂN TỪ SYSTEMCORE =================
@@ -234,7 +209,6 @@ string Information::getWindowsVersion() {
 
     // Logic quan trọng: Nếu Build >= 22000 thì là Windows 11
     if (buildNum >= 22000) {
-        // Thay thế "Windows 10" thành "Windows 11" trong chuỗi ProductName
         size_t pos = name.find("Windows 10");
         if (pos != string::npos) {
             name.replace(pos, 10, "Windows 11");
@@ -353,9 +327,9 @@ string Information::getWindowsLicenseStatus() {
             // Kiểm tra dòng "License Status"
             if (line.find("License Status:") != string::npos) {
                 if (line.find("Licensed") != string::npos) {
-                    result = "Licensed (Chinh thuc)";
+                    result = "Licensed (Chính thức)";
                 } else if (line.find("Initial grace period") != string::npos) {
-                    result = "Grace Period (Dung thu)";
+                    result = "Grace Period (Dùng thử)";
                 } else {
                     result = "Unlicensed/Expired";
                 }
@@ -386,17 +360,6 @@ void Information::showAllInfo() {
 
     // 1. In Dashboard phần cứng (Khung bo vuông)
     showDashboard();
-    cout << "\n";
-
-    sc.setColor(3);
-    cout << "┌────────────────────────────────────────────────────────┐\n";
-    cout << "│                 ỨNG DỤNG ĐÃ PHÁT HIỆN                  │\n";
-    cout << "└────────────────────────────────────────────────────────┘\n";
-    sc.setColor(7);
-    string apps = getAppLicenses();
-    cout << "-> Các phần mềm cơ bản: " << apps << "\n";
-    cout << "-> Danh sách phần mềm hệ thống (WMIC):\n";
-    sc.runCMD("wmic product get name,version"); 
     cout << "\n";
 
     sc.setColor(3);

@@ -1,4 +1,5 @@
 #include "../include/Internet.h"
+#include "../include/SystemCore.h"
 #include <ws2tcpip.h>
 #include <iostream>
 #include <fstream>
@@ -264,16 +265,6 @@ void Internet::quickSharePRO() {
     sharePath = path;
     shareName = path.substr(path.find_last_of("/\\") + 1);
 
-    cout << "\nPort (mặc định 8080): ";
-    string portStr;
-    getline(cin, portStr);
-    if (!portStr.empty()) {
-        try {
-            int p = stoi(portStr);
-            if (p >= 1024 && p <= 65535) httpPort = p;
-        } catch (...) {}
-    }
-
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
         cout << "WSAStartup failed\n";
@@ -306,8 +297,9 @@ void Internet::quickSharePRO() {
 
     cout << "\n"<< string(70, '=') << "\n";
     cout << "Server chạy!\n";
-    cout << "[IP]: " << ip << " | Port: " << httpPort << " | File: " << shareName << " (" << formatSize(shareSize) << ")\n";
-    cout << "[URL]: http://" << ip << ":" << httpPort << "/" << shareName << "\n";
+    cout << "[IP]: " << ip << " | Port: " << httpPort << " | File: " << shareName << " (" << formatSize(shareSize) << ")\n\n";
+        
+    cout << "[URL]: http://" << ip << ":" << httpPort << "/" << shareName << "\n\n";
 
     cout << "\nCtrl+C để dừng\n";
     cout << string(70, '=') << "\n\n";
@@ -320,7 +312,6 @@ void Internet::quickSharePRO() {
     }
 }
 
-// Thêm hàm khởi chạy server chat tương tự quickSharePRO
 
 void Internet::startLocalChat() {
     sc.cls();

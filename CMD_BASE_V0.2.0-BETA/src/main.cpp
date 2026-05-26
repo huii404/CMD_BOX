@@ -103,9 +103,9 @@ public:
 
     void run(){
         int mainChoice;
-        runCMD("title V0.2.0");
+        runCMD("title Github: huii404");
         while (true) {
-            chatbox.resume(); // Bật chatbox trước
+            chatbox.resume(); // Bật chatbox 
             cls();
             cout << "\n\n\n\n\n\n\n\n";
             mainMenu();
@@ -113,7 +113,7 @@ public:
             if (mainChoice == 0) break;
             if (mainChoice < 1 || mainChoice > 5) continue;
 
-            chatbox.pause(); // Khóa ngầm ngay lập tức khi chọn Menu con
+            chatbox.pause(); // Khóa  lập tức khi chọn Menu con
             Sleep(40);       // Chờ luồng phụ kịp đóng cổng vẽ trước khi xóa màn hình
 
             int sub;

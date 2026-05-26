@@ -16,7 +16,7 @@ void SystemOptimizer::windowsTelemetry() { sc.runAdmin("reg add \"HKLM\\SOFTWARE
 void SystemOptimizer::reduceShutdownTime() { sc.runCMD("reg add \"HKCU\\Control Panel\\Desktop\" /v \"WaitToKillAppTimeout\" /t REG_SZ /d \"2000\" /f"); }
 
 void SystemOptimizer::cleanDiskPro() {
-    sc.runCMD("cmd /c del /s /f /q \"I%temp%\\*\" & rd /s /q \"%temp%\" & md \"%temp%\"");
+    sc.runCMD("cmd /c del /s /f /q \"%temp%\\*\" & rd /s /q \"%temp%\" & md \"%temp%\"");
     sc.runCMD("cleanmgr /sagerun:1");
     sc.runCMD("cmd /c del /f /s /q \"%AppData%\\Microsoft\\Windows\\Recent\\*\"");
     sc.runCMD("powershell -NoProfile -Command \"Clear-RecycleBin -Force -ErrorAction SilentlyContinue\"");
@@ -25,14 +25,15 @@ void SystemOptimizer::cleanDiskPro() {
     sc.runCMD("del /f /s /q \"%LocalAppData%\\Low\\Microsoft\\CryptnetUrlCache\\*\"");
     sc.runCMD("del /f /s /q \"%LocalAppData%\\D3DSCache\\*\"");
     sc.runCMD("del /f /s /q %windir%\\WindowsUpdate.log");
-    sc.runCMD("taskkill /f /im explorer.exe & del /f /q %LocalAppData%\\IconCache.db & start explorer.exe");
 
-    string tempBatPath = "CleanDisk.bat";
+   fs::path absoluteBatPath = fs::absolute("CleanDisk.bat");
+    string tempBatPath = absoluteBatPath.string();
+
     ofstream batFile(tempBatPath);
     
     if (batFile.is_open()) {
         batFile << "@echo off\n";
-        batFile << "chcp 65001 > nul\n"; // Đảm bảo không lỗi font 
+        batFile << "chcp 65001 > nul\n"; 
         batFile << "del /s /f /q \"%systemroot%\\temp\\*\" & rd /s /q \"%systemroot%\\temp\" & md \"%systemroot%\\temp\"\n";
         batFile << "del /s /f /q \"%systemroot%\\Prefetch\\*\"\n";
         batFile << "dism /online /cleanup-image /startcomponentcleanup\n";
@@ -42,14 +43,12 @@ void SystemOptimizer::cleanDiskPro() {
         batFile << "dism /online /cleanup-image /analyzecomponentstore\n";
         batFile << "dism /online /cleanup-image /startcomponentcleanup /resetbase\n";
         batFile << "powershell -Command \"Get-EventLog -LogName * | ForEach { Clear-EventLog $_.Log }\"\n";
-        
+        batFile << "exit\n";
         batFile.close();
-
         cout << "\n[i] Dang yeu cau quyen Admin de thuc thi cac lenh he thong..." << endl;
-        sc.runAdmin(tempBatPath, true);
-
+        sc.runAdmin("\"" + tempBatPath + "\"", true);
         Sleep(500); 
-        std::filesystem::remove(tempBatPath);
+        fs::remove(absoluteBatPath);
     } else {
         cout << "[!] Khong the tao file bat tam thoi cho tien trinh Admin!" << endl;
     }
@@ -174,15 +173,83 @@ void SystemOptimizer::clearBrowserCache() {
 }
 
 void SystemOptimizer::optimizeSystemPRO() {
-    cout << "[...] Bắt đầu tối ưu hệ thống...\n\n";
-    cleanDiskPro();
-    reduceShutdownTime();
-    Consumer_Content();
-    windowsTelemetry();
-    Hibernate();
-    clearBrowserCache();
-    cout << "[OK] Hệ thống đã được tối ưu!\n";
+    sc.cls();
+    cout << "================ TỐI ƯU HỆ THỐNG (PRO) ================\n";
+    cout << "[...] Đang chuẩn bị gói cấu hình tối ưu, vui lòng đợi...\n\n";
+
+    // Lấy đường dẫn tuyệt đối cho file .bat tạm thời để tránh lỗi lạc hướng thư mục của Admin
+    fs::path absoluteBatPath = fs::absolute("OptimizeSystem.bat");
+    string tempBatPath = absoluteBatPath.string();
+
+    ofstream batFile(tempBatPath);
+    
+    if (batFile.is_open()) {
+        batFile << "@echo off\n";
+        batFile << "chcp 65001 > nul\n"; // Đảm bảo hiển thị font tiếng Việt nếu có xuất chữ
+        batFile << "echo ======= TIẾN TRÌNH TỐI ƯU HỆ THỐNG ĐANG CHẠY CHUYÊN SÂU =======\n\n";
+
+        // cleanDiskPro
+        batFile << "echo [+] Dang don dep bo nho dem va file rac Pro...\n";
+        batFile << "del /s /f /q \"%systemroot%\\temp\\*\" & rd /s /q \"%systemroot%\\temp\" & md \"%systemroot%\\temp\"\n";
+        batFile << "del /s /f /q \"%systemroot%\\Prefetch\\*\"\n";
+        batFile << "dism /online /cleanup-image /startcomponentcleanup\n";
+        batFile << "powershell -Command \"Get-DeliveryOptimizationStatus | Remove-DeliveryOptimizationCache -Confirm:$false\"\n";
+        batFile << "netsh branchcache flush\n";
+        batFile << "powershell -Command \"Stop-Service -Name FontCache -Force; del /f /s /q $env:windir\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\* ; Start-Service -Name FontCache\"\n";
+        batFile << "dism /online /cleanup-image /analyzecomponentstore\n";
+        batFile << "dism /online /cleanup-image /startcomponentcleanup /resetbase\n";
+        batFile << "powershell -Command \"Get-EventLog -LogName * | ForEach { Clear-EventLog $_.Log }\"\n";
+
+        //(Giảm thời gian chờ tắt máy)
+        batFile << "echo [+] Dang toi uu toc do tat may...\n";
+        batFile << "reg add \"HKCU\\Control Panel\\Desktop\" /v \"WaitToKillAppTimeout\" /t REG_SZ /d \"2000\" /f\n";
+
+        // (Tắt cài đặt app quảng cáo ngầm)
+        batFile << "echo [+] Dang tat tu dong cai dat app quang cao ngam...\n";
+        batFile << "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager\" /v \"SilentInstalledAppsEnabled\" /t REG_DWORD /d 0 /f\n";
+
+        // (Tắt theo dõi, thu thập dữ liệu của MS)
+        batFile << "echo [+] Dang chan Windows Telemetry de tiet kiem tai nguyen...\n";
+        batFile << "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection\" /v AllowTelemetry /t REG_DWORD /d 0 /f\n";
+
+        //(Tắt chế độ ngủ đông để giải phóng file hiberfil.sys vài GB)
+        batFile << "echo [+] Dang tat tinh nang Hibernate de lay lai dung luong o C...\n";
+        batFile << "powercfg -h off\n";
+
+        // Lệnh kết thúc bắt buộc để đóng cửa sổ Admin sau khi chạy xong toàn bộ
+        batFile << "\necho [OK] Tat ca tac vu toi uu da hoan tat!\n";
+        batFile << "exit\n";
+        
+        batFile.close();
+
+        // CHẠY DUY NHẤT 1 LẦN CỬA SỔ ADMIN
+        cout << "[i] Dang yeu cau 1 quyen Admin duy nhat de thuc thi toan bo goi toi uu..." << endl;
+        sc.runAdmin("\"" + tempBatPath + "\"", true);
+
+        // 6. CÁC HÀM KHÔNG CẦN ADMIN (Chạy song song bằng luồng thường của app)
+        cout << "\n[...] Dang don dep bo nho dem Browser (Chrome, Edge, Firefox...)\n";
+        clearBrowserCache(); 
+
+        // Xóa dọn các file rác người dùng không cần quyền Admin ở máy chính
+        sc.runCMD("cmd /c del /s /f /q \"%temp%\\*\" & rd /s /q \"%temp%\" & md \"%temp%\"");
+        sc.runCMD("cleanmgr /sagerun:1");
+        sc.runCMD("cmd /c del /f /s /q \"%AppData%\\Microsoft\\Windows\\Recent\\*\"");
+        sc.runCMD("powershell -NoProfile -Command \"Clear-RecycleBin -Force -ErrorAction SilentlyContinue\"");
+        sc.runCMD("del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\Temp\\*\"");
+        sc.runCMD("del /f /s /q \"%AppData%\\Local\\Microsoft\\Windows\\WER\\*\"");
+        sc.runCMD("del /f /s /q \"%LocalAppData%\\Low\\Microsoft\\CryptnetUrlCache\\*\"");
+        sc.runCMD("del /f /s /q \"%LocalAppData%\\D3DSCache\\*\"");
+        sc.runCMD("del /f /s /q %windir%\\WindowsUpdate.log");
+
+        Sleep(800); 
+        fs::remove(absoluteBatPath); // Tự động dọn file bat tạm sau khi thực thi xong
+
+        cout << "\n[OK] Hệ thống đã được tối ưu hóa PRO toàn diện!\n";
+    } else {
+        cout << "[!] Khong the khoi tao file cau hinh bat tam thoi!" << endl;
+    }
 }
+
 
 void SystemOptimizer::enableSecurityPRO() {
     sc.runAdmin("netsh advfirewall set allprofiles state on", true);
