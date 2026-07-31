@@ -106,7 +106,7 @@ public:
         cout << " [12] Tắt app khởi động cùng Windows\n";
         cout << " [13] Cập nhật tất cả ứng dụng\n";
         cout << " [14] Sửa lỗi Windows Update (Kẹt 0%)\n";
-        cout << " [15] Tối ưu Taskbar (Tắt nút thừa)\n";
+        cout << " [15] Tối ưu Taskbar\n";
         cout << " [0] Quay lại\n";
         cout << " [Chọn]: ";
     }
@@ -127,7 +127,7 @@ public:
         cout << " [12] Chặn cổng nguy hiểm\n";
         cout << " [13] Cấu hình DNS over HTTPS\n";
         cout << " [14] Kiểm tra trạng thái bảo mật\n";
-        cout << " [15] Tăng cường bảo mật toàn diện (PRO)\n";
+        cout << " [15] Tăng cường bảo mật (PRO)\n";
         cout << " [16] Tối ưu mạng & bảo mật (PRO)\n";
         cout << " [0] Quay lại\n";
         cout << " [Chọn]: ";

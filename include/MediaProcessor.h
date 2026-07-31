@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <cstdio>
 #include <mutex>
+#include <iostream> 
 
 class MediaProcessor {
 private:

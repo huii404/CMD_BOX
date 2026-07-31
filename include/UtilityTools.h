@@ -26,6 +26,8 @@ public:
     void uninstallBloatware();
     void downloadManager();
     void processDownload(const AppInfo& app);
+    void showToolsMenu();
+    void showDownloadHistory();
 };
 
 #endif 

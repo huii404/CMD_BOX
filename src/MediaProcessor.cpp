@@ -300,6 +300,7 @@ void MediaProcessor::changeSpeedCore(const std::string& inputPath, const std::st
     std::string cmd = ffmpeg + " -y -i \"" + inputPath + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 " + filter + " -c:v libx264 -crf 23 -c:a aac \"" + outputPath + "\"";
     runCommand(cmd);
 }
+
 void MediaProcessor::processMediaAuto() {
     bool hasPreviousRun = false;
     int totalTotalFiles = 0;
@@ -308,14 +309,11 @@ void MediaProcessor::processMediaAuto() {
     long long totalBytesSaved = 0;
 
     while (true) {
+        // === FIX: Xóa buffer input và flush console ===
         std::cin.clear();
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-        
-        // === FIX: Gọi FlushConsoleInputBuffer để xóa buffer console ===
         FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
-        
-        std::cout << std::flush; 
-        system("cls"); 
+        std::cout << std::flush;
+        system("cls");
 
         cout << " ==================================================\n";
         cout << "    BỘ TỐI ƯU DUNG LƯỢNG \n";
@@ -338,12 +336,12 @@ void MediaProcessor::processMediaAuto() {
                 sizeUnit = "KB";
             }
             
-            cout << "  số file đầu vào: " << totalTotalFiles << "\n";
+            cout << "  Số file đầu vào: " << totalTotalFiles << "\n";
             
             if (totalBytesSaved > 0) {
-                printf("   đã giải phóng: %.2f %s\n", finalSavedSize, sizeUnit.c_str());
+                printf("  Đã giải phóng: %.2f %s\n", finalSavedSize, sizeUnit.c_str());
             } else {
-                cout << "  đã giải phóng: 0 Bytes\n";
+                cout << "  Đã giải phóng: 0 Bytes\n";
             }
             
             cout << "  - Số file tối ưu  : " << totalOptimizedCount << "\n";
@@ -444,7 +442,7 @@ void MediaProcessor::processMediaAuto() {
             }
             bool renderSuccess = false;
 
-            // Kiểm tra dung lượng file trước khi nén ===
+            // Kiểm tra dung lượng file trước khi nén
             uintmax_t originalSize = 0;
             try {
                 originalSize = fs::file_size(inPath);
@@ -462,7 +460,6 @@ void MediaProcessor::processMediaAuto() {
             if (find(imageExts.begin(), imageExts.end(), ext) != imageExts.end()) {
                 if (ext == ".heic") {
                     string ffmpeg = getFFmpegPath();
-                    // === FIX: Thêm -hide_banner -loglevel error để ẩn output ===
                     string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + input + "\" -map_metadata 0 -movflags +faststart -q:v 5 \"" + tempOutPath.string() + "\"";
                     cout << " \x1b[35m[Media]\x1b[0m Đang chuyển HEIC sang JPG...";
                     renderSuccess = runCommand(cmd) && fs::exists(tempOutPath);
@@ -503,7 +500,6 @@ void MediaProcessor::processMediaAuto() {
                     if (compressedSize < originalSize) {
                         currentBytesSaved += (originalSize - compressedSize);
                         
-                        // === FIX: Kiểm tra tồn tại trước khi xóa ===
                         if (fs::exists(inPath)) {
                             fs::remove(inPath);
                         }
@@ -534,7 +530,6 @@ void MediaProcessor::processMediaAuto() {
                 cout << "\n    -> [Lỗi] Quá trình render thất bại!\n\n";
             }
             
-            // === FIX: Flush output sau mỗi file ===
             fflush(stdout);
         }
         
@@ -544,15 +539,28 @@ void MediaProcessor::processMediaAuto() {
         totalBytesSaved += currentBytesSaved; 
         hasPreviousRun = true;
 
-        // === FIX: Tự động quay về menu ===
+        // === FIX: Đảm bảo hiển thị và chờ đủ 2 giây ===
         cout << "\n ==================================================\n";
         cout << " [*] Đã xử lý xong " << inputs.size() << " file!\n";
         cout << " ==================================================\n";
         cout << " Tự động quay về menu thống kê sau 2 giây...\n";
-        Sleep(2000);
+        cout.flush();
+        
+        // === FIX: Xóa buffer trước khi sleep ===
+        FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
+        
+        // Đếm ngược 2 giây
+        for (int i = 2; i > 0; i--) {
+            Sleep(1000);
+            cout << " " << i << "... ";
+            cout.flush();
+        }
+        cout << "\n";
+        
+        // Đảm bảo đã sleep đủ
+        Sleep(100);
     }
 }
-
 
 void MediaProcessor::processExtractAudioBatch() {
     cin.clear();

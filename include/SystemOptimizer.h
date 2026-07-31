@@ -36,4 +36,4 @@ public:
     void optimizeTaskbar();  
 };
 
-#endif // SYSTEMOPTIMIZER_H
+#endif 

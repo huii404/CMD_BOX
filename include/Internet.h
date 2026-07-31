@@ -60,4 +60,4 @@ public:
     void checkSecurityStatus();
 };
 
-#endif // INTERNET_H
+#endif 

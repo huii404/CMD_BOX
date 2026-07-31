@@ -35,7 +35,6 @@ void SystemCore::cls() {
     std::cout << std::flush; // Buộc đẩy hết dữ liệu cout cũ ra màn hình
     std::fflush(stdout);     // Dọn sạch luồng stdout của hệ thống
     
-    // Thực hiện lệnh xóa màn hình tùy thuộc cách bạn đang viết:
     system("cls"); 
 }
 std::string SystemCore::getTime() {
