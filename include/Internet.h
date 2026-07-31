@@ -34,12 +34,8 @@ private:
     std::string getTime();
     HTTPRequest parseReq(const std::string &raw);
     void sendFile(SOCKET client);
-    
-    // ==================== KHU VỰC SỬA ĐỔI TẠI ĐÂY ====================
     void handleClient(SOCKET client);     
     void handleChatClient(SOCKET client); 
-    // =================================================================
-    
     bool checkFileSizeAndConfirm(const std::string &path, long long &outSize);
     bool getFileSizeInfoAndPrompt(const std::string &path, long long &outSize);
 

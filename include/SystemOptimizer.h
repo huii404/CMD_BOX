@@ -33,7 +33,7 @@ public:
     bool ServiceControlAPI(std::string serviceName, DWORD startupType, bool stopService);
     void turnOffServicesMenu();
     void runBatchAsAdmin(const std::string &batContent, const std::string &description = "");
-    void optimizeTaskbar();  // Tối ưu Taskbar
+    void optimizeTaskbar();  
 };
 
 #endif // SYSTEMOPTIMIZER_H

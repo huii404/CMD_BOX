@@ -28,4 +28,4 @@ public:
     void processDownload(const AppInfo& app);
 };
 
-#endif // UTILITYTOOLS_H
+#endif 

@@ -91,7 +91,6 @@ string MediaProcessor::getFFmpegPath() {
 
 
 vector<string> MediaProcessor::getPathInput(const string& promptText) {
-    // === FIX: Đảm bảo buffer đã được reset từ bên ngoài ===
     string rawInput;
     cout << promptText;
     getline(cin, rawInput);
@@ -261,9 +260,7 @@ int MediaProcessor::readIntLocal(const std::string& prompt) {
     }
 }
 
-// ==================== HÀM CHÍNH CÓ SỬA ====================
 
-// === 1. COMPRESS IMAGE - THÊM MAP_METADATA ===
 void MediaProcessor::compressImage(const string& inputPath, const string& outputPath, int quality) {
     string ffmpeg = getFFmpegPath();
     // THÊM: -map_metadata 0 để giữ metadata gốc
@@ -274,7 +271,6 @@ void MediaProcessor::compressImage(const string& inputPath, const string& output
     else cout << "\n -> [Lỗi] Quá trình xử lý thất bại hoặc sai đường dẫn!\n";
 }
 
-// === 2. EXTRACT AUDIO - THÊM MAP_METADATA ===
 void MediaProcessor::extractAudioCore(const std::string& inputPath, const std::string& outputPath) {
     std::string ffmpeg = getFFmpegPath();
     // THÊM: -map_metadata 0 để giữ metadata của audio
@@ -282,7 +278,7 @@ void MediaProcessor::extractAudioCore(const std::string& inputPath, const std::s
     runCommand(cmd);
 }
 
-// === 3. CHANGE SPEED - THÊM MAP_METADATA ===
+
 void MediaProcessor::changeSpeedCore(const std::string& inputPath, const std::string& outputPath, float speedMultiplier) {
     std::string ffmpeg = getFFmpegPath();
     float videoPts = 1.0f / speedMultiplier;
@@ -312,7 +308,6 @@ void MediaProcessor::processMediaAuto() {
     long long totalBytesSaved = 0;
 
     while (true) {
-        // === FIX: Reset buffer hoàn toàn ===
         std::cin.clear();
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         
@@ -357,7 +352,6 @@ void MediaProcessor::processMediaAuto() {
         }
         cout << "\n";
 
-        // === FIX: Đọc input kéo thả ===
         cout << " -> Kéo thả N file vào đây để nén tiếp ( 0 để thoát): ";
         string rawInput;
         getline(cin, rawInput);
@@ -450,7 +444,7 @@ void MediaProcessor::processMediaAuto() {
             }
             bool renderSuccess = false;
 
-            // === FIX: Kiểm tra dung lượng file trước khi nén ===
+            // Kiểm tra dung lượng file trước khi nén ===
             uintmax_t originalSize = 0;
             try {
                 originalSize = fs::file_size(inPath);

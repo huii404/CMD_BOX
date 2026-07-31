@@ -71,10 +71,6 @@ private:
 
 public:
     AppUI() {
-        // TỐI ƯU KHỞI ĐỘNG
-        setFileLogging(false);   // Tắt file logging để tăng tốc (bật khi debug)
-        setConsoleLogging(true); // Bật console logging
-        
         // Pre-allocate memory cho các chuỗi/mảng đệm
         std::string dummy;
         dummy.reserve(1024);
