@@ -1,6 +1,7 @@
 #ifndef MEDIA_PROCESSOR_H
 #define MEDIA_PROCESSOR_H
 
+#include "../include/SystemCore.h"
 #include <string>
 #include <windows.h>
 #include <vector>
@@ -16,12 +17,9 @@ class MediaProcessor {
 private:
     std::string getFFmpegPath();
     bool runCommand(const std::string& command);
-    std::vector<std::string> getPathInput(const std::string& promptText); 
-    
     void compressImage(const std::string& inputPath, const std::string& outputPath, int quality);
     void extractAudioCore(const std::string& inputPath, const std::string& outputPath);
     void changeSpeedCore(const std::string& inputPath, const std::string& outputPath, float speedMultiplier);
-    int readIntLocal(const std::string& prompt);
 
 public:
     MediaProcessor();
@@ -31,7 +29,11 @@ public:
     void processExtractAudioBatch();
     void processChangeSpeedBatch();
     void processMediaEnhancementAuto();
-    void processConvertFormatBatch();  
+    void processConvertFormatBatch();
+    void normalizeMediaFilenames();
+    void hideFileInImage();
+    void hideFileInVideo();
+    void extractHiddenFromMedia();
 };
 
 #endif

@@ -12,6 +12,17 @@
 #pragma comment(lib, "ws2_32.lib")
 namespace fs = std::filesystem;
 
+std::string SystemCore::trim(const std::string& str) {
+    std::string s = str;
+    while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' ')) {
+        s.pop_back();
+    }
+    while (!s.empty() && s.front() == ' ') {
+        s.erase(0, 1);
+    }
+    return s;
+}
+
 // ==================== CONSTRUCTOR & DESTRUCTOR ====================
 
 SystemCore::SystemCore() {
@@ -37,16 +48,164 @@ void SystemCore::cls() {
     
     system("cls"); 
 }
-std::string SystemCore::getTime() {
+
+std::string SystemCore::getTime(bool includeDate) {
     time_t now = time(0);
     tm *t = localtime(&now);
     std::stringstream ss;
-    ss << "[" << std::setfill('0') << std::setw(2) << t->tm_mday << "/" 
-       << std::setw(2) << t->tm_mon + 1 << "/" << t->tm_year + 1900 << "-" 
-       << std::setw(2) << t->tm_hour << ":" << std::setw(2) << t->tm_min << ":" 
+    if (includeDate) {
+        ss << "[" << std::setfill('0') << std::setw(2) << t->tm_mday << "/" 
+           << std::setw(2) << t->tm_mon + 1 << "/" << t->tm_year + 1900 << "-";
+    } else {
+        ss << "[";
+    }
+    ss << std::setw(2) << t->tm_hour << ":" << std::setw(2) << t->tm_min << ":" 
        << std::setw(2) << t->tm_sec << "]";
     return ss.str();
 }
+
+
+std::string SystemCore::formatSize(long long b) {
+    static const char* units[] = {"B", "KB", "MB", "GB", "TB"};
+    double sz = (double)b;
+    int i = 0;
+    while (sz >= 1024.0 && i < 4) {
+        sz /= 1024.0;
+        i++;
+    }
+    char buf[32];
+    if (i == 0) {
+        sprintf_s(buf, sizeof(buf), "%.0f %s", sz, units[i]);
+    } else {
+        sprintf_s(buf, sizeof(buf), "%.2f %s", sz, units[i]);
+    }
+    return std::string(buf);
+}
+
+
+bool SystemCore::runRawCommand(const std::string& command) {
+    // Chuyển đổi command sang UTF-16
+    int wchars_num = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, NULL, 0);
+    if (wchars_num == 0) return false;
+    
+    std::vector<wchar_t> wcmd(wchars_num);
+    if (MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, wcmd.data(), wchars_num) == 0) return false;
+
+    STARTUPINFOW si = {sizeof(si)};
+    PROCESS_INFORMATION pi = {};
+    si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+    si.wShowWindow = SW_HIDE;
+    
+    SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+    HANDLE hNull = CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_WRITE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hNull != INVALID_HANDLE_VALUE) {
+        si.hStdOutput = hNull;
+        si.hStdError = hNull;
+        si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    }
+    
+    bool success = false;
+    if (CreateProcessW(NULL, wcmd.data(), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+        WaitForSingleObject(pi.hProcess, INFINITE);
+        DWORD exitCode = 0;
+        if (GetExitCodeProcess(pi.hProcess, &exitCode)) {
+            success = (exitCode == 0);
+        }
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    }
+    if (hNull != INVALID_HANDLE_VALUE) CloseHandle(hNull);
+    return success;
+}
+
+
+std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
+    if (rawInput.empty() || rawInput == "0") return {};
+
+    // Tách chuỗi (giữ nguyên logic cũ của MediaProcessor)
+    std::string processed = rawInput;
+    for (int i = (int)processed.length() - 3; i >= 1; --i) {
+        char prev = processed[i - 1];
+        char curr = processed[i];
+        char next = processed[i + 1];
+        char next2 = processed[i + 2];
+        bool isPrevNonSpace = (prev != ' ' && prev != '\t' && prev != '"' && prev != '\0');
+        bool isDriveLetter = ((curr >= 'A' && curr <= 'Z') || (curr >= 'a' && curr <= 'z'));
+        bool isDrivePattern = (next == ':' && next2 == '\\');
+        if (isPrevNonSpace && isDriveLetter && isDrivePattern) {
+            processed.insert(i, " ");
+        }
+    }
+    
+    std::vector<std::string> paths;
+    std::string token;
+    bool inQuotes = false;
+    for (size_t i = 0; i <= processed.size(); ++i) {
+        char c = (i < processed.size()) ? processed[i] : '\0';
+        if (c == '"') { inQuotes = !inQuotes; continue; }
+        bool isSep = (!inQuotes && (c == ' ' || c == '\t' || c == '\0'));
+        if (isSep) {
+            if (!token.empty()) {
+                if (!token.empty() && token.front() == '"') token.erase(0, 1);
+                if (!token.empty() && token.back() == '"') token.pop_back();
+                
+                // Chuẩn hóa đường dẫn (sửa \\ thành \)
+                size_t p = token.find("\\\\");
+                while (p != std::string::npos) {
+                    token.replace(p, 2, "\\");
+                    p = token.find("\\\\", p + 1);
+                }
+                
+                if (std::filesystem::exists(token)) {
+                    paths.push_back(token);
+                } else {
+                    std::cout << "    [!] Không tìm thấy: " << token << "\n";
+                }
+                token.clear();
+            }
+        } else if (c != '\0') {
+            token += c;
+        }
+    }
+    return paths;
+}
+
+
+std::string SystemCore::urlDecode(const std::string& str) {
+    std::string decoded;
+    for (size_t i = 0; i < str.length(); ++i) {
+        if (str[i] == '%') {
+            if (i + 2 < str.length()) {
+                int value;
+                sscanf(str.substr(i + 1, 2).c_str(), "%x", &value);
+                decoded += static_cast<char>(value);
+                i += 2;
+            }
+        } else if (str[i] == '+') {
+            decoded += ' ';
+        } else {
+            decoded += str[i];
+        }
+    }
+    return decoded;
+}
+
+
+bool SystemCore::runBatchAsAdmin(const std::string& batContent, const std::string& description) {
+    char tempPath[MAX_PATH];
+    GetTempPathA(MAX_PATH, tempPath);
+    std::string batPath = std::string(tempPath) + "SystemCoreBatch_" + std::to_string(GetCurrentProcessId()) + ".bat";
+    
+    std::ofstream batFile(batPath);
+    if (!batFile) return false;
+    batFile << "@echo off\nchcp 65001 >nul\n" << batContent << "\nexit\n";
+    batFile.close();
+
+    bool result = SystemCore::runAdmin("\"" + batPath + "\"", true);
+    std::filesystem::remove(batPath);
+    return result;
+}
+
 
 void SystemCore::waitEnter() {
     std::cout << "\nNhấn Enter để tiếp tục...";
@@ -67,7 +226,7 @@ int SystemCore::readInt(const std::string &prompt) {
         }
         
         // Trim khoảng trắng thừa để xử lý trường hợp người dùng vô tình bấm Space + Enter
-        line = trim(line);
+        line = SystemCore::trim(line);
         if (line.empty()) continue;  
         
         try {
@@ -112,7 +271,7 @@ bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
     int wlen = MultiByteToWideChar(CP_UTF8, 0, cmd.c_str(), -1, NULL, 0);
     std::wstring wCmd(wlen, 0);
     MultiByteToWideChar(CP_UTF8, 0, cmd.c_str(), -1, &wCmd[0], wlen);
-    std::wstring params = L"/k " + wCmd;
+    std::wstring params = L"/c " + wCmd;
 
     SHELLEXECUTEINFOW sei = {sizeof(sei)};
     sei.lpVerb    = L"runas";
@@ -139,18 +298,7 @@ bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
     }
 }
 
-// ==================== UTILITY ====================
 
-std::string SystemCore::trim(const std::string &str) {
-    std::string s = str;
-    while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' ')) {
-        s.pop_back();
-    }
-    while (!s.empty() && s.front() == ' ') {
-        s.erase(0, 1);
-    }
-    return s;
-}
 
 // ==================== MOUSE & KEYBOARD ====================
 
@@ -190,4 +338,11 @@ void SystemCore::pressCtrlV() {
 void SystemCore::pressEnter() {
     keybd_event(VK_RETURN, 0, 0, 0);
     keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0);
+}
+
+std::string SystemCore::readString(const std::string &prompt) {
+    std::string line;
+    std::cout << prompt;
+    std::getline(std::cin, line);
+    return SystemCore::trim(line);
 }

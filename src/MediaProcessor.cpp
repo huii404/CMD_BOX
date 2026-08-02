@@ -1,5 +1,7 @@
 #include "../include/MediaProcessor.h"
+#include "../include/SystemCore.h"
 #include <iostream>
+#include <random>
 #include <filesystem>
 #include <algorithm>
 #include <regex>
@@ -25,27 +27,7 @@ static void clearScreenWin32() {
 MediaProcessor::MediaProcessor() {}
 MediaProcessor::~MediaProcessor() {}
 
-// ==================== HÀM TIỆN ÍCH ====================
 
-// Thêm static hoặc đổi tên để tránh conflict
-static int readIntLocal(const std::string& prompt) {
-    while (true) {
-        if (!std::cin.good()) {
-            std::cin.clear();
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-            std::cout << "\t[Lỗi] Input stream bị lỗi, thử lại!\n";
-            continue;
-        }
-        std::cout << prompt;
-        std::string s;
-        std::getline(std::cin, s);
-        try {
-            return std::stoi(s);
-        } catch (...) {
-            std::cout << "\t[Lỗi] Vui lòng nhập số nguyên!\n";
-        }
-    }
-}
 
 string MediaProcessor::getFFmpegPath() {
     if (!cachedFFmpegPath.empty()) {
@@ -90,188 +72,13 @@ string MediaProcessor::getFFmpegPath() {
 }
 
 
-vector<string> MediaProcessor::getPathInput(const string& promptText) {
-    string rawInput;
-    cout << promptText;
-    getline(cin, rawInput);
-
-    // Kiểm tra input rỗng hoặc "0"
-    if (rawInput.empty()) {
-        return vector<string>();
-    }
-
-    if (rawInput == "0") {
-        return vector<string>();
-    }
-
-    // Xử lý tách đường dẫn dính liền
-    string processed = rawInput;
-    
-    for (int i = (int)processed.length() - 3; i >= 1; --i) {
-        char prev = processed[i - 1];
-        char curr = processed[i];
-        char next = processed[i + 1];
-        char next2 = processed[i + 2];
-        
-        bool isPrevNonSpace = (prev != ' ' && prev != '\t' && prev != '"' && prev != '\0');
-        bool isDriveLetter = ((curr >= 'A' && curr <= 'Z') || (curr >= 'a' && curr <= 'z'));
-        bool isDrivePattern = (next == ':' && next2 == '\\');
-        
-        if (isPrevNonSpace && isDriveLetter && isDrivePattern) {
-            processed.insert(i, " ");
-        }
-    }
-    
-    vector<string> paths;
-    vector<string> tokens;
-    string token;
-    bool inQuotes = false;
-    
-    for (size_t i = 0; i <= processed.size(); ++i) {
-        char c = (i < processed.size()) ? processed[i] : '\0';
-        
-        if (c == '"') {
-            inQuotes = !inQuotes;
-            continue;
-        }
-        
-        bool isSep = (!inQuotes && (c == ' ' || c == '\t' || c == '\0'));
-        
-        if (isSep) {
-            if (!token.empty()) {
-                if (!token.empty() && token.front() == '"') token.erase(0, 1);
-                if (!token.empty() && token.back() == '"') token.pop_back();
-                
-                tokens.push_back(token);
-                token.clear();
-            }
-        } else if (c != '\0') {
-            token += c;
-        }
-    }
-    
-    for (const string& t : tokens) {
-        string path = t;
-        size_t p = path.find("\\\\");
-        while (p != string::npos) {
-            path.replace(p, 2, "\\");
-            p = path.find("\\\\", p + 1);
-        }
-        
-        // Bỏ qua nếu path rỗng
-        if (path.empty()) continue;
-        
-        if (fs::exists(path)) {
-            paths.push_back(path);
-        } else {
-            cout << "    [!] Không tìm thấy: " << path << "\n";
-        }
-    }
-
-    if (paths.empty()) {
-        cout << "    [!] Không tìm thấy file nào hợp lệ!\n";
-    }
-
-    return paths;
-}
-
-bool MediaProcessor::runCommand(const string& command) {
-    // Chuyển đổi command sang UTF-16
-    int wchars_num = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, NULL, 0);
-    if (wchars_num == 0) {
-        return false;
-    }
-    
-    vector<wchar_t> wcmd(wchars_num);
-    if (MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, wcmd.data(), wchars_num) == 0) {
-        return false;
-    }
-
-    STARTUPINFOW si;
-    PROCESS_INFORMATION pi;
-    ZeroMemory(&si, sizeof(si));
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES; // Thêm flag để redirect
-    si.wShowWindow = SW_HIDE;
-    
-    // === FIX: Redirect output để tránh treo buffer ===
-    SECURITY_ATTRIBUTES sa;
-    sa.nLength = sizeof(SECURITY_ATTRIBUTES);
-    sa.bInheritHandle = TRUE;
-    sa.lpSecurityDescriptor = NULL;
-    
-    HANDLE hNull = CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_WRITE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hNull != INVALID_HANDLE_VALUE) {
-        si.hStdOutput = hNull;
-        si.hStdError = hNull;
-        si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-    }
-    
-    ZeroMemory(&pi, sizeof(pi));
-
-    bool success = false;
-    if (CreateProcessW(NULL, wcmd.data(), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
-        WaitForSingleObject(pi.hProcess, INFINITE);
-        DWORD exitCode = 0;
-        if (GetExitCodeProcess(pi.hProcess, &exitCode)) {
-            success = (exitCode == 0);
-        }
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-    }else{
-        //check
-        std::cerr << "[!] Không thể tạo process. Lỗi: " << GetLastError() << "\n";
-        success = false;
-    }
-
-    if (hNull != INVALID_HANDLE_VALUE){
-        CloseHandle(hNull);
-    }
-
-    return success;
-}
-
-int MediaProcessor::readIntLocal(const std::string& prompt) {
-    while (true) {
-        if (!std::cin.good()) {
-            std::cin.clear();
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-            std::cout << "\t[Lỗi] Input stream bị lỗi, thử lại!\n";
-            continue;
-        }
-        std::cout << prompt;
-        std::string s;
-        std::getline(std::cin, s);
-        
-        // Xóa khoảng trắng đầu/cuối
-        s.erase(0, s.find_first_not_of(" \t\n\r"));
-        s.erase(s.find_last_not_of(" \t\n\r") + 1);
-        
-        if (s.empty()) {
-            std::cout << "\t[Lỗi] Vui lòng nhập số nguyên!\n";
-            continue;
-        }
-        
-        try {
-            return std::stoi(s);
-        } catch (const std::invalid_argument&) {
-            std::cout << "\t[Lỗi] Vui lòng nhập số nguyên hợp lệ!\n";
-        } catch (const std::out_of_range&) {
-            std::cout << "\t[Lỗi] Số quá lớn hoặc quá nhỏ!\n";
-        } catch (...) {
-            std::cout << "\t[Lỗi] Đã xảy ra lỗi không xác định!\n";
-        }
-    }
-}
-
-
 void MediaProcessor::compressImage(const string& inputPath, const string& outputPath, int quality) {
     string ffmpeg = getFFmpegPath();
     // THÊM: -map_metadata 0 để giữ metadata gốc
     // THÊM: -movflags +faststart để tối ưu streaming
     string cmd = ffmpeg + " -y -i \"" + inputPath + "\" -map_metadata 0 -movflags +faststart -q:v " + to_string(quality) + " \"" + outputPath + "\"";
     cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu dung lượng ảnh...";
-    if (runCommand(cmd)) cout << "\n -> Thành công! Đã xuất file: " << outputPath << "\n";
+    if (SystemCore::runRawCommand(cmd)) cout << "\n -> Thành công! Đã xuất file: " << outputPath << "\n";
     else cout << "\n -> [Lỗi] Quá trình xử lý thất bại hoặc sai đường dẫn!\n";
 }
 
@@ -279,7 +86,7 @@ void MediaProcessor::extractAudioCore(const std::string& inputPath, const std::s
     std::string ffmpeg = getFFmpegPath();
     // THÊM: -map_metadata 0 để giữ metadata của audio
     std::string cmd = ffmpeg + " -y -i \"" + inputPath + "\" -map_metadata 0 -vn -q:a 2 \"" + outputPath + "\"";
-    runCommand(cmd);
+    SystemCore::runRawCommand(cmd);
 }
 
 
@@ -302,7 +109,7 @@ void MediaProcessor::changeSpeedCore(const std::string& inputPath, const std::st
     
     // THÊM: -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 để giữ metadata cho từng stream
     std::string cmd = ffmpeg + " -y -i \"" + inputPath + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 " + filter + " -c:v libx264 -crf 23 -c:a aac \"" + outputPath + "\"";
-    runCommand(cmd);
+    SystemCore::runRawCommand(cmd);
 }
 
 void MediaProcessor::processMediaAuto() {
@@ -324,30 +131,8 @@ void MediaProcessor::processMediaAuto() {
         cout << " ==================================================\n";
 
         if (hasPreviousRun) {
-            double finalSavedSize = static_cast<double>(totalBytesSaved);
-            string sizeUnit = "Bytes";
-
-            if (totalBytesSaved >= 1024LL * 1024LL * 1024LL) {
-                finalSavedSize /= (1024.0 * 1024.0 * 1024.0);
-                sizeUnit = "GB";
-            } 
-            else if (totalBytesSaved >= 1024LL * 1024LL) {
-                finalSavedSize /= (1024.0 * 1024.0);
-                sizeUnit = "MB";
-            } 
-            else if (totalBytesSaved >= 1024LL) {
-                finalSavedSize /= 1024.0;
-                sizeUnit = "KB";
-            }
-            
             cout << "  Số file đầu vào: " << totalTotalFiles << "\n";
-            
-            if (totalBytesSaved > 0) {
-                printf("  Đã giải phóng: %.2f %s\n", finalSavedSize, sizeUnit.c_str());
-            } else {
-                cout << "  Đã giải phóng: 0 Bytes\n";
-            }
-            
+            cout << "  Đã giải phóng: " << SystemCore::formatSize(totalBytesSaved) << "\n"; // Đã dùng formatSize chuẩn
             cout << "  - Số file tối ưu  : " << totalOptimizedCount << "\n";
             cout << "  - Số file giữ nguyên : " << totalSkippedCount << "\n";
             cout << " ==================================================\n";
@@ -365,47 +150,8 @@ void MediaProcessor::processMediaAuto() {
             return;
         }
 
-        // === FIX: Xử lý input từ kéo thả - Tối ưu hóa ===
-        vector<string> inputs;
-        string token;
-        bool inQuotes = false;
-        
-        // Thêm space vào cuối để xử lý token cuối
-        string processed = rawInput + " ";
-        
-        for (char c : processed) {
-            if (c == '"') {
-                inQuotes = !inQuotes;
-                continue;
-            }
-            
-            bool isSep = (!inQuotes && (c == ' ' || c == '\t'));
-            
-            if (isSep) {
-                if (!token.empty()) {
-                    // Xóa dấu ngoặc kép
-                    if (token.front() == '"') token.erase(0, 1);
-                    if (token.back() == '"') token.pop_back();
-                    
-                    // Sửa đường dẫn
-                    size_t p = token.find("\\\\");
-                    while (p != string::npos) {
-                        token.replace(p, 2, "\\");
-                        p = token.find("\\\\", p + 1);
-                    }
-                    
-                    // Kiểm tra file tồn tại
-                    if (fs::exists(token)) {
-                        inputs.push_back(token);
-                    } else {
-                        cout << "    [!] Không tìm thấy: " << token << "\n";
-                    }
-                    token.clear();
-                }
-            } else {
-                token += c;
-            }
-        }
+        // === FIX: DÙNG HÀM parsePaths CỦA SYSTEMCORE THAY VÌ TỰ PARSE DÀI DÒNG ===
+        vector<string> inputs = SystemCore::parsePaths(rawInput);
 
         if (inputs.empty()) {
             cout << "\n    [!] Không tìm thấy file nào hợp lệ!\n";
@@ -466,7 +212,7 @@ void MediaProcessor::processMediaAuto() {
                     string ffmpeg = getFFmpegPath();
                     string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + input + "\" -map_metadata 0 -movflags +faststart -q:v 5 \"" + tempOutPath.string() + "\"";
                     cout << " \x1b[35m[Media]\x1b[0m Đang chuyển HEIC sang JPG...";
-                    renderSuccess = runCommand(cmd) && fs::exists(tempOutPath);
+                    renderSuccess = SystemCore::runRawCommand(cmd) && fs::exists(tempOutPath);
                 } else {
                     compressImage(input, tempOutPath.string(), 5);
                     renderSuccess = fs::exists(tempOutPath);
@@ -477,7 +223,7 @@ void MediaProcessor::processMediaAuto() {
                     string ffmpeg = getFFmpegPath();
                     string tempFixPath = tempOutPath.string() + ".fix";
                     string fixCmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + tempOutPath.string() + "\" -map_metadata 0 -metadata:s:v:0 rotate=0 -c copy \"" + tempFixPath + "\"";
-                    if (runCommand(fixCmd) && fs::exists(tempFixPath)) {
+                    if (SystemCore::runRawCommand(fixCmd) && fs::exists(tempFixPath)) {
                         fs::remove(tempOutPath);
                         fs::rename(tempFixPath, tempOutPath);
                     } else {
@@ -489,7 +235,7 @@ void MediaProcessor::processMediaAuto() {
                 string ffmpeg = getFFmpegPath();
                 string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + input + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 -c:v libx264 -crf 24 -pix_fmt yuv420p -c:a aac -b:a 128k \"" + tempOutPath.string() + "\"";
                 cout << " \x1b[35m[Media]\x1b[0m Đang đóng gói Video mã hóa ẩn";
-                renderSuccess = runCommand(cmd) && fs::exists(tempOutPath);
+                renderSuccess = SystemCore::runRawCommand(cmd) && fs::exists(tempOutPath);
             }
             else {
                 cout << "\n    -> [Bỏ qua] Định dạng " << ext << " không được hỗ trợ!\n\n";
@@ -512,7 +258,7 @@ void MediaProcessor::processMediaAuto() {
                         
                         // Hiển thị tỷ lệ nén
                         float ratio = (1.0f - (float)compressedSize / originalSize) * 100;
-                        cout << "\n    -> [OK] Đã nén: " << (originalSize - compressedSize) / 1024 << " KB (" << fixed << setprecision(1) << ratio << "%)\n\n";
+                        cout << "\n    -> [OK] Đã nén: " << SystemCore::formatSize(originalSize - compressedSize) << " (" << fixed << setprecision(1) << ratio << "%)\n\n";
                     } 
                     else {
                         fs::remove(tempOutPath);
@@ -567,9 +313,11 @@ void MediaProcessor::processMediaAuto() {
 }
 
 void MediaProcessor::processExtractAudioBatch() {
-    cin.clear();
-    cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    vector<string> inputs = getPathInput("\tkéo thả N video để lấy âm thanh: ");
+    cout << "\tkéo thả N video để lấy âm thanh: ";
+    string rawInput;
+    getline(cin, rawInput);
+    vector<string> inputs = SystemCore::parsePaths(rawInput);
+    
     if (inputs.empty()) {
         cout << "\t[Lỗi] Chưa nhập file nào cả!\n";
         return;
@@ -593,7 +341,6 @@ void MediaProcessor::processExtractAudioBatch() {
 
         if (find(videoExts.begin(), videoExts.end(), ext) != videoExts.end()) {
             fs::path outPath = inPath.parent_path() / (inPath.stem().string() + ".mp3");
-            // Hàm extractAudioCore đã có map_metadata
             extractAudioCore(inputs[i], outPath.string());
             cout << "\t[OK] -> " << outPath.filename().string() << "\n";
             successCount++;
@@ -604,19 +351,18 @@ void MediaProcessor::processExtractAudioBatch() {
     cout << "\tHOÀN THÀNH: Đã trích " << successCount << "/" << inputs.size() << " âm thanh!\n";
 }
 
-
 void MediaProcessor::processChangeSpeedBatch() {
-    cin.clear();
-    cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    std::vector<std::string> inputs = getPathInput("\tkéo thả N video: ");
+    cout << "\tkéo thả N video: ";
+    string rawInput;
+    getline(cin, rawInput);
+    std::vector<std::string> inputs = SystemCore::parsePaths(rawInput);
+    
     if (inputs.empty()) {
         cout << "\t[Lỗi] Chưa nhập file nào cả!\n";
         return;
     }
 
-    cout << "\ttốc độ mong muốn (0.5: Slow-motion, 2.0: Tua nhanh): ";
-    std::string speedStr;
-    getline(cin, speedStr);
+    std::string speedStr = SystemCore::readString("\ttốc độ mong muốn (0.5: Slow-motion, 2.0: Tua nhanh): ");
     float speed = 1.0f;
     try { speed = stof(speedStr); } catch(...) { speed = 1.0f; }
 
@@ -644,7 +390,6 @@ void MediaProcessor::processChangeSpeedBatch() {
         if (find(videoExts.begin(), videoExts.end(), ext) != videoExts.end()) {
             std::string speedSuffix = "_speed_" + speedStr + "x.mp4";
             fs::path outPath = inPath.parent_path() / (inPath.stem().string() + speedSuffix);
-            // Hàm changeSpeedCore đã có map_metadata
             changeSpeedCore(inputs[i], outPath.string(), speed);
             cout << "\t[OK] -> " << outPath.filename().string() << "\n";
             successCount++;
@@ -654,7 +399,6 @@ void MediaProcessor::processChangeSpeedBatch() {
     }
     cout << "\tHOÀN THÀNH: Đã xử lý " << successCount << "/" << inputs.size() << " video!\n";
 }
-
 
 void MediaProcessor::processMediaEnhancementAuto() {
     std::vector<std::string> imageExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".heic" };
@@ -669,7 +413,10 @@ void MediaProcessor::processMediaEnhancementAuto() {
         std::cout << "    BỘ TỰ ĐỘNG PHỤC CHẾ & LÀM NÉT (AI AUTO) \n";
         std::cout << " ==================================================\n\n";
 
-        std::vector<std::string> inputs = getPathInput(" -> Kéo thả N file Ảnh/Video để làm nét ( 0 để thoát): ");
+        cout << " -> Kéo thả N file Ảnh/Video để làm nét ( 0 để thoát): ";
+        string rawInput;
+        getline(cin, rawInput);
+        std::vector<std::string> inputs = SystemCore::parsePaths(rawInput);
         
         if (inputs.empty()) {
             std::cout << "\n -> [Thoát] Quay lại menu chính.\n";
@@ -681,7 +428,7 @@ void MediaProcessor::processMediaEnhancementAuto() {
         std::cout << "  [2] Cân bằng hệ thống (Khuyến nghị, nét tự nhiên)\n";
         std::cout << "  [3] Tăng cường tối đa (Chất lượng cao, chậm hơn)\n";
         std::cout << " ==================================================\n";
-        int level = readIntLocal(" -> Chọn cấp độ xử lý: ");
+        int level = SystemCore::readInt(" -> Chọn cấp độ xử lý: ");
         if (level < 1 || level > 3) level = 2;
 
         std::string imgFilter, vidFilter, vidCodec;
@@ -719,13 +466,12 @@ void MediaProcessor::processMediaEnhancementAuto() {
             std::string cmd = "";
             bool isSupported = false;
 
-            // Kiểm tra và dựng lệnh cho Ảnh - THÊM MAP_METADATA
+            // Kiểm tra và dựng lệnh cho Ảnh
             if (std::find(imageExts.begin(), imageExts.end(), ext) != imageExts.end()) {
                 cmd = ffmpeg + " -y -i \"" + inputs[i] + "\" -map_metadata 0 -vf \"" + imgFilter + "\" -q:v 2 \"" + outPath.string() + "\"";
                 std::cout << " \x1b[35m[AI-Image]\x1b[0m Đang tái cấu trúc pixel & khử nhiễu bề mặt...";
                 isSupported = true;
             }
-            // Kiểm tra và dựng lệnh cho Video - THÊM MAP_METADATA
             else if (std::find(videoExts.begin(), videoExts.end(), ext) != videoExts.end()) {
                 cmd = ffmpeg + " -y -i \"" + inputs[i] + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 -vf \"" + vidFilter + "\" " + vidCodec + " -c:a copy \"" + outPath.string() + "\"";
                 std::cout << " \x1b[35m[AI-Video]\x1b[0m Đang nội suy khung hình & tăng độ tương phản...";
@@ -737,7 +483,7 @@ void MediaProcessor::processMediaEnhancementAuto() {
             }
 
             if (isSupported) {
-                if (runCommand(cmd) && fs::exists(outPath)) {
+                if (SystemCore::runRawCommand(cmd) && fs::exists(outPath)) {
                     std::cout << "\n    -> Thành công! File xuất: " << outPath.filename().string() << "\n\n";
                 } else {
                     std::cout << "\n    -> [Lỗi] Xử lý thất bại hoặc lỗi dòng lệnh!\n\n";
@@ -746,6 +492,7 @@ void MediaProcessor::processMediaEnhancementAuto() {
         }
     }
 }
+
 
 void MediaProcessor::processConvertFormatBatch() {
     while (true) {
@@ -756,7 +503,10 @@ void MediaProcessor::processConvertFormatBatch() {
         cout << "    BỘ CHUYỂN ĐỔI ĐỊNH DẠNG (GIỮ NGUYÊN CHẤT LƯỢNG) \n";
         cout << " ==================================================\n\n";
 
-        vector<string> inputs = getPathInput(" -> Kéo thả N file ảnh/video (0 để thoát): ");
+        cout << " -> Kéo thả N file ảnh/video (0 để thoát): ";
+        string rawInput;
+        getline(cin, rawInput);
+        vector<string> inputs = SystemCore::parsePaths(rawInput);
 
         if (inputs.empty()) {
             cout << "\n -> [Thoát] Quay lại menu chính.\n";
@@ -792,7 +542,7 @@ void MediaProcessor::processConvertFormatBatch() {
             cout << "  [2] .png\n";
             cout << "  [3] .webp\n";
             cout << "  [0] Hủy\n";
-            int choice = readIntLocal(" -> Chọn: ");
+            int choice = SystemCore::readInt(" -> Chọn: ");
             if (choice == 0) continue;
             if (choice == 1) targetExt = ".jpg";
             else if (choice == 2) targetExt = ".png";
@@ -842,7 +592,7 @@ void MediaProcessor::processConvertFormatBatch() {
                 }
 
                 cout << "    -> Đang chuyển đổi...";
-                bool success = runCommand(cmd);
+                bool success = SystemCore::runRawCommand(cmd);
 
                 if (success && fs::exists(outPath)) {
                     try {
@@ -863,7 +613,7 @@ void MediaProcessor::processConvertFormatBatch() {
             cout << "  [2] .mkv\n";
             cout << "  [3] .mov\n";
             cout << "  [0] Hủy\n";
-            int choice = readIntLocal(" -> Chọn: ");
+            int choice = SystemCore::readInt(" -> Chọn: ");
             if (choice == 0) continue;
             if (choice == 1) targetExt = ".mp4";
             else if (choice == 2) targetExt = ".mkv";
@@ -944,7 +694,7 @@ void MediaProcessor::processConvertFormatBatch() {
                 }
 
                 cout << "    -> Đang chuyển đổi...";
-                bool success = runCommand(cmd);
+                bool success = SystemCore::runRawCommand(cmd);
 
                 if (success && fs::exists(outPath)) {
                     try {
@@ -962,5 +712,305 @@ void MediaProcessor::processConvertFormatBatch() {
         } else {
             cout << " [Lỗi] Không phát hiện file ảnh hoặc video hợp lệ!\n";
         }
+    }
+}
+
+// ==================== CHUẨN HÓA TÊN FILE MEDIA ====================
+
+void MediaProcessor::normalizeMediaFilenames() {
+    // Dùng SystemCore để xóa màn hình (vì hàm cls là static)
+    system("cls");
+    std::cout << "============================================================\n";
+    std::cout << "    CHUẨN HÓA TÊN FILE ẢNH, VIDEO, ÂM THANH\n";
+    std::cout << "============================================================\n";
+    
+    std::cout << "-> Nhập đường dẫn thư mục chứa file cần chuẩn hóa: ";
+    std::string dirPath;
+    std::getline(std::cin, dirPath);
+    dirPath = SystemCore::trim(dirPath);
+    
+    // Bỏ dấu ngoặc kép nếu người dùng kéo thả
+    if (dirPath.length() >= 2 && dirPath.front() == '"' && dirPath.back() == '"') {
+        dirPath = dirPath.substr(1, dirPath.length() - 2);
+    }
+
+    if (!std::filesystem::exists(dirPath) || !std::filesystem::is_directory(dirPath)) {
+        std::cout << "\n[!] Đường dẫn không tồn tại hoặc không phải thư mục!\n";
+        return;
+    }
+
+    // Định nghĩa danh sách đuôi file
+    std::vector<std::string> imgExts = { ".png", ".jpg", ".jpeg", ".bmp", ".webp" };
+    std::vector<std::string> vidExts = { ".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv" };
+    std::vector<std::string> audExts = { ".mp3", ".wav", ".aac", ".flac" };
+    std::vector<std::string> allExts = imgExts;
+    allExts.insert(allExts.end(), vidExts.begin(), vidExts.end());
+    allExts.insert(allExts.end(), audExts.begin(), audExts.end());
+
+    std::vector<std::filesystem::path> filesToRename;
+    
+    // Duyệt thư mục
+    for (const auto& entry : std::filesystem::directory_iterator(dirPath)) {
+        if (!std::filesystem::is_regular_file(entry.path())) continue;
+        
+        std::string ext = entry.path().extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        
+        // Chỉ xử lý các định dạng hỗ trợ
+        if (std::find(allExts.begin(), allExts.end(), ext) != allExts.end()) {
+            filesToRename.push_back(entry.path());
+        }
+    }
+
+    if (filesToRename.empty()) {
+        std::cout << "\n[i] Không tìm thấy file ảnh/video/audio nào trong thư mục này!\n";
+        return;
+    }
+
+    std::cout << "\n[*] Phát hiện " << filesToRename.size() << " file cần chuẩn hóa.\n";
+    std::cout << "[?] Bạn có muốn thực hiện đổi tên? (Y/N): ";
+    std::string confirm;
+    std::getline(std::cin, confirm);
+    if (confirm != "y" && confirm != "Y") {
+        std::cout << "[i] Đã hủy.\n";
+        return;
+    }
+
+    std::cout << "\n[*] Bắt đầu chuẩn hóa...\n";
+    int successCount = 0;
+
+    // === Cốt lõi chống trùng: Dùng thời gian hiện tại + số ngẫu nhiên ===
+    auto now = std::chrono::high_resolution_clock::now();
+    auto timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+    std::mt19937_64 rng(timestamp); // Seed bằng chính thời gian để random
+
+    for (const auto& oldPath : filesToRename) {
+        std::string ext = oldPath.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        
+        std::string prefix;
+        if (std::find(imgExts.begin(), imgExts.end(), ext) != imgExts.end()) prefix = "IMG_";
+        else if (std::find(vidExts.begin(), vidExts.end(), ext) != vidExts.end()) prefix = "VD_";
+        else if (std::find(audExts.begin(), audExts.end(), ext) != audExts.end()) prefix = "MP3_";
+        else continue; // Không bao giờ xảy ra vì đã lọc ở trên
+
+        // Tạo số duy nhất: Lấy thời gian hiện tại (micro giây) cộng thêm 1 số random 0-999
+        long long uniqueNumber = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        uniqueNumber += rng() % 1000; 
+
+        // Tạo tên mới
+        std::string newName = prefix + std::to_string(uniqueNumber) + ext;
+        std::filesystem::path newPath = oldPath.parent_path() / newName;
+
+        // Kiểm tra nếu tên đã tồn tại thì thêm hậu tố _1, _2...
+        int counter = 1;
+        while (std::filesystem::exists(newPath)) {
+            newName = prefix + std::to_string(uniqueNumber) + "_" + std::to_string(counter) + ext;
+            newPath = oldPath.parent_path() / newName;
+            counter++;
+        }
+
+        try {
+            std::filesystem::rename(oldPath, newPath);
+            std::cout << " [✓] " << oldPath.filename().string() << "  ->  " << newName << "\n";
+            successCount++;
+        } catch (const std::exception& e) {
+            std::cout << " [✗] Lỗi đổi tên: " << oldPath.filename().string() << " (" << e.what() << ")\n";
+        }
+    }
+
+    std::cout << "\n============================================================\n";
+    std::cout << " [✓] Hoàn thành! Đã chuẩn hóa " << successCount << "/" << filesToRename.size() << " file.\n";
+    std::cout << "============================================================\n";
+}
+
+// ==================== ẨN FILE TRONG ẢNH (GIỚI HẠN 10MB) ====================
+void MediaProcessor::hideFileInImage() {
+    system("cls");
+    std::cout << "============================================================\n";
+    std::cout << "   ẨN FILE TRONG ẢNH (Bìa Ảnh <= 10MB)\n";
+    std::cout << "============================================================\n";
+
+    std::cout << "-> Nhập đường dẫn Ảnh nền (jpg/png...): ";
+    std::string imagePath;
+    std::getline(std::cin, imagePath);
+    imagePath = SystemCore::trim(imagePath);
+    if (imagePath.front() == '"') imagePath = imagePath.substr(1, imagePath.length() - 2);
+
+    std::cout << "-> Nhập đường dẫn File cần ẩn (zip/txt/exe...): ";
+    std::string hiddenFilePath;
+    std::getline(std::cin, hiddenFilePath);
+    hiddenFilePath = SystemCore::trim(hiddenFilePath);
+    if (hiddenFilePath.front() == '"') hiddenFilePath = hiddenFilePath.substr(1, hiddenFilePath.length() - 2);
+
+    std::cout << "-> Nhập tên file đầu ra (vd: final.jpg): ";
+    std::string outputFileName;
+    std::getline(std::cin, outputFileName);
+    outputFileName = SystemCore::trim(outputFileName);
+    if (outputFileName.front() == '"') outputFileName = outputFileName.substr(1, outputFileName.length() - 2);
+
+    if (!std::filesystem::exists(imagePath) || !std::filesystem::exists(hiddenFilePath)) {
+        std::cout << "\n[!] Lỗi: 1 trong 2 file không tồn tại!\n";
+        return;
+    }
+
+    // Kiểm tra dung lượng file Ảnh
+    uintmax_t imgSize = std::filesystem::file_size(imagePath);
+    const uintmax_t MAX_IMG_SIZE = 10ULL * 1024 * 1024; // 10MB
+    if (imgSize > MAX_IMG_SIZE) {
+        std::cout << "\n[!] Lỗi: Ảnh nền quá nặng (" << SystemCore::formatSize(imgSize) 
+                  << "). Chỉ chấp nhận ảnh <= 10MB để tránh bị phát hiện!\n";
+        return;
+    }
+
+    // Tạo lệnh CMD
+    std::string cmd = "copy /b \"" + imagePath + "\" + \"" + hiddenFilePath + "\" \"" + outputFileName + "\"";
+    
+    std::cout << "\n[*] Đang ghép file...\n";
+    system(cmd.c_str());
+
+    uintmax_t outputSize = 0;
+    if (std::filesystem::exists(outputFileName)) {
+        outputSize = std::filesystem::file_size(outputFileName);
+        std::cout << "\n[✓] Thành công! File đầu ra: " << outputFileName 
+                  << " (" << SystemCore::formatSize(outputSize) << ")\n";
+        std::cout << "[✓] Bạn có thể mở file bằng ảnh bình thường, hoặc đổi đuôi .zip/.txt để lấy nội dung ẩn.\n";
+    } else {
+        std::cout << "\n[✗] Lỗi khi tạo file đầu ra!\n";
+    }
+}
+
+// ==================== ẨN FILE TRONG VIDEO (GIỚI HẠN 100MB) ====================
+void MediaProcessor::hideFileInVideo() {
+    system("cls");
+    std::cout << "============================================================\n";
+    std::cout << "   ẨN FILE TRONG VIDEO (Bìa Video <= 100MB)\n";
+    std::cout << "============================================================\n";
+
+    std::cout << "-> Nhập đường dẫn Video nền (mp4/mkv...): ";
+    std::string videoPath;
+    std::getline(std::cin, videoPath);
+    videoPath = SystemCore::trim(videoPath);
+    if (videoPath.front() == '"') videoPath = videoPath.substr(1, videoPath.length() - 2);
+
+    std::cout << "-> Nhập đường dẫn File cần ẩn (zip/txt/exe...): ";
+    std::string hiddenFilePath;
+    std::getline(std::cin, hiddenFilePath);
+    hiddenFilePath = SystemCore::trim(hiddenFilePath);
+    if (hiddenFilePath.front() == '"') hiddenFilePath = hiddenFilePath.substr(1, hiddenFilePath.length() - 2);
+
+    std::cout << "-> Nhập tên file đầu ra (vd: final.mp4): ";
+    std::string outputFileName;
+    std::getline(std::cin, outputFileName);
+    outputFileName = SystemCore::trim(outputFileName);
+    if (outputFileName.front() == '"') outputFileName = outputFileName.substr(1, outputFileName.length() - 2);
+
+    if (!std::filesystem::exists(videoPath) || !std::filesystem::exists(hiddenFilePath)) {
+        std::cout << "\n[!] Lỗi: 1 trong 2 file không tồn tại!\n";
+        return;
+    }
+
+    // Kiểm tra dung lượng video
+    uintmax_t videoSize = std::filesystem::file_size(videoPath);
+    const uintmax_t MAX_VIDEO_SIZE = 100ULL * 1024 * 1024; // 100MB
+    if (videoSize > MAX_VIDEO_SIZE) {
+        std::cout << "\n[!] Lỗi: Video nền quá nặng (" << SystemCore::formatSize(videoSize) 
+                  << "). Chỉ chấp nhận Video <= 100MB để đỡ tốn thời gian render!\n";
+        return;
+    }
+
+    // Tạo lệnh CMD
+    std::string cmd = "copy /b \"" + videoPath + "\" + \"" + hiddenFilePath + "\" \"" + outputFileName + "\"";
+    
+    std::cout << "\n[*] Đang ghép file...\n";
+    system(cmd.c_str());
+
+    uintmax_t outputSize = 0;
+    if (std::filesystem::exists(outputFileName)) {
+        outputSize = std::filesystem::file_size(outputFileName);
+        std::cout << "\n[✓] Thành công! File đầu ra: " << outputFileName 
+                  << " (" << SystemCore::formatSize(outputSize) << ")\n";
+        std::cout << "[✓] Bạn có thể xem video bình thường, hoặc đổi đuôi .zip/.txt để lấy nội dung ẩn.\n";
+    } else {
+        std::cout << "\n[✗] Lỗi khi tạo file đầu ra!\n";
+    }
+}
+
+
+// Hàm XOR giải mã ngược (dùng key 0xAA)
+static void xorDecrypt(std::vector<uint8_t>& data, uint8_t key = 0xAA) {
+    for (auto& byte : data) {
+        byte ^= key;
+    }
+}
+
+
+// Hàm tách & giải mã file ẩn (Dùng nội bộ)
+static bool extractHiddenFile(const std::string& containerPath, const std::string& extractPath, uint8_t key = 0xAA) {
+    std::ifstream in(containerPath, std::ios::binary);
+    if (!in) return false;
+
+    // Đọc toàn bộ file
+    std::vector<uint8_t> buffer((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+
+    // Tìm dấu hiệu kết thúc: 4 byte cuối là magic number "HIDE"
+    if (buffer.size() < 4) return false;
+    if (buffer[buffer.size() - 4] != 'H' || buffer[buffer.size() - 3] != 'I' || 
+        buffer[buffer.size() - 2] != 'D' || buffer[buffer.size() - 1] != 'E') {
+        return false;
+    }
+
+    // Lấy kích thước file ẩn (4 byte ngay trước magic number)
+    uint32_t hiddenSize = 0;
+    hiddenSize |= (buffer[buffer.size() - 8] << 24);
+    hiddenSize |= (buffer[buffer.size() - 7] << 16);
+    hiddenSize |= (buffer[buffer.size() - 6] << 8);
+    hiddenSize |= (buffer[buffer.size() - 5]);
+
+    // Trích xuất dữ liệu ẩn
+    size_t startPos = buffer.size() - 8 - hiddenSize;
+    std::vector<uint8_t> hiddenData(buffer.begin() + startPos, buffer.begin() + startPos + hiddenSize);
+
+    // Giải mã XOR ngược
+    xorDecrypt(hiddenData, key);
+
+    // Ghi ra file
+    std::ofstream out(extractPath, std::ios::binary);
+    if (!out) return false;
+    out.write(reinterpret_cast<const char*>(hiddenData.data()), hiddenData.size());
+    out.close();
+    return true;
+}
+
+// ==================== TRÍCH XUẤT FILE ẨN (TÊN TỰ ĐỘNG) ====================
+void MediaProcessor::extractHiddenFromMedia() {
+    system("cls");
+    std::cout << "-> File chứa (ảnh/video): ";
+    std::string in;
+    std::getline(std::cin, in);
+    in = SystemCore::trim(in);
+    if (in.front() == '"') in = in.substr(1, in.size() - 2);
+
+    if (!std::filesystem::exists(in)) {
+        std::cout << "[!] File không tồn tại!\n";
+        return;
+    }
+
+    // Sinh tên file xuất ngẫu nhiên
+    long long now = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch()
+    ).count();
+    std::filesystem::path containerPath(in);
+    std::string outputPath = containerPath.parent_path().string() + "\\extracted_" + std::to_string(now) + ".bin";
+
+    if (extractHiddenFile(in, outputPath, 0xAA)) {
+        std::cout << "\n[✓] Đã trích xuất thành công!\n";
+        std::cout << "    File lưu tại: " << outputPath << "\n";
+        std::cout << "    Dung lượng: " << SystemCore::formatSize(std::filesystem::file_size(outputPath)) << "\n";
+        std::cout << "    [Tip] Đổi đuôi .bin thành .zip/.txt/.exe nếu cần.\n";
+    } else {
+        std::cout << "\n[✗] Không tìm thấy file ẩn hoặc file bị hỏng!\n";
     }
 }

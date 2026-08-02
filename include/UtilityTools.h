@@ -21,8 +21,8 @@ public:
     void autoPasteData();
 
     bool text_processing(const std::string &text);
-    void ShowQR(std::string text);
-    void ShowN_QR(int number);
+    void ShowQR();
+    void ShowN_QR();
     void uninstallBloatware();
     void downloadManager();
     void processDownload(const AppInfo& app);

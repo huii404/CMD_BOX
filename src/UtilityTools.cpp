@@ -16,19 +16,7 @@ namespace fs = std::filesystem;
 // ==================== CONSTRUCTOR ====================
 UtilityTools::UtilityTools(SystemCore &s) : sc(s) {}
 
-// ==================== HÀM TIỆN ÍCH NỘI BỘ ====================
 
-// Format dung lượng file
-static string formatFileSize(long long bytes) {
-    if (bytes >= 1024LL * 1024LL * 1024LL) {
-        return to_string(bytes / (1024LL * 1024LL * 1024LL)) + " GB";
-    } else if (bytes >= 1024LL * 1024LL) {
-        return to_string(bytes / (1024LL * 1024LL)) + " MB";
-    } else if (bytes >= 1024LL) {
-        return to_string(bytes / 1024LL) + " KB";
-    }
-    return to_string(bytes) + " B";
-}
 
 // Lưu lịch sử download
 static void saveDownloadHistory(const string& appName) {
@@ -246,7 +234,9 @@ bool UtilityTools::text_processing(const string &text) {
     return false;
 }
 
-void UtilityTools::ShowQR(string text) {
+void UtilityTools::ShowQR() {
+    string text;
+    cout<<"Text: ";getline(cin,text);
     if (text_processing(text)) {
         cout << "[!] Van ban khong hop le (Max 99 ky tu).\n";
         return;
@@ -263,7 +253,9 @@ void UtilityTools::ShowQR(string text) {
     cout << "\n";
 }
 
-void UtilityTools::ShowN_QR(int number) {
+void UtilityTools::ShowN_QR() {
+    int number;
+    cout<<"Số lượng QR: ";cin>>number;
     if (number >= 15 || number <= 0) { 
         cout << "[!] So luong khong hop le (1-14)!\n"; 
         return; 
@@ -418,7 +410,7 @@ void UtilityTools::processDownload(const AppInfo &app) {
     // Kiểm tra kết quả
     if (fs::exists(fullPath) && fs::file_size(fullPath) > 0) {
         auto size = fs::file_size(fullPath);
-        cout << "\n    [✓] Tai thanh cong! (" << formatFileSize(size) << ")\n";
+        cout << "\n    [✓] Tai thanh cong! (" << SystemCore::formatSize(size) << ")\n";
         
         // Lưu lịch sử
         saveDownloadHistory(app.name);

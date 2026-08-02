@@ -70,9 +70,7 @@ private:
     }
 
 public:
-    AppUI() {
-    }
-
+    AppUI() {}
     ~AppUI() = default;
 
     void mainMenu() {
@@ -128,22 +126,27 @@ public:
         cout << " [Chọn]: ";
     }
 
-    void menuCongCuTuDong() {
+    void menuCongCuTuDong(){
         cls();
         cout << " [1] Auto Click\n";
-        cout << " [2] Spam Text\n";
-        cout << " [3] Auto Paste\n";
-        cout << " [4] Tạo mã QR\n";
+        cout << " [2] Spam Text (1 dòng + xuống dòng)\n";
+        cout << " [3] Auto Paste Data\n";
+        cout << " [4] Tạo mã QR (1 cái)\n";
+        cout << " [5] Tạo mã QR (Nhiều cái)\n";
+        cout << " [6] Download Manager (Tải & cài app)\n";
+        cout << " [7] Xem lịch sử Download\n";
+        cout << " [8] Xóa app rác (Bloatware)\n";
         cout << " [0] Quay lại\n";
         cout << " [Chọn]: ";
     }
 
-    void menuUngDungTienIch() {
+    void menuUngDungTienIch()
+    {
         cls();
         cout << " [1] Tải và cài đặt ứng dụng (Chrome, Zalo, Discord...)\n";
         cout << " [2] Xóa app rác (Bloatware)\n";
         cout << " [3] Xóa cache trình duyệt (Chrome, Edge, CocCoc...)\n";
-        cout << " [4] Chuyển bản Windows (Home -> Pro -> ...)\n";
+        cout << " [4] Thay đổi bản Windows (Home -> Pro -> ...)\n";
         cout << " [0] Quay lại\n";
         cout << " [Chọn]: ";
     }
@@ -154,7 +157,11 @@ public:
         cout << " [2] Phục chế & Làm nét\n"; 
         cout << " [3] Mp4->Mp3\n";
         cout << " [4] Tốc độ Video\n";
-        cout << " [5] Đổi đuôi file (giữ nguyên chất lượng)\n";
+        cout << " [5] Đổi đuôi file \n";
+        cout << " [6] Chuẩn hóa tên file trong thư mục \n";
+        cout << " [7] Ẩn file trong Ảnh \n"; 
+        cout << " [8] Ẩn file trong Video\n";
+        cout << " [7] Dò file ẩn\n"; 
         cout << " [0] Quay lại\n\n";
         cout << " [Chọn]: ";
     }
@@ -165,14 +172,11 @@ public:
         Sleep(50);
 
         while (true) {
-            cls();
-            cout<<"\n\n\n";
+            cls(); cout<<"\n\n\n";
             mainMenu();
             mainChoice = readInt("");
             
-            if (mainChoice == 0) {
-                break;
-            }
+            if (mainChoice == 0) break;      
             if (mainChoice < 1 || mainChoice > 5) continue;
 
             int sub;
@@ -186,7 +190,7 @@ public:
                     sub = readInt("");
                     if (sub == 0) break;
                     
-                    if (sub == 1) getOptimizer().cleanDiskPro();
+                    if (sub == 1)      getOptimizer().cleanDiskPro();
                     else if (sub == 2) getOptimizer().cleanDiskBase();
                     else if (sub == 3) {
                         int ans = readInt("[1] Quét nhanh    [2] Quét toàn bộ     [0] Back: ");
@@ -221,43 +225,21 @@ public:
                     menuMangChiaSe();
                     sub = readInt("");
                     if (sub == 0) break;
-                
-
-                    if (sub == 1) getInternet().showIP();
+                    if (sub == 1)      getInternet().showIP();
                     else if (sub == 2) getInternet().renewIP();
                     else if (sub == 3) getInternet().wifiAudit();
                     else if (sub == 4) getInternet().flushdns();
                     else if (sub == 5) getInternet().netsh_tcpIP();
                     else if (sub == 6) getInternet().quickSharePRO();
                     else if (sub == 7) getInternet().startLocalChat();
-                    else if (sub == 8) {
-                        cls();
-                        getInternet().enableWindowsDefender();
-                    }
-                    else if (sub == 9) {
-                        cls();
-                        getInternet().enableFirewall();
-                    }
-                    else if (sub == 10) {
-                        cls();
-                        getInternet().enableControlledFolderAccess();
-                    }
-                    else if (sub == 11) {
-                        cls();
-                        getInternet().disableInsecureProtocols();
-                    }
-                    else if (sub == 12) {
-                        cls();
-                        getInternet().blockDangerousPorts();
-                    }
-                    else if (sub == 13) {
-                        cls();
-                        getInternet().configureDNSoverHTTPS();
-                    }
-                    else if (sub == 14) {
-                        cls();
-                        getInternet().checkSecurityStatus();
-                    }
+                    else if (sub == 8) getInternet().enableWindowsDefender();
+                    else if (sub == 9) getInternet().enableFirewall();                    
+                    else if (sub == 10)getInternet().enableControlledFolderAccess();
+                    
+                    else if (sub == 11)getInternet().disableInsecureProtocols();
+                    else if (sub == 12)getInternet().blockDangerousPorts();
+                    else if (sub == 13)getInternet().configureDNSoverHTTPS();
+                    else if (sub == 14)getInternet().checkSecurityStatus();
                     else if (sub == 15) {
                         cls();
                         getInternet().enableWindowsDefender();
@@ -281,38 +263,34 @@ public:
                 }
                 break;
 
-            // CASE 3: CÔNG CỤ TỰ ĐỘNG 
+            // CASE 3: CÔNG CỤ TỰ ĐỘNG
             case 3:
-                while (true) {
+                while (true){
                     cls();
                     menuCongCuTuDong();
                     sub = readInt("");
                     if (sub == 0) break;
-                    
-                    if (sub == 1) getTools().autoClickPoint();
+
+                    if (sub == 1)getTools().autoClickPoint();
                     else if (sub == 2) getTools().spamText();
-                    else if (sub == 3) getTools().autoPasteData();
-                    else if (sub == 4) {
-                        cls();
-                        int qrChoice = readInt("\n [1] Tạo 1 mã QR\n [2] Tạo nhiều mã QR\n [0] Back\n [Chọn]: ");
-                        if (qrChoice == 0) continue;
-                        if (qrChoice == 1) {
-                            string line;
-                            cin.ignore();
-                            cout << " Nhập text: ";
-                            getline(cin, line);
-                            getTools().ShowQR(line);
-                        }
-                        if (qrChoice == 2) {
-                            int n = readInt(" Số lượng QR: ");
-                            getTools().ShowN_QR(n);
-                        }
+                    else if (sub == 3) getTools().autoPasteData();      
+                    else if (sub == 4){
+                        cin.ignore(); // Xóa bộ đệm
+                        getTools().ShowQR(); 
+                    } 
+                    else if (sub == 5)getTools().ShowN_QR();            
+                    else if (sub == 6) getTools().downloadManager();         
+                    else if (sub == 7)getTools().showDownloadHistory();             
+                    else if (sub == 8) getTools().uninstallBloatware();   
+                    else {
+                        cout << "\n[!] Lựa chọn không hợp lệ!\n";
+                        Sleep(1000);
+                        continue;
                     }
                     waitEnter();
-                }
-                break;
+                } break;
 
-            // CASE 4: ỨNG DỤNG & TIỆN ÍCH 
+            // CASE 4: ỨNG DỤNG & TIỆN ÍCH
             case 4:
                 while (true) {
                     cls();
@@ -320,7 +298,7 @@ public:
                     sub = readInt("");
                     if (sub == 0) break;
                     
-                    if (sub == 1) getTools().downloadManager();
+                    if (sub == 1)      getTools().downloadManager();
                     else if (sub == 2) getTools().uninstallBloatware();
                     else if (sub == 3) getOptimizer().clearBrowserCache();
                     else if (sub == 4) getOptimizer().upgradeWindowsEditionPRO();
@@ -337,16 +315,15 @@ public:
                     sub = readInt("");
                     if (sub == 0) break; 
 
-                    if (sub == 1)
-                        getMedia().processMediaAuto(); 
-                    else if (sub == 2)
-                        getMedia().processMediaEnhancementAuto();
-                    else if (sub == 3)
-                        getMedia().processExtractAudioBatch();
-                    else if (sub == 4)
-                        getMedia().processChangeSpeedBatch();
-                    else if (sub == 5)
-                        getMedia().processConvertFormatBatch();
+                    if (sub == 1)      getMedia().processMediaAuto(); 
+                    else if (sub == 2) getMedia().processMediaEnhancementAuto();
+                    else if (sub == 3) getMedia().processExtractAudioBatch();
+                    else if (sub == 4) getMedia().processChangeSpeedBatch();
+                    else if (sub == 5) getMedia().processConvertFormatBatch();
+                    else if (sub == 6) getMedia().normalizeMediaFilenames();
+                    else if (sub == 7) getMedia().hideFileInImage();   
+                    else if (sub == 8) getMedia().hideFileInVideo();
+                    else if (sub == 9) getMedia().extractHiddenFromMedia();
 
                     if (sub != 1 && sub != 2)
                         waitEnter();
@@ -361,8 +338,7 @@ int main() {
     // === TỐI ƯU I/O ===
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
-    // Tăng tốc C++ I/O 
-    std::ios::sync_with_stdio(false);
+    std::ios::sync_with_stdio(false); // Tăng tốc C++ I/O 
     AppUI app;
     app.run();
     

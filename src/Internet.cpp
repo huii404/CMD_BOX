@@ -135,25 +135,7 @@ string Internet::getContentType(const string &fpath) {
     return (it != contentTypeMap.end()) ? it->second : "application/octet-stream";
 }
 
-// ==================== TỐI ƯU formatSize() ====================
 
-string Internet::formatSize(long long b) {
-    static const char* units[] = {"B", "KB", "MB", "GB", "TB"};
-    double sz = (double)b;
-    int i = 0;
-    while (sz >= 1024.0 && i < 4) {
-        sz /= 1024.0;
-        i++;
-    }
-    
-    char buf[32];
-    if (i == 0) {
-        sprintf_s(buf, sizeof(buf), "%.0f %s", sz, units[i]);
-    } else {
-        sprintf_s(buf, sizeof(buf), "%.2f %s", sz, units[i]);
-    }
-    return string(buf);
-}
 
 // ==================== TỐI ƯU openFW() ====================
 
@@ -175,13 +157,6 @@ string Internet::getField(const string &line) {
     return "";
 }
 
-string Internet::getTime() {
-    time_t now = time(0);
-    tm *t = localtime(&now);
-    char buf[100];
-    strftime(buf, sizeof(buf), "[%H:%M:%S]", t);
-    return string(buf);
-}
 
 HTTPRequest Internet::parseReq(const string &raw) {
     HTTPRequest req;
@@ -221,7 +196,7 @@ void Internet::sendFile(SOCKET client) {
     char buf[CHUNK];
     long long sent = 0;
     int prog = 0;
-    cout << getTime() << " | Gửi: ";
+    cout << SystemCore::getTime(false) << " | Gửi: ";
 
     while (f.read(buf, CHUNK) || f.gcount() > 0) {
         int toSend = (int)f.gcount();
@@ -304,7 +279,7 @@ void Internet::quickSharePRO() {
 
     cout << "\n" << string(70, '=') << "\n";
     cout << "Server chạy!\n";
-    cout << "[IP]: " << ip << " | Port: " << httpPort << " | File: " << shareName << " (" << formatSize(shareSize) << ")\n\n";
+    cout << "[IP]: " << ip << " | Port: " << httpPort << " | File: " << shareName << " (" << SystemCore::formatSize(shareSize) << ")\n\n";
     cout << "[URL]: http://" << ip << ":" << httpPort << "/" << shareName << "\n\n";
     cout << "\nCtrl+C để dừng\n";
     cout << string(70, '=') << "\n\n";
@@ -332,7 +307,7 @@ void Internet::handleClient(SOCKET client) {
     if (rcv > 0) {
         buf[rcv] = '\0';
         HTTPRequest req = parseReq(buf);
-        std::cout << getTime() << " | " << req.method << " " << req.path << "\n";
+        std::cout << SystemCore::getTime(false) << " | " << req.method << " " << req.path << "\n";
 
         if (req.method == "GET" && !sharePath.empty()) {
             // Decode URL: bỏ query string, decode %20, chuẩn hóa path
@@ -362,7 +337,7 @@ void Internet::handleClient(SOCKET client) {
             } else {
                 string err = "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nContent-Length: 9\r\nConnection: close\r\n\r\nForbidden";
                 send(client, err.c_str(), (int)err.length(), 0);
-                std::cout << getTime() << " | [!] Từ chối truy cập path: " << decoded << "\n";
+                std::cout << SystemCore::getTime(false) << " | [!] Từ chối truy cập path: " << decoded << "\n";
             }
         }
     }
@@ -390,8 +365,8 @@ bool Internet::checkFileSizeAndConfirm(const string &path, long long &outSize) {
     if (fileSize > MAX_FILE_SIZE) {
         cout << "\n" << string(70, '=') << "\n";
         cout << "[⚠️  CẢNH BÁO] File vượt quá giới hạn an toàn!\n";
-        cout << "Kích thước file: " << formatSize(fileSize) << "\n";
-        cout << "Giới hạn tối đa:  " << formatSize(MAX_FILE_SIZE) << "\n";
+        cout << "Kích thước file: " << SystemCore::formatSize(fileSize) << "\n";
+        cout << "Giới hạn tối đa:  " << SystemCore::formatSize(MAX_FILE_SIZE) << "\n";
         cout << string(70, '=') << "\n";
 
         string confirm;
@@ -415,7 +390,7 @@ bool Internet::getFileSizeInfoAndPrompt(const string &path, long long &outSize) 
 
     cout << "\n[✓] Thông tin file:\n";
     cout << "    - Đường dẫn: " << path << "\n";
-    cout << "    - Dung lượng: " << formatSize(outSize) << "\n";
+    cout << "    - Dung lượng: " << SystemCore::formatSize(outSize) << "\n";
 
     string proceedChoice;
     cout << "\n[?] Tiếp tục với quá trình chia sẻ? (Y/N): ";
@@ -619,7 +594,7 @@ void Internet::handleChatClient(SOCKET client) {
                 }
             }
 
-            chatHistory.push_back(getTime() + " : " + decodedMsg);
+            chatHistory.push_back(SystemCore::getTime(false) + " : " + decodedMsg);
             cout << "[NEW MSG] " << decodedMsg << endl;
         }
         string ok = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
@@ -638,22 +613,26 @@ void Internet::handleChatClient(SOCKET client) {
 // ==================== BẢO MẬT NÂNG CAO (GIỮ NGUYÊN) ====================
 
 void Internet::enableWindowsDefender() {
+    sc.cls();
     sc.runAdmin("powershell -Command \"Set-MpPreference -DisableRealtimeMonitoring $false\"", true);
     sc.runCMD("cmd /c \"\"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -SignatureUpdate\"");
     cout << "[+] Windows Defender – bảo vệ thời gian thực đã bật.\n";
 }
 
 void Internet::enableFirewall() {
+    sc.cls();
     sc.runAdmin("netsh advfirewall set allprofiles state on", true);
     cout << "[+] Tường lửa Windows đã bật cho tất cả profile.\n";
 }
 
 void Internet::enableControlledFolderAccess() {
+    sc.cls();
     sc.runAdmin("powershell -Command \"Set-MpPreference -EnableControlledFolderAccess Enabled\"", true);
     cout << "[+] Truy cập thư mục có kiểm soát (Controlled Folder Access) đã bật.\n";
 }
 
 void Internet::disableInsecureProtocols() {
+    sc.cls();
     sc.runAdmin("reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters\" /v SMB1 /t REG_DWORD /d 0 /f", true);
     sc.runAdmin("reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient\" /v EnableMulticast /t REG_DWORD /d 0 /f", true);
     string psNetBios = "Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-NetAdapter -Name $_.Name -NetLuid $_.NetLuid -NetBIOSSetting Disabled }";
@@ -662,6 +641,7 @@ void Internet::disableInsecureProtocols() {
 }
 
 void Internet::blockDangerousPorts() {
+    sc.cls();
     // Các port nguy hiểm thông thường (chặn không hỏi)
     vector<int> normalPorts = {445, 139, 135, 137, 138};
 
@@ -699,6 +679,7 @@ void Internet::blockDangerousPorts() {
 }
 
 void Internet::configureDNSoverHTTPS() {
+    sc.cls();
     string psDns = "Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ServerAddresses ('1.1.1.1','1.0.0.1') }";
     sc.runAdmin("powershell -Command \"" + psDns + "\"", true);
     sc.runAdmin("reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\" /v EnableAutoDoh /t REG_DWORD /d 2 /f", true);
@@ -706,6 +687,7 @@ void Internet::configureDNSoverHTTPS() {
 }
 
 void Internet::checkSecurityStatus() {
+    sc.cls();
     cout << "\n========== BÁO CÁO TRẠNG THÁI BẢO MẬT ==========\n";
     cout << "[*] Windows Defender:\n";
     sc.runCMD("powershell -Command \"Get-MpComputerStatus | Select-Object AntivirusEnabled, RealTimeProtectionEnabled, IoavProtectionEnabled\"");
