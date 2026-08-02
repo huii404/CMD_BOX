@@ -19,7 +19,6 @@
 namespace fs = std::filesystem;
 using namespace std;
 
-#pragma comment(lib, "ws2_32.lib")
 
 // ==================== STATIC CACHE ====================
 static string cachedIP = "";
@@ -293,6 +292,13 @@ void Internet::quickSharePRO() {
 
     listen(listenSocket, SOMAXCONN);
 
+    // check
+    if (listenSocket == INVALID_SOCKET) {
+        cout << "[!] Socket không hợp lệ!\n";
+        WSACleanup();
+        return;
+    }
+
     string ip = getLocalIP();
     openFW();
 
@@ -317,6 +323,11 @@ void Internet::handleClient(SOCKET client) {
     const int BUFSIZE = 4096;
     char buf[BUFSIZE];
     int rcv = recv(client, buf, BUFSIZE - 1, 0);
+
+    if (rcv <= 0) {
+        closesocket(client);
+        return;
+    }
 
     if (rcv > 0) {
         buf[rcv] = '\0';

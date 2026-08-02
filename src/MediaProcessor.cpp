@@ -218,12 +218,16 @@ bool MediaProcessor::runCommand(const string& command) {
         }
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
+    }else{
+        //check
+        std::cerr << "[!] Không thể tạo process. Lỗi: " << GetLastError() << "\n";
+        success = false;
     }
-    
-    if (hNull != INVALID_HANDLE_VALUE) {
+
+    if (hNull != INVALID_HANDLE_VALUE){
         CloseHandle(hNull);
     }
-    
+
     return success;
 }
 

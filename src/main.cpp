@@ -71,11 +71,6 @@ private:
 
 public:
     AppUI() {
-        // Pre-allocate memory cho các chuỗi/mảng đệm
-        std::string dummy;
-        dummy.reserve(1024);
-        std::vector<int> dummyVec;
-        dummyVec.reserve(100);
     }
 
     ~AppUI() = default;
@@ -366,19 +361,9 @@ int main() {
     // === TỐI ƯU I/O ===
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
-    
-    // Tăng tốc C++ I/O bằng cách bỏ đồng bộ luồng C tiêu chuẩn
+    // Tăng tốc C++ I/O 
     std::ios::sync_with_stdio(false);
-    
-    // Cấp phát trước bộ nhớ đệm chống phân mảnh RAM
-    std::string dummy;
-    dummy.reserve(4096);
-    std::vector<int> dummyVec;
-    dummyVec.reserve(100);
-    
     AppUI app;
-    
-    // Chạy app
     app.run();
     
     return 0;

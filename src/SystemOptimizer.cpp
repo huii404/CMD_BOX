@@ -23,7 +23,6 @@ void SystemOptimizer::FullScanVirus() {
 void SystemOptimizer::Consumer_Content() { sc.runCMD("reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager\" /v \"SilentInstalledAppsEnabled\" /t REG_DWORD /d 0 /f"); }
 void SystemOptimizer::Hibernate() { sc.runAdmin("powercfg -h off", true); }
 void SystemOptimizer::windowsTelemetry() { sc.runAdmin("reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection\" /v AllowTelemetry /t REG_DWORD /d 0 /f", true); }
-void SystemOptimizer::reduceShutdownTime() { sc.runCMD("reg add \"HKCU\\Control Panel\\Desktop\" /v \"WaitToKillAppTimeout\" /t REG_SZ /d \"2000\" /f"); }
 
 
 void SystemOptimizer::cleanDiskPro() {
@@ -668,11 +667,16 @@ void SystemOptimizer::turnOffServicesMenu() {
             }
             std::cout << "\n[SUCCESS] Hoàn tất! Đã tối ưu " << successCount << "/" << targetSvcs.size() << " dịch vụ.\n";
             sc.waitEnter();
-        } 
-        else {
-            try {
+        }
+        else{
+            if(input.empty()){
+                std::cout << "[!] Vui lòng nhập lựa chọn!\n";
+                Sleep(1000);
+                continue;
+            }try{
                 int idx = std::stoi(input) - 1;
-                if (idx >= 0 && idx < (int)targetSvcs.size()) {
+                if (idx >= 0 && idx < (int)targetSvcs.size())
+                {
                     sc.cls();
                     std::cout << "=== CẤU HÌNH RIÊNG LẺ DỊCH VỤ ===\n";
                     std::cout << "Dịch vụ: " << targetSvcs[idx].desc << " [" << targetSvcs[idx].name << "]\n\n";
@@ -692,11 +696,15 @@ void SystemOptimizer::turnOffServicesMenu() {
                         std::cout << "[!] Thất bại! Cần chạy công cụ bằng quyền Administrator.\n";
                     }
                     sc.waitEnter();
-                } else {
+                }
+                else
+                {
                     std::cout << "[!] Số thứ tự nằm ngoài phạm vi danh sách!\n";
                     Sleep(1000);
                 }
-            } catch (...) {
+            }
+            catch (...)
+            {
                 std::cout << "[!] Vui lòng nhập số thứ tự hoặc ký tự hợp lệ!\n";
                 Sleep(1000);
             }

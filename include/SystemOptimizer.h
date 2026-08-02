@@ -16,7 +16,6 @@ public:
     void cleanDiskBase();
     void QuickScanVirus();
     void FullScanVirus();
-    void restart();
     void Consumer_Content();
     void Hibernate();
     void windowsTelemetry();
