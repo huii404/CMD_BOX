@@ -17,7 +17,6 @@ namespace fs = std::filesystem;
 UtilityTools::UtilityTools(SystemCore &s) : sc(s) {}
 
 
-
 // Lưu lịch sử download
 static void saveDownloadHistory(const string& appName) {
     try {
@@ -35,7 +34,6 @@ static void saveDownloadHistory(const string& appName) {
 }
 
 // ==================== AUTO CLICK (NÂNG CẤP) ====================
-
 void UtilityTools::autoClickPoint() {
     sc.cls();
     cout << "============================================================\n";
@@ -82,7 +80,6 @@ void UtilityTools::autoClickPoint() {
 }
 
 // ==================== SPAM TEXT (NÂNG CẤP) ====================
-
 void UtilityTools::spamText() {
     sc.cls();
     cout << "============================================================\n";
@@ -297,7 +294,6 @@ void UtilityTools::ShowN_QR() {
 }
 
 // ==================== DOWNLOAD MANAGER (NÂNG CẤP) ====================
-
 void UtilityTools::downloadManager() {
     vector<AppInfo> appList = {
         {"Google Chrome", "https://dl.google.com/tag/s/appname%3DGoogle%2520Chrome/update2/installers/ChromeSetup.exe", "ChromeSetup.exe"},
@@ -308,15 +304,12 @@ void UtilityTools::downloadManager() {
         {"Zalo PC", "https://zalo.me/download/zalo-pc", "ZaloSetup.exe"},
         {"Discord", "https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64", "DiscordSetup.exe"},
         {"Telegram PC", "https://telegram.org/dl/desktop/win64", "TelegramSetup.exe"},
-        {"Spotify", "https://download.scdn.co/SpotifySetup.exe", "SpotifySetup.exe"},
         {"7-Zip (Giải nén)", "https://www.7-zip.org/a/7z2408-x64.exe", "7zipSetup.exe"},
         {"WinRAR", "https://www.rarlab.com/rar/winrar-x64-701.exe", "WinRARSetup.exe"},
-        {"Geek Uninstaller", "https://geekuninstaller.com/geek.zip", "GeekUninstaller.zip"},
         {"WARP 1.1.1.1", "https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-x64.msi", "CloudflareWARP.msi"},
         {"VS Code", "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user", "VSCodeSetup.exe"},
         {"Notepad++", "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.6.7/npp.8.6.7.Installer.x64.exe", "NotepadPlusPlusSetup.exe"},
         {"Git for Windows", "https://github.com/git-for-windows/git/releases/download/v2.45.1.windows.1/Git-2.45.1-64-bit.exe", "GitSetup.exe"},
-        {"Epic Games", "https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/installer/download/EpicGamesLauncherInstaller.msi", "EpicGamesSetup.msi"}
     };
 
     sc.cls();
@@ -456,12 +449,8 @@ void UtilityTools::showDownloadHistory() {
 }
 
 // ==================== UNINSTALL BLOATWARE ====================
-
 void UtilityTools::uninstallBloatware() {
     sc.cls();
-    cout << "============================================================\n";
-    cout << "           XOA APP RAC (BLOATWARE)\n";
-    cout << "============================================================\n";
     
     string listRac = "BingWeather|BingNews|SolitaireCollection|People|PowerAutomateDesktop|"
                      "Todo|GetHelp|Getstarted|OfficeHub|SkypeApp|YourPhone|FeedbackHub|"
@@ -483,24 +472,4 @@ void UtilityTools::uninstallBloatware() {
     sc.runAdmin(cmd, true);
     
     cout << "\n[✓] Hoan thanh xoa app rac!\n";
-}
-
-// ==================== HIỂN THỊ MENU ====================
-
-void UtilityTools::showToolsMenu() {
-    sc.cls();
-    cout << "============================================================\n";
-    cout << "           CONG CU TIEN ICH\n";
-    cout << "============================================================\n";
-    cout << " [1] Auto Click\n";
-    cout << " [2] Spam Text (1 dong + xuong dong)\n";
-    cout << " [3] Auto Paste Data\n";
-    cout << " [4] Tao QR Code (1 cai)\n";
-    cout << " [5] Tao QR Code (Nhieu cai)\n";
-    cout << " [6] Download Manager\n";
-    cout << " [7] Xem lich su Download\n";
-    cout << " [8] Xoa app rac (Bloatware)\n";
-    cout << " [0] Quay lai\n";
-    cout << "============================================================\n";
-    cout << " [Chon]: ";
 }

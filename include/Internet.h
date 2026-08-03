@@ -50,7 +50,6 @@ public:
     void netsh_tcpIP();
     void quickSharePRO();
     void startLocalChat();
-    // === Các phương thức bảo mật mới ===
     void enableWindowsDefender();
     void enableFirewall();
     void enableControlledFolderAccess();

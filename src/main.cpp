@@ -140,8 +140,7 @@ public:
         cout << " [Chọn]: ";
     }
 
-    void menuUngDungTienIch()
-    {
+    void menuUngDungTienIch(){
         cls();
         cout << " [1] Tải và cài đặt ứng dụng (Chrome, Zalo, Discord...)\n";
         cout << " [2] Xóa app rác (Bloatware)\n";
@@ -235,7 +234,6 @@ public:
                     else if (sub == 8) getInternet().enableWindowsDefender();
                     else if (sub == 9) getInternet().enableFirewall();                    
                     else if (sub == 10)getInternet().enableControlledFolderAccess();
-                    
                     else if (sub == 11)getInternet().disableInsecureProtocols();
                     else if (sub == 12)getInternet().blockDangerousPorts();
                     else if (sub == 13)getInternet().configureDNSoverHTTPS();

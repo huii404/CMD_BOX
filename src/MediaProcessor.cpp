@@ -715,8 +715,8 @@ void MediaProcessor::processConvertFormatBatch() {
     }
 }
 
-// ==================== CHUẨN HÓA TÊN FILE MEDIA ====================
 
+// ==================== CHUẨN HÓA TÊN FILE MEDIA ====================
 void MediaProcessor::normalizeMediaFilenames() {
     // Dùng SystemCore để xóa màn hình (vì hàm cls là static)
     system("cls");
@@ -984,7 +984,7 @@ static bool extractHiddenFile(const std::string& containerPath, const std::strin
     return true;
 }
 
-// ==================== TRÍCH XUẤT FILE ẨN (TÊN TỰ ĐỘNG) ====================
+//TRÍCH XUẤT FILE ẨN (TÊN TỰ ĐỘNG)
 void MediaProcessor::extractHiddenFromMedia() {
     system("cls");
     std::cout << "-> File chứa (ảnh/video): ";

@@ -238,7 +238,6 @@ int SystemCore::readInt(const std::string &prompt) {
 }
 
 // ==================== SYSTEM COMMANDS ====================
-
 void SystemCore::runCMD(const std::string &cmd) {
     STARTUPINFOA si = {sizeof(si)};
     PROCESS_INFORMATION pi = {};
@@ -301,7 +300,6 @@ bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
 
 
 // ==================== MOUSE & KEYBOARD ====================
-
 void SystemCore::leftClick() {
     INPUT input[2] = {};
     input[0].type = INPUT_MOUSE;

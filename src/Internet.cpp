@@ -406,18 +406,12 @@ bool Internet::getFileSizeInfoAndPrompt(const string &path, long long &outSize) 
 }
 
 void Internet::showIP() {
-    cout << "\n====================================================\n";
-    cout << "             THÔNG TIN MẠNG IPV4 CỐT LÕI            \n";
-    cout << "====================================================\n";
     sc.runCMD("chcp 437 >nul & ipconfig | findstr /i \"IPv4 Subnet Gateway\" & chcp 65001 >nul");
-    cout << "====================================================\n";
 }
 
 void Internet::renewIP() { sc.runCMD("ipconfig /renew"); }
 void Internet::flushdns() { sc.runCMD("ipconfig /flushdns"); }
 void Internet::netsh_tcpIP() { sc.runAdmin("netsh int ip reset"); }
-
-// ==================== wifiAudit() - TỐI ƯU ====================
 
 void Internet::wifiAudit() {
     sc.cls();
@@ -492,8 +486,6 @@ void Internet::wifiAudit() {
     cout << "====================================================\n";
 }
 
-// ==================== startLocalChat() - TỐI ƯU ====================
-
 void Internet::startLocalChat() {
     sc.cls();
     httpPort = 9000;
@@ -541,8 +533,6 @@ void Internet::startLocalChat() {
         }
     }
 }
-
-// ==================== handleChatClient() - TỐI ƯU ====================
 
 void Internet::handleChatClient(SOCKET client) {
     char buf[4096];
@@ -609,8 +599,6 @@ void Internet::handleChatClient(SOCKET client) {
     }
     closesocket(client);
 }
-
-// ==================== BẢO MẬT NÂNG CAO (GIỮ NGUYÊN) ====================
 
 void Internet::enableWindowsDefender() {
     sc.cls();

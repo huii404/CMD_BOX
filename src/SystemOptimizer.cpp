@@ -80,7 +80,7 @@ void SystemOptimizer::cleanDiskPro() {
     sc.runCMD("ipconfig /flushdns");
     cout << "[✓] Đã dọn Browser, Recycle Bin, DNS\n";
 
-    // === 2. DỌN RÁC HỆ THỐNG (CẦN ADMIN - GỘP 1 BATCH) ===
+    //  DỌN RÁC HỆ THỐNG  ADMIN - GỘP 1 BATCH
     lock_guard<mutex> lock(batchMutex);
     
     fs::path absoluteBatPath = fs::absolute("CleanDiskPro_Advanced.bat");
@@ -94,7 +94,6 @@ void SystemOptimizer::cleanDiskPro() {
 
     batFile << "@echo off\n";
     batFile << "chcp 65001 > nul\n";
-    batFile << "echo [*] Dang don rac he thong...\n\n";
 
     // Temp & Prefetch (song song trong batch bằng start)
     batFile << "echo [1/9] Don temp he thong...\n";
@@ -102,41 +101,39 @@ void SystemOptimizer::cleanDiskPro() {
     batFile << "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\temp\" /mir /w:0 /r:0 /log:nul\n";
     batFile << "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\Prefetch\" /mir /w:0 /r:0 /log:nul\n";
     
-    batFile << "echo [2/9] Don Windows Update cache...\n";
+    // Don Windows Update cache
     batFile << "del /f /s /q \"%systemroot%\\SoftwareDistribution\\Download\\*\" 2>nul\n";
     
-    batFile << "echo [3/9] Don CBS logs...\n";
+    //Don CBS logs
     batFile << "del /f /s /q \"%systemroot%\\Logs\\CBS\\*.*\" 2>nul\n";
     batFile << "del /f /q %windir%\\WindowsUpdate.log 2>nul\n";
     
-    batFile << "echo [4/9] Don Windows Error Reporting...\n";
+    //  Don Windows Error Reporting
     batFile << "del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\ReportQueue\\*\" 2>nul\n";
     batFile << "del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\ReportArchive\\*\" 2>nul\n";
     
-    batFile << "echo [5/9] Don Windows Defender history...\n";
+    // Don Windows Defender history
     batFile << "del /f /s /q \"%ProgramData%\\Microsoft\\Windows Defender\\Scans\\History\\*\" 2>nul\n";
     batFile << "del /f /s /q \"%ProgramData%\\Microsoft\\Windows Defender\\LocalCopy\\*\" 2>nul\n";
     
-    batFile << "echo [6/9] Don Font cache...\n";
+    // Don Font cache
     batFile << "net stop FontCache 2>nul\n";
     batFile << "del /f /s /q \"%WinDir%\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\*\" 2>nul\n";
     batFile << "net start FontCache 2>nul\n";
     
-    batFile << "echo [7/9] Don Delivery Optimization...\n";
+    // Don Delivery Optimization
     batFile << "powershell -Command \"Get-DeliveryOptimizationStatus | Remove-DeliveryOptimizationCache -Confirm:$false\" 2>nul\n";
     
-    batFile << "echo [8/9] Don Event Logs...\n";
+    // Don Event Logs
     batFile << "wevtutil el 2>nul | foreach { wevtutil cl \"$_\" 2>nul }\n";
     
-    batFile << "echo [9/9] Don memory dumps...\n";
+    //  Don memory dumps
     batFile << "del /f /s /q \"%SystemRoot%\\Minidump\\*\" 2>nul\n";
     batFile << "del /f /q \"%SystemRoot%\\Memory.dmp\" 2>nul\n";
     
-    // Cleanmgr cuối cùng
-    batFile << "echo [FINAL] Chay cleanmgr...\n";
+    // Cleanmgr
     batFile << "cleanmgr /sagerun:1\n";
     batFile << "rmdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
-    
 
     batFile << "\necho [OK] Hoan tat!\n";
     batFile << "exit\n";
@@ -148,7 +145,7 @@ void SystemOptimizer::cleanDiskPro() {
     Sleep(500);
     fs::remove(absoluteBatPath);
 
-    // === 3. TÍNH DUNG LƯỢNG GIẢI PHÓNG ===
+    //TÍNH DUNG LƯỢNG GIẢI PHÓNG 
     long long bytesAfter = 0;
     try {
         fs::space_info space = fs::space("C:\\");
@@ -168,8 +165,7 @@ void SystemOptimizer::cleanDiskPro() {
     cout << "\n[✓] THANH CONG\n";
 }
 
-void SystemOptimizer::cleanDiskBase() {
-    cout << "[...] Dang don rac he thong...\n\n";    
+void SystemOptimizer::cleanDiskBase() {   
     cout << "[1] Xoa temp nguoi dung...\n"; sc.runCMD("cmd /c del /s /f /q \"%temp%\\*\" 2>nul & rd /s /q \"%temp%\" 2>nul & md \"%temp%\" 2>nul");
     cout << "[2] Xoa temp he thong...\n"; sc.runCMD("cmd /c del /s /f /q \"%systemroot%\\temp\\*\" 2>nul & rd /s /q \"%systemroot%\\temp\" 2>nul & md \"%systemroot%\\temp\" 2>nul");
     cout << "[3] Xoa Prefetch...\n"; sc.runCMD("cmd /c del /s /f /q \"%systemroot%\\Prefetch\\*\" 2>nul");
@@ -319,10 +315,6 @@ void SystemOptimizer::clearBrowserCache() {
 
 void SystemOptimizer::optimizeSystemPRO() {
     sc.cls();
-    cout << "====================================================================\n";
-    cout << "========= TIẾN TRÌNH TỐI ƯU HỆ THỐNG TOÀN DIỆN CHUYÊN SÂU PRO =======\n";
-    cout << "====================================================================\n";
-    cout << "Đang chuẩn bị gói cấu hình tối ưu\n\n";
 
     // Lấy đường dẫn tuyệt đối cho file .bat tạm thời để tránh lỗi lạc hướng thư mục của Admin
     fs::path absoluteBatPath = fs::absolute("OptimizeSystem.bat");
@@ -333,9 +325,8 @@ void SystemOptimizer::optimizeSystemPRO() {
     if (batFile.is_open()) {
         batFile << "@echo off\n";
         batFile << "chcp 65001 > nul\n"; 
-        batFile << "echo ======= TIẾN TRÌNH TỐI ƯU HỆ THỐNG ĐANG CHẠY CHUYÊN SÂU =======\n\n";
 
-        batFile << "echo [+] Dang don dep bo nho dem va file rac Pro...\n";
+        // Dang don dep bo nho dem va file rac Pro
         batFile << "del /s /f /q \"%%systemroot%%\\temp\\*\" & rd /s /q \"%%systemroot%%\\temp\" & md \"%%systemroot%%\\temp\"\n";
         batFile << "del /s /f /q \"%%systemroot%%\\Prefetch\\*\"\n";
         batFile << "dism /online /cleanup-image /startcomponentcleanup\n";
@@ -364,40 +355,28 @@ void SystemOptimizer::optimizeSystemPRO() {
         batFile << "powercfg -h off\n";
 
         // ==================== BỔ SUNG: TỐI ƯU TASKBAR ====================
-        batFile << "\necho ============================================================\n";
-        batFile << "echo            TOI UU TASKBAR WINDOWS\n";
-        batFile << "echo ============================================================\n";
-        
         // 1. Tắt Search (0=Ẩn, 1=Icon, 2=Box)
-        batFile << "echo [1/7] Tat Search...\n";
         batFile << "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Search\" /v SearchboxTaskbarMode /t REG_DWORD /d 0 /f\n";
         
         // 2. Tắt Widgets (0=Tắt, 1=Bật)
-        batFile << "echo [2/7] Tat Widgets...\n";
         batFile << "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v TaskbarDa /t REG_DWORD /d 0 /f\n";
         
         // 3. Tắt Chat/Teams (0=Tắt, 1=Bật)
-        batFile << "echo [3/7] Tat Chat (Teams)...\n";
         batFile << "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v TaskbarMn /t REG_DWORD /d 0 /f\n";
         
         // 4. Tắt Task View (0=Tắt, 1=Bật)
-        batFile << "echo [4/7] Tat Task View...\n";
         batFile << "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v ShowTaskViewButton /t REG_DWORD /d 0 /f\n";
         
         // 5. Tắt News & Interests (0=Bật, 1=Icon, 2=Tắt)
-        batFile << "echo [5/7] Tat News & Interests...\n";
         batFile << "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Feeds\" /v ShellFeedsTaskbarViewMode /t REG_DWORD /d 2 /f\n";
         
         // 6. Tắt Copilot (0=Bật, 1=Tắt)
-        batFile << "echo [6/7] Tat Copilot...\n";
         batFile << "reg add \"HKCU\\Software\\Policies\\Microsoft\\Windows\\WindowsCopilot\" /v TurnOffWindowsCopilot /t REG_DWORD /d 1 /f\n";
         
         // 7. Tắt Snap Assist (khi hover nút Maximize)
-        batFile << "echo [7/7] Tat Snap Assist...\n";
         batFile << "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v SnapAssist /t REG_DWORD /d 0 /f\n";
         
         // Restart Explorer để áp dụng
-        batFile << "echo [*] Khoi dong lai Explorer de ap dung...\n";
         batFile << "taskkill /f /im explorer.exe & start explorer.exe\n";
         // ================================================================
 
@@ -410,11 +389,10 @@ void SystemOptimizer::optimizeSystemPRO() {
         cout << "[i] Dang yeu cau 1 quyen Admin" << endl;
         sc.runAdmin("\"" + tempBatPath + "\"", true);
 
-        cout << "\n[...] Dang don dep bo nho dem Browser (Chrome, Edge, Firefox...)\n";
+        //Dang don dep bo nho dem Browser (Chrome, Edge, Firefox...)
         clearBrowserCache(); 
 
-        cout << "[...] Đang giải phóng siêu tốc bộ nhớ đệm người dùng...\n";
-        
+        // Đang giải phóng siêu tốc bộ nhớ đệm người dùng
         sc.runCMD("cmd /c \"mkdir \"%LocalAppData%\\EmptyFolderTmp\" 2>nul\"");
         sc.runCMD("cmd /c \"robocopy \"%LocalAppData%\\EmptyFolderTmp\" \"%temp%\" /mir /w:0 /r:0 /log:nul\"");
         sc.runCMD("cmd /c \"rmdir \"%LocalAppData%\\EmptyFolderTmp\" 2>nul\"");
