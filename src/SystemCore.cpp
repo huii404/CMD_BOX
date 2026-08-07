@@ -122,7 +122,7 @@ bool SystemCore::runRawCommand(const std::string& command) {
 std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
     if (rawInput.empty() || rawInput == "0") return {};
 
-    // Tách chuỗi (giữ nguyên logic cũ của MediaProcessor)
+    // Tách chuỗi 
     std::string processed = rawInput;
     for (int i = (int)processed.length() - 3; i >= 1; --i) {
         char prev = processed[i - 1];

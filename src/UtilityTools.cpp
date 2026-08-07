@@ -414,7 +414,6 @@ void UtilityTools::processDownload(const AppInfo &app) {
         cin >> answer;
         
         if (answer == "y" || answer == "Y") {
-            cout << "    [>] Dang chay installer...\n";
             sc.runCMD("start \"\" \"" + fullPath + "\"");
         } else {
             cout << "    [i] Da luu file tai: " << fullPath << "\n";
@@ -471,5 +470,4 @@ void UtilityTools::uninstallBloatware() {
     
     sc.runAdmin(cmd, true);
     
-    cout << "\n[✓] Hoan thanh xoa app rac!\n";
 }

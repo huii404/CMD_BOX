@@ -27,9 +27,8 @@ void SystemOptimizer::windowsTelemetry() { sc.runAdmin("reg add \"HKLM\\SOFTWARE
 
 void SystemOptimizer::cleanDiskPro() {
     sc.cls();
-    cout << "====================================================================\n";
-    cout << "             TIẾN TRÌNH DỌN RÁC CHUYÊN SÂU PRO\n";
-    cout << "====================================================================\n";
+    cout << "             TIẾN TRÌNH DỌN RÁC CHUYÊN SÂU PRO\n\n";
+
 
     // === ĐO DUNG LƯỢNG TRƯỚC ===
     long long bytesBefore = 0;
@@ -135,11 +134,11 @@ void SystemOptimizer::cleanDiskPro() {
     batFile << "cleanmgr /sagerun:1\n";
     batFile << "rmdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
 
-    batFile << "\necho [OK] Hoan tat!\n";
+    batFile << "\necho [OK] Hòan tất!\n";
     batFile << "exit\n";
     batFile.close();
 
-    cout << "\n[i] Yeu cau quyen Admin de don rac he thong...\n";
+    cout << "\n[i] Yêu cầu quyền Admin để dọn rác hệ thống...\n";
     sc.runAdmin("\"" + tempBatPath + "\"", true);
     
     Sleep(500);
@@ -152,6 +151,7 @@ void SystemOptimizer::cleanDiskPro() {
         bytesAfter = space.available;
     } catch (...) {}
     
+    sc.cls();
     long long freed = bytesAfter - bytesBefore;
     if (freed > 0) {
         double size = freed;
@@ -159,10 +159,10 @@ void SystemOptimizer::cleanDiskPro() {
         if (freed >= 1024LL * 1024LL * 1024LL) { size /= (1024.0 * 1024.0 * 1024.0); unit = "GB"; }
         else if (freed >= 1024LL * 1024LL) { size /= (1024.0 * 1024.0); unit = "MB"; }
         else if (freed >= 1024LL) { size /= 1024.0; unit = "KB"; }
-        printf("\n[✓] Da giai phong: %.2f %s\n", size, unit.c_str());
+        printf("\n\n[✓] Da giai phong: %.2f %s\n", size, unit.c_str());
     }
 
-    cout << "\n[✓] THANH CONG\n";
+    cout << "\n[✓] THÀNH CÔNG\n";
 }
 
 void SystemOptimizer::cleanDiskBase() {   
@@ -354,7 +354,7 @@ void SystemOptimizer::optimizeSystemPRO() {
         batFile << "echo [+] Dang tat tinh nang Hibernate de lay lai dung luong o C...\n";
         batFile << "powercfg -h off\n";
 
-        // ==================== BỔ SUNG: TỐI ƯU TASKBAR ====================
+        // BỔ SUNG: TỐI ƯU TASKBAR
         // 1. Tắt Search (0=Ẩn, 1=Icon, 2=Box)
         batFile << "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Search\" /v SearchboxTaskbarMode /t REG_DWORD /d 0 /f\n";
         
@@ -378,11 +378,9 @@ void SystemOptimizer::optimizeSystemPRO() {
         
         // Restart Explorer để áp dụng
         batFile << "taskkill /f /im explorer.exe & start explorer.exe\n";
-        // ================================================================
 
-        // Lệnh kết thúc bắt buộc để đóng cửa sổ Admin sau khi chạy xong toàn bộ
-        batFile << "\necho [OK] Tat ca tac vu toi uu da hoan tat!\n";
         batFile << "exit\n";
+
         
         batFile.close();
 
