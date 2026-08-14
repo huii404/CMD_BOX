@@ -21,13 +21,11 @@ public:
     SystemCore();
     ~SystemCore();
 
-    void setColor(int color);
     void cls();
     static std::string getTime(bool includeDate = true);
     void waitEnter();
     static std::string trim(const std::string& str);
     static int readInt(const std::string &prompt);
-    static std::string readString(const std::string &prompt);
     static std::string formatSize(long long b);
     static bool runRawCommand(const std::string& command);
     static std::vector<std::string> parsePaths(const std::string& rawInput);
@@ -37,7 +35,7 @@ public:
     void runCMD(const std::string &cmd); // system-user
     static bool runAdmin(const std::string &cmd, bool silent = false); // system-admin
     
-    // === MOUSE & KEYBOARD ===
+    // Chuột & bàn phím
     void leftClick();
     void pressEnter();
     void setClipboard(const std::string &text);

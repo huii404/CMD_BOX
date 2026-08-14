@@ -1,142 +1,105 @@
-Tôi sẽ chỉnh sửa README.md cho phù hợp với code hiện tại (đã xóa Waifu2x):
+# 🛠️ CMD BOX - SYSTEM TOOLKIT
+
+> **Tác giả:** [huii404](https://github.com/huii404)  
+> **Ngôn ngữ:** C++17 | **Nền tảng:** Windows (x64)
 
 ---
 
-# 🛠️ CMD-TOOL v0.4.0 
+## I. Giới thiệu Tổng quan
 
-> **Tác giả:** huii404
+**CMD BOX** là bộ công cụ quản trị, bảo trì, tối ưu hóa và tiện ích hệ thống được xây dựng trên nền tảng C++ native. Phần mềm can thiệp an toàn vào hệ thống Windows thông qua Windows API trực tiếp, giúp tối ưu hóa hiệu năng, bảo mật và cung cấp các công cụ hữu ích mà không tiêu tốn tài nguyên nền.
 
----
-
-## I. Giới thiệu Tổng quan & Ưu điểm Vượt trội
-
-**CMD-TOOL** là phần mềm quản trị hệ thống chuyên sâu được xây dựng trên nền tảng C++ native, giúp can thiệp an toàn và tối ưu tài nguyên máy tính triệt để.
-
-### 🚀 Ưu điểm độc quyền:
-* **Quản lý Tiến trình An toàn (Windows Job Objects):** Các tiến trình con (DISM, SFC, curl...) được gán chặt vào `hJob`. Khi tắt đột ngột tool (`Ctrl + C` hoặc đóng cửa sổ), toàn bộ tiến trình con lập tức bị khai tử, không gây treo máy hay kẹt nền.
-* **Siêu nhẹ & Tối ưu (Zero-Overhead):** Loại bỏ hoàn toàn `using namespace std;`, tối ưu vùng nhớ qua truyền tham chiếu hằng (`const std::string&`). Chiếm dưới 5MB RAM khi vận hành.
-* **Gỡ sạch Bloatware:** Dùng PowerShell và lọc Regex bóc tách tận gốc ứng dụng rác cài sẵn (Copilot, Teams, Candy Crush...) mà không ảnh hưởng tới Microsoft Office.
-* **Chia sẻ & Giao tiếp Nội bộ (LAN HTTP Server):** Tự khởi tạo mạng HTTP Server và Socket (Winsock2) trực tiếp trên RAM để truyền file qua Wi-Fi/LAN, không phụ thuộc Cloud, bảo mật tuyệt đối.
+### 🚀 Ưu điểm nổi bật
+* **Quản lý tiến trình an toàn (Windows Job Objects):** Mọi tiến trình con khởi tạo từ tool đều được gắn vào Job Object của hệ điều hành. Khi người dùng đóng tool hoặc nhấn `Ctrl + C`, toàn bộ tiến trình con sẽ được dọn dẹp sạch sẽ, không gây chạy ngầm.
+* **Tối ưu hóa tài nguyên:** Khởi tạo trễ (Lazy Loading) với `std::unique_ptr` và cơ chế Thread-safe, chiếm dưới 5MB RAM khi vận hành.
+* **Giao diện Console tinh tế:** Giao diện dòng lệnh trực quan, điều hướng nhanh chóng bằng phím số.
+* **Không phụ thuộc Cloud:** Các tính năng chia sẻ file, chat nội bộ hoạt động trực tiếp qua mạng LAN nội bộ bằng socket Winsock2.
 
 ---
 
-## II. Cấu trúc Chức năng Cốt lõi
+## II. Cấu trúc Tính năng
 
-### 1. 📊 Thông tin Hệ thống (Module: `SystemCore`)
-* **Phần cứng sâu:** Đọc CPU Model bằng hợp ngữ (`__cpuid`), tính Uptime, check dung lượng ổ C, phân biệt Win 10/11 và kiểm tra bản quyền qua `slmgr.vbs`.
-* **Cấu hình mạng:** Kiểm tra toàn bộ cổng mạng đang kết nối/lắng nghe (ESTABLISHED/LISTENING) kèm PID quản lý qua `netstat/ipconfig`.
+Chương trình được chia thành **4 phân hệ chính**:
 
-### 2. ⚡ Bảo trì & Tối ưu (Module: `SystemOptimizer`)
-* **Dọn rác chuyên sâu:** Xóa sạch Cache của hơn 8 trình duyệt, thư mục Temp, Prefetch, bộ nhớ đệm Delivery Optimization và ép dọn thùng rác ngầm.
-* **Tinh chỉnh Cấu trúc Registry:** Giảm thời gian chờ tắt máy (`WaitToKillAppTimeout`), tắt ngủ đông (giải phóng file `hiberfil.sys` vài chục GB), chặn Windows Telemetry thu thập dữ liệu ngầm.
-* **Sửa lỗi Windows Update:** Dừng đồng bộ 4 dịch vụ cốt lõi (`wuauserv`, `cryptSvc`, `bits`, `msiserver`) để làm sạch thư mục kẹt `SoftwareDistribution`.
-* **🎯 Tối ưu Taskbar (Mới v0.4.0):** Tự động tắt các nút thừa trên Taskbar Windows 11 bao gồm: Search, Widgets, Chat (Teams), Task View, News & Interests, Copilot và Snap Assist. Giúp giao diện gọn gàng, sạch sẽ, tăng trải nghiệm người dùng.
-* **Quản lý Dịch vụ (Turn Off Services):** Giao diện căn lề bằng `std::setw`. Hỗ trợ tắt hàng loạt hoặc tắt riêng lẻ các dịch vụ ngầm vô dụng (Print Spooler, Bluetooth, Windows Insider, Xbox...) về `MANUAL` hoặc `DISABLED`.
+### 1. 🛠️ Bảo trì & Tối ưu Hệ thống (`SystemOptimizer`)
+* **Dọn rác chuyên sâu PRO:** Quét đa luồng, làm sạch bộ nhớ đệm của hơn 8 trình duyệt (Chrome, Edge, CocCoc, Brave, Vivaldi, Opera, Opera GX, Firefox), thư mục Temp, Prefetch, Thumbcache, CBS Logs, Delivery Optimization, Windows Update Cache và dọn sạch Thùng rác.
+* **Quản lý & Tắt ứng dụng khởi động:** Quét các Registry Run keys với Whitelist thông minh bảo vệ driver phần cứng, âm thanh (Realtek, Waves), card màn hình (NVIDIA, AMD, Intel) và OEM tools (ASUS, Dell, Lenovo, HP).
+* **Quản lý Dịch vụ Windows (Services Control API):** Tinh chỉnh hoặc vô hiệu hóa các dịch vụ ngầm không cần thiết (Windows Update, Telemetry, Maps, Xbox Services, Error Reporting...) thông qua Win32 Service Manager.
+* **Tinh chỉnh Taskbar Windows 11:** Ẩn các nút không dùng trên Taskbar (Search Box, Widgets, Chat/Teams, Task View, News & Interests, Copilot, Snap Assist).
+* **Sửa lỗi Windows Update:** Dừng các dịch vụ liên quan, xóa sạch thư mục cache bị kẹt (`SoftwareDistribution`, `catroot2`) và khôi phục lại hoạt động.
+* **Tối ưu hóa tổng thể (PRO 1-Click):** Tự động áp dụng toàn bộ tinh chỉnh Registry, giảm độ trễ tắt máy, tắt Hibernate giải phóng ổ C và dọn dẹp hệ thống chỉ với một thao tác.
 
-### 3. 🌐 Mạng & Chia sẻ (Module: `Internet`)
-* **QuickShare PRO:** Kéo thả tệp tin để tạo máy chủ HTTP tải file qua LAN. Tự động kiểm soát file (< 1.5GB), mở Firewall Rule và hiển thị % tiến độ trực quan.
-* **Chat LAN Nội bộ:** Khởi tạo Chat Server tại Port 9000. Hỗ trợ bộ giải mã URL (Decode URL) để xử lý ký tự đặc biệt, dấu cách từ điện thoại gửi lên.
-* **Tăng cường bảo mật:** Bật Windows Defender, Firewall, Controlled Folder Access; vô hiệu hóa giao thức không an toàn (SMB1, LLMNR, NetBIOS); chặn cổng nguy hiểm (445,139,135,137,138,3389); cấu hình DNS over HTTPS.
+### 2. 🌐 Mạng & Bảo mật (`Internet`)
+* **Thông tin mạng chi tiết:** Xem địa chỉ IP nội bộ (LAN), truy vấn Public IP qua Internet, thông tin Adapter mạng, Subnet Mask và DNS Server.
+* **Sửa lỗi & Khôi phục mạng (Network Repair):** Quy trình 5 bước tự động (Flush DNS, Reset Winsock Catalog, Reset TCP/IP Stack, xóa ARP Cache, Release & Renew IP).
+* **Kích hoạt Bảo mật Toàn diện (Full Security Shield):** Bật Windows Defender & cập nhật Signature, bật Firewall, bật Controlled Folder Access, chặn các cổng nguy hiểm (445, 139, 135, 137, 138), cấu hình DNS over HTTPS (Cloudflare 1.1.1.1).
+* **Kiểm tra trạng thái bảo mật:** Báo cáo chi tiết trạng thái của Defender, Firewall, dịch vụ Remote và DNS.
+* **Xem mật khẩu Wi-Fi đã lưu:** Trích xuất tên, mật khẩu và chuẩn mã hóa của các mạng Wi-Fi từng kết nối.
+* **Chia sẻ file nội bộ (LAN P2P):** Khởi tạo máy chủ HTTP tốc độ cao để truyền file trực tiếp giữa máy tính và điện thoại/máy tính khác trong cùng mạng LAN.
+* **Phòng Chat nội bộ mạng LAN:** Máy chủ Web Chat P2P cho phép các thiết bị cùng mạng nhắn tin qua trình duyệt web.
 
-### 4. 🤖 Công cụ Tự động (Module: `UtilityTools`)
-* **Thao tác tự động:** Auto Click theo tọa độ (`GetCursorPos`), Spam Text, Auto Paste nhiều dòng liên tiếp bằng cách chiếm quyền Clipboard (`SetClipboardData`) và giả lập tổ hợp `Ctrl + V`, `Enter`.
-* **Vẽ Mã QR:** Gọi `curl` liên kết API `qrenco.de` để render trực tiếp mã QR độ phân giải văn bản ngay trên màn hình Console.
-* **Download Manager:** Tự động tải và cài đặt các ứng dụng thiết yếu (Chrome, Zalo, Discord, VS Code...) qua `curl`.
-* **Xóa Bloatware:** Gỡ bỏ ứng dụng rác cài sẵn trên Windows.
+### 3. ⚡ Công cụ Tự động & Tiện ích (`UtilityTools`)
+* **Auto Click chuột:** Tự động click theo tọa độ với tùy chỉnh số lần, delay (ms) và thời gian chuẩn bị.
+* **Spam Text:** Tự động gửi tin nhắn hoặc văn bản lặp lại kèm thao tác xuống dòng.
+* **Auto Paste dữ liệu:** Hỗ trợ nhập và dán tự động danh sách dữ liệu nhiều dòng.
+* **Trình tải & Cài đặt phần mềm:** Tải nhanh các phần mềm phổ biến (Chrome, CocCoc, Brave, EVKey, OpenKey, Zalo, Discord, Telegram, 7-Zip, WinRAR, WARP, VS Code, Notepad++, Git) kèm thanh tiến trình trực quan.
+* **Gỡ bỏ ứng dụng rác (Bloatware Windows):** Quét và gỡ bỏ tận gốc các ứng dụng mặc định thừa thãi trên Windows bằng PowerShell script.
 
-### 5. 🎬 Xử lý Media (Module: `MediaProcessor`) - *Nâng cấp v0.4.0*
-* **Nén dung lượng thông minh:** Tự động phát hiện và nén ảnh (JPG, PNG, WebP, HEIC) và video (MP4, MKV, AVI, MOV) với thuật toán tối ưu. Giữ nguyên metadata gốc bao gồm EXIF, GPS, thông số máy ảnh.
-* **Phục chế & Làm nét:** Tích hợp bộ lọc (hqdn3d, nlmeans, bm3d, unsharp) giúp khử nhiễu, tăng độ sắc nét, cân bằng độ tương phản cho ảnh và video.
-* **Trích xuất âm thanh:** Chuyển đổi video sang MP3 nhanh chóng, giữ nguyên chất lượng âm thanh.
-* **Thay đổi tốc độ video:** Hỗ trợ Slow-motion (0.5x) đến Tua nhanh (2.0x) với xử lý âm thanh không bị méo.
-* **Chuyển đổi định dạng:** Đổi đuôi file ảnh/video mà vẫn giữ nguyên chất lượng và metadata gốc. Tự động phát hiện codec không tương thích và chuyển đổi phù hợp.
-
----
-
-## III. Hướng dẫn Sử dụng Nhanh
-
-1. **Quyền khởi chạy:** Bắt buộc chạy bằng quyền Quản trị (**Run as Administrator**) để các API hệ thống (`OpenSCManager`, cấu hình Registry, Firewall) thực thi thành công.
-2. **Điều hướng:** Nhập số từ `[1]` đến `[5]` tại Menu chính -> Nhấn `Enter`. Nhập `[0]` để quay lại menu cấp trước.
-3. **Mẹo QuickShare:** Vào mục chia sẻ file -> Kéo thả trực tiếp file vào CMD (tool tự khử dấu ngoặc kép `"`) -> Lấy link IP hiển thị gửi cho thiết bị khác cùng mạng để tải xuống.
-4. **Mẹo Quản lý Dịch vụ:** Vào menu tắt dịch vụ -> Gõ số thứ tự của dịch vụ (Ví dụ: `15` - Print Spooler) -> Nhập `[2]` để `DISABLED` (Tắt hẳn).
-5. **Mẹo Xử lý Media:** Kéo thả nhiều file ảnh/video cùng lúc để xử lý hàng loạt. Tool hỗ trợ nén, làm nét, trích xuất âm thanh và thay đổi tốc độ.
+### 4. 🎬 Bộ xử lý Media (`MediaProcessor` - FFmpeg)
+* **Nén dung lượng Media:** Tự động tối ưu dung lượng Video / Ảnh mà vẫn giữ nguyên metadata gốc (EXIF, GPS).
+* **Phục chế & Làm nét:** Sử dụng các bộ lọc chuyên sâu để khử nhiễu và tăng độ nét.
+* **Chuyển đổi Mp4 -> Mp3:** Trích xuất âm thanh từ video nhanh chóng.
+* **Thay đổi tốc độ Video:** Hỗ trợ từ 0.5x (Slow-motion) đến 2.0x (Tua nhanh) với thuật toán xử lý âm thanh chống méo tiếng.
+* **Đổi đuôi định dạng:** Chuyển đổi qua lại giữa các định dạng media phổ biến.
+* **Chuẩn hóa tên file:** Tự động định dạng lại tên file trong thư mục.
+* **Ẩn & Dò tìm file bí mật:** Kỹ thuật Steganography giấu file dữ liệu vào trong Ảnh hoặc Video.
 
 ---
 
-## IV. Lưu ý Quan trọng & Bảo mật
-
-* **Windows Widgets:** Tool gỡ gói "Windows Web Experience Pack" để tắt hoàn toàn Widgets ngầm, giải phóng ~200MB RAM của `msedgewebview2.exe`. *Khuyến cáo: Không tự ý xóa file msedgewebview2.exe vật lý vì sẽ gây lỗi Zalo PC và Discord.*
-* **Metadata ảnh:** Khi xử lý ảnh với FFmpeg, tool tự động thêm tham số `-map_metadata 0` để giữ nguyên metadata gốc (EXIF, GPS, thông số máy ảnh). Tuy nhiên, khi chuyển từ JPG sang PNG/WEBP, một số metadata có thể bị mất do định dạng không hỗ trợ.
-* **Dọn dẹp trình duyệt:** Hãy tắt hẳn các trình duyệt (Chrome, Edge...) trước khi dọn dẹp để tránh lỗi tệp tin đang bận (`[!] Đang bận`).
-* **Điểm khôi phục:** Nên tạo Điểm khôi phục hệ thống (**System Restore Point**) trước khi tắt dịch vụ hàng loạt. Muốn bật lại thủ công, sử dụng lệnh `services.msc`.
-
----
-
-## V. Tài nguyên Bổ sung & Cấu hình Build
-
-### 1. Cấu hình `.vscode/tasks.json` (Trình biên dịch g++ UCRT64)
-```json
-{
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "type": "cppbuild",
-            "label": "C/C++: Build(Multi-file + Winsock)",
-            "command": "C:\\msys64\\ucrt64\\bin\\g++.exe",
-            "args": [
-                "-fdiagnostics-color=always", "-g", "-std=c++17",
-                "${workspaceFolder}\\src\\*.cpp",
-                "-o", "${workspaceFolder}\\bin\\main.exe",
-                "-lws2_32", "-static-libgcc", "-static-libstdc++", "-static"
-            ],
-            "options": { "cwd": "${workspaceFolder}" },
-            "group": { "kind": "build", "isDefault": true }
-        }
-    ]
-}
-```
-
-### 2. Thư viện bên thứ ba (Cấu hình Thư mục `/bin`)
-Tải bản Portable của **FFmpeg** (lấy `ffmpeg.exe`). Sắp xếp cấu trúc file trong thư mục đầu ra `/bin` như sau để tool nhận diện bằng đường dẫn tương đối:
+## III. Cấu trúc Thư mục
 
 ```text
-CMD_TOOL_v0.4.0/
-├── include/                 # Thư mục chứa các file tiêu đề (.h)
-├── src/                     # Thư mục chứa các file mã nguồn (.cpp)
-└── bin/                     # THƯ MỤC CHỨA SẢN PHẨM SAU KHI BIÊN DỊCH
-    ├── main.exe             # File thực thi chính sau khi build
-    ├── ffmpeg.exe           # [Bỏ vào đây] Bộ xử lý media (FFmpeg)
-
+CMD_BOX/
+├── include/                 # Header files (.h)
+│   ├── SystemCore.h         # Lớp cơ sở điều khiển Win32 API & Job Objects
+│   ├── SystemOptimizer.h    # Module bảo trì & tối ưu hệ thống
+│   ├── Internet.h           # Module mạng, socket P2P & bảo mật
+│   ├── UtilityTools.h       # Module công cụ tự động & tiện ích
+│   └── MediaProcessor.h     # Module xử lý media (FFmpeg)
+├── src/                     # Source files (.cpp)
+│   ├── SystemCore.cpp
+│   ├── SystemOptimizer.cpp
+│   ├── Internet.cpp
+│   ├── UtilityTools.cpp
+│   ├── MediaProcessor.cpp
+│   └── main.cpp             # Entry point & Menu điều hướng
+└── bin/                     # Thư mục chứa file sau khi build
+    ├── cmd_box.exe          # File thực thi chính
+    └── ffmpeg.exe           # Bộ xử lý media (tùy chọn)
 ```
 
-### 3. Hướng dẫn cài đặt FFmpeg
+---
 
-**FFmpeg:**
-- Tải bản zip tại [gyan.dev/ffmpeg/builds](https://www.gyan.dev/ffmpeg/builds/) (Mục git master/release builds -> gói `ffmpeg-git-essentials.7z`)
-- Giải nén và copy duy nhất file `ffmpeg.exe` từ thư mục `bin` vào thư mục `/bin` của tool
+## IV. Hướng dẫn Biên dịch & Chạy
+
+### 1. Yêu cầu môi trường
+* Hệ điều hành: Windows 10 / 11 (64-bit).
+* Trình biên dịch: GCC/G++ (MinGW-w64 / MSYS2) hỗ trợ C++17 trở lên.
+
+### 2. Lệnh biên dịch (Command Line)
+```bash
+g++ -std=c++17 -Iinclude src/*.cpp -o bin/cmd_box.exe -lws2_32 -liphlpapi -static-libgcc -static-libstdc++
+```
+
+### 3. Cài đặt FFmpeg (Dành cho Module Media)
+1. Tải bản build Portable của FFmpeg từ [gyan.dev/ffmpeg/builds](https://www.gyan.dev/ffmpeg/builds/).
+2. Giải nén và sao chép file `ffmpeg.exe` vào thư mục `bin/` cùng cấp với `cmd_box.exe`.
+
+### 4. Khởi chạy
+* **Khuyến nghị:** Nhấp chuột phải vào `cmd_box.exe` và chọn **Run as Administrator** để sử dụng đầy đủ các tính năng tối ưu hệ thống, chỉnh sửa Registry, Service API và cấu hình tường lửa.
 
 ---
 
-## VI. Changelog v0.4.0
+## V. Giấy phép & Đóng góp
 
-### ✨ Tính năng mới:
-- **Tối ưu Taskbar:** Tự động tắt Search, Widgets, Chat/Teams, Task View, News & Interests, Copilot, Snap Assist
-- **Metadata Preservation:** Giữ nguyên metadata ảnh (EXIF, GPS) khi xử lý với FFmpeg
-- **Xử lý HEIC:** Hỗ trợ chuyển đổi và nén ảnh HEIC sang JPG
-- **Kiểm tra codec:** Tự động phát hiện và xử lý codec không tương thích khi đổi đuôi video
-
-### 🔧 Cải thiện:
-- **Tối ưu `optimizeSystemPRO()`:** Gộp tối ưu Taskbar vào chức năng tối ưu hệ thống PRO
-- **Tăng cường bảo mật:** Bổ sung các chức năng bảo mật Windows Defender, Firewall, DNS over HTTPS
-- **Tối ưu code:** Xóa bỏ các biến, hàm không sử dụng, thêm kiểm tra điều kiện cho các hàm quan trọng
-
----
-
-## VII. Kết luận
-
-**CMD-TOOL** là giải pháp toàn diện cho việc quản trị, tối ưu và bảo mật hệ thống Windows. Với kiến trúc nhẹ, hiệu năng cao và khả năng tùy biến linh hoạt, công cụ này phù hợp cho cả người dùng phổ thông lẫn quản trị viên chuyên nghiệp.
-
----
-
-**📧 Liên hệ:** [GitHub: huii404](https://github.com/huii404)
-
+Dự án được phát triển và duy trì bởi **huii404**. Mọi đóng góp và báo lỗi xin vui lòng tạo Issue hoặc Pull Request trên GitHub.

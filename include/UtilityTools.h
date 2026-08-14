@@ -19,15 +19,10 @@ public:
     void autoClickPoint();
     void spamText();
     void autoPasteData();
-
-    bool text_processing(const std::string &text);
-    void ShowQR();
-    void ShowN_QR();
-    void uninstallBloatware();
     void downloadManager();
     void processDownload(const AppInfo& app);
-    void showToolsMenu();
     void showDownloadHistory();
+    void uninstallBloatware();
 };
 
 #endif 

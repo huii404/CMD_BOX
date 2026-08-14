@@ -13,46 +13,38 @@
 using namespace std;
 namespace fs = std::filesystem;
 
-// ==================== CONSTRUCTOR ====================
 UtilityTools::UtilityTools(SystemCore &s) : sc(s) {}
 
-
-// Lưu lịch sử download
+// Lưu lịch sử tải
 static void saveDownloadHistory(const string& appName) {
     try {
         string historyFile = string(getenv("TEMP")) + "\\download_history.txt";
         ofstream history(historyFile, ios::app);
         if (history.is_open()) {
-            time_t now = time(0);
-            tm *t = localtime(&now);
-            char buf[100];
-            strftime(buf, sizeof(buf), "[%d/%m/%Y %H:%M:%S]", t);
-            history << buf << " - Da tai: " << appName << "\n";
+            history << SystemCore::getTime(true) << " - Đã tải: " << appName << "\n";
             history.close();
         }
     } catch (...) {}
 }
 
-// ==================== AUTO CLICK (NÂNG CẤP) ====================
+// Auto click chuột theo vị trí
 void UtilityTools::autoClickPoint() {
     sc.cls();
-    cout << "============================================================\n";
-    cout << "           AUTO CLICK\n";
-    cout << "============================================================\n";
+    cout << "--- AUTO CLICK CHUỘT ---\n\n";
     
-    int times = sc.readInt("So lan click: ");
+    int times = sc.readInt("Số lần click: ");
     if (times <= 0) {
-        cout << "[!] So lan khong hop le!\n";
+        cout << "[!] Số lần không hợp lệ!\n";
         return;
     }
     
-    int intervalMs = sc.readInt("Delay giua cac lan (ms): ");
+    int intervalMs = sc.readInt("Delay giữa các lần (ms): ");
     if (intervalMs < 0) intervalMs = 100;
     
-    int delaySec = sc.readInt("Di chuyen chuot den dich (giay): ");
+    int delaySec = sc.readInt("Thời gian di chuyển chuột đến đích (giây): ");
     if (delaySec < 0) delaySec = 3;
     
-    cout << "\nDua chuot den vi tri can click...\n";
+    cout << "\nDi chuyển chuột đến vị trí cần click...\n";
     for (int i = delaySec; i > 0; i--) { 
         cout << " " << i << "... "; cout.flush(); 
         Sleep(1000); 
@@ -60,73 +52,65 @@ void UtilityTools::autoClickPoint() {
     
     POINT p; 
     GetCursorPos(&p);
-    cout << "\n\n[*] Bat dau click tai: (" << p.x << ", " << p.y << ")\n";
-    cout << "[*] So lan: " << times << ", Delay: " << intervalMs << "ms\n\n";
+    cout << "\n\n[*] Bắt đầu click tại tọa độ: (" << p.x << ", " << p.y << ")\n";
+    cout << "[*] Số lần: " << times << " | Delay: " << intervalMs << "ms\n\n";
     
     for (int i = 0; i < times; i++) { 
         SetCursorPos(p.x, p.y); 
         sc.leftClick();
         
-        // Hiển thị tiến trình
         if (times > 20 && i % (times / 20) == 0) {
-            cout << "\r[+] Tien do: " << (i * 100 / times) << "% ";
+            cout << "\r[+] Tiến độ: " << (i * 100 / times) << "% ";
             cout.flush();
         }
         
         Sleep(intervalMs); 
     }
     
-    cout << "\n\n[✓] Hoan thanh " << times << " lan click!\n";
+    cout << "\n\n[✓] Hoàn thành " << times << " lần click!\n";
 }
 
-// ==================== SPAM TEXT (NÂNG CẤP) ====================
+// Spam văn bản tự động
 void UtilityTools::spamText() {
     sc.cls();
-    cout << "============================================================\n";
-    cout << "           SPAM TEXT (1 dong + xuong dong)\n";
-    cout << "============================================================\n";
+    cout << "--- SPAM TEXT (TỰ ĐỘNG GỬI) ---\n\n";
     
     string content; 
-    cout << "\nNhap text can spam: ";
+    cout << "Nhập text cần gửi: ";
     cin.ignore(); 
     getline(cin, content);
     
     if (content.empty()) { 
-        cout << "[!] Text trong!\n"; 
+        cout << "[!] Nội dung trống!\n"; 
         return; 
     }
     
-    int times = sc.readInt("So lan spam: ");
+    int times = sc.readInt("Số lần gửi: ");
     if (times <= 0) {
-        cout << "[!] So lan khong hop le!\n";
+        cout << "[!] Số lần không hợp lệ!\n";
         return;
     }
     
-    int delayMs = sc.readInt("Delay giua cac lan (ms): ");
+    int delayMs = sc.readInt("Delay giữa các lần (ms): ");
     if (delayMs < 0) delayMs = 100;
     
-    cout << "\n[?] Tu dong click vao o nhap? (Y/N): ";
+    cout << "\n[?] Tự động click vào ô nhập? (Y/N): ";
     string autoFocus;
     getline(cin, autoFocus);
     bool shouldClick = (autoFocus == "y" || autoFocus == "Y");
     
-    cout << "\n[*] Chuan bi spam...\n";
-    cout << "    - Text: " << content << "\n";
-    cout << "    - So lan: " << times << "\n";
+    cout << "\n[*] Chuẩn bị gửi...\n";
+    cout << "    - Nội dung: " << content << "\n";
+    cout << "    - Số lần: " << times << "\n";
     cout << "    - Delay: " << delayMs << "ms\n";
     
-    if (shouldClick) {
-        cout << "    - Tu dong click vao vi tri con tro\n";
-    }
-    
-    cout << "\nBat dau sau 3 giay...\n";
+    cout << "\nBắt đầu sau 3 giây...\n";
     for (int i = 3; i > 0; i--) { 
         cout << " " << i << "... "; cout.flush(); 
         Sleep(1000); 
     }
     cout << "\n";
     
-    // Click để focus nếu cần
     if (shouldClick) {
         POINT p;
         GetCursorPos(&p);
@@ -136,68 +120,60 @@ void UtilityTools::spamText() {
         Sleep(100);
     }
     
-    // Spam
     for (int i = 0; i < times; i++) { 
         sc.setClipboard(content); 
-        sc.pressCtrlV();    // Paste
-        sc.pressEnter();    // Xuong dong
+        sc.pressCtrlV();
+        sc.pressEnter();
         
-        // Hien thi tien trinh
         if ((i + 1) % 10 == 0 || i == times - 1) {
-            cout << "\r[+] Da spam: " << (i + 1) << "/" << times << " ";
+            cout << "\r[+] Đã gửi: " << (i + 1) << "/" << times << " ";
             cout.flush();
         }
         
         Sleep(delayMs); 
     }
     
-    cout << "\n\n[✓] Hoan thanh spam " << times << " lan!\n";
+    cout << "\n\n[✓] Hoàn thành gửi " << times << " lần!\n";
 }
 
-// ==================== AUTO PASTE DATA ====================
-
+// Tự động paste danh sách dữ liệu
 void UtilityTools::autoPasteData() {
     sc.cls();
-    cout << "============================================================\n";
-    cout << "           AUTO PASTE DATA\n";
-    cout << "============================================================\n";
+    cout << "--- AUTO PASTE DỮ LIỆU ---\n\n";
     
-    int n = sc.readInt("So dong du lieu: ");
+    int n = sc.readInt("Số dòng dữ liệu: ");
     if (n <= 0) {
-        cout << "[!] So dong khong hop le!\n";
+        cout << "[!] Số dòng không hợp lệ!\n";
         return;
     }
     
-    int delayMs = sc.readInt("Delay giua cac dong (ms): ");
+    int delayMs = sc.readInt("Delay giữa các dòng (ms): ");
     if (delayMs < 0) delayMs = 200;
     
     cin.ignore();
     vector<string> dataList(n);
     
-    cout << "\nNhap " << n << " dong du lieu:\n";
+    cout << "\nNhập " << n << " dòng dữ liệu:\n";
     for (int i = 0; i < n; i++) { 
         cout << "  [" << i + 1 << "]: "; 
         getline(cin, dataList[i]);
         if (dataList[i].empty()) {
-            cout << "    [!] Dong trong, bo qua!\n";
             dataList[i] = "(empty)";
         }
     }
     
-    cout << "\n[?] Tu dong click vao o nhap? (Y/N): ";
+    cout << "\n[?] Tự động click vào ô nhập? (Y/N): ";
     string autoFocus;
     getline(cin, autoFocus);
     bool shouldClick = (autoFocus == "y" || autoFocus == "Y");
     
-    cout << "\n[*] Chuan bi paste " << n << " dong...\n";
-    cout << "Bat dau sau 3 giay...\n";
+    cout << "\nBắt đầu sau 3 giây...\n";
     for (int i = 3; i > 0; i--) { 
         cout << " " << i << "... "; cout.flush(); 
         Sleep(1000); 
     }
     cout << "\n";
     
-    // Click để focus
     if (shouldClick) {
         POINT p;
         GetCursorPos(&p);
@@ -207,93 +183,21 @@ void UtilityTools::autoPasteData() {
         Sleep(100);
     }
     
-    // Paste từng dòng
     for (int i = 0; i < n; i++) {
         sc.setClipboard(dataList[i]);
         sc.pressCtrlV();
         sc.pressEnter();
         
-        cout << "\r[+] Da paste: " << (i + 1) << "/" << n << " ";
+        cout << "\r[+] Đã dán: " << (i + 1) << "/" << n << " ";
         cout.flush();
         
         Sleep(delayMs);
     }
     
-    cout << "\n\n[✓] Hoan thanh paste " << n << " dong!\n";
+    cout << "\n\n[✓] Hoàn thành dán " << n << " dòng!\n";
 }
 
-// ==================== QR CODE ====================
-
-bool UtilityTools::text_processing(const string &text) {
-    if (text.empty() || text.length() > 99) { 
-        return true; 
-    }
-    return false;
-}
-
-void UtilityTools::ShowQR() {
-    string text;
-    cout<<"Text: ";getline(cin,text);
-    if (text_processing(text)) {
-        cout << "[!] Van ban khong hop le (Max 99 ky tu).\n";
-        return;
-    }
-    
-    // URL encode spaces
-    string encodedText = text;
-    for (char &c : encodedText) {
-        if (c == ' ') c = '+';
-    }
-    
-    cout << "\n[*] Dang lay QR Code cho: " << text << "\n\n";
-    sc.runCMD("curl -s qrenco.de/" + encodedText);
-    cout << "\n";
-}
-
-void UtilityTools::ShowN_QR() {
-    int number;
-    cout<<"Số lượng QR: ";cin>>number;
-    if (number >= 15 || number <= 0) { 
-        cout << "[!] So luong khong hop le (1-14)!\n"; 
-        return; 
-    }
-    
-    cin.ignore(); 
-    vector<string> list_qr;
-    
-    cout << "\nNhap " << number << " noi dung QR:\n";
-    for (int dem = 1; dem <= number; dem++) {
-        string text; 
-        cout << "  [" << dem << "/" << number << "]: ";
-        if (!getline(cin, text) || text.empty()) { 
-            cout << "    [!] Khong duoc de trong!\n"; 
-            dem--; 
-            continue; 
-        }
-        list_qr.push_back(text);
-    }
-
-    cout << "\n[*] Dang lay " << number << " ma QR...\n\n";
-    
-    for (size_t i = 0; i < list_qr.size(); i++) {
-        string current_text = list_qr[i];
-        cout << "  [" << i + 1 << "/" << list_qr.size() << "] " << current_text << "\n";
-        
-        // URL encode
-        for (char &c : current_text) {
-            if (c == ' ') c = '+';
-        }
-        
-        sc.runCMD("curl -s qrenco.de/" + current_text);
-        cout << "\n";
-        
-        if (i < list_qr.size() - 1) Sleep(300);
-    }
-    
-    cout << "\n[✓] Hoan thanh " << number << " ma QR!\n";
-}
-
-// ==================== DOWNLOAD MANAGER (NÂNG CẤP) ====================
+// Trình tải & Cài đặt phần mềm tự động
 void UtilityTools::downloadManager() {
     vector<AppInfo> appList = {
         {"Google Chrome", "https://dl.google.com/tag/s/appname%3DGoogle%2520Chrome/update2/installers/ChromeSetup.exe", "ChromeSetup.exe"},
@@ -313,22 +217,17 @@ void UtilityTools::downloadManager() {
     };
 
     sc.cls();
-    cout << "============================================================\n";
-    cout << "           TRÌNH TẢI & CÀI ĐẶT APP TỰ ĐỘNG\n";
-    cout << "============================================================\n";
+    cout << "--- TRÌNH TẢI & CÀI ĐẶT PHẦN MỀM ---\n\n";
     
-    // Hiển thị danh sách 2 cột
     for (size_t i = 0; i < appList.size(); i++) {
-        cout << "[" << setw(2) << i + 1 << "] " << left << setw(28) << appList[i].name;
+        cout << " [" << setw(2) << i + 1 << "] " << left << setw(28) << appList[i].name;
         if ((i + 1) % 2 == 0) cout << "\n";
     }
     if (appList.size() % 2 != 0) cout << "\n";
     
-    cout << "============================================================\n";
-    cout << " [A] TẢI TOÀN BỘ DANH SÁCH\n";
-    cout << " [H] Xem lịch sử download\n";
-    cout << " [0] Quay lại\n";
-    cout << "============================================================\n";
+    cout << "\n [A] Tải toàn bộ danh sách\n";
+    cout << " [H] Xem lịch sử tải\n";
+    cout << " [0] Quay lại\n\n";
     cout << " -> Nhập lựa chọn: "; 
     
     string input; 
@@ -341,11 +240,11 @@ void UtilityTools::downloadManager() {
     }
 
     if (input == "A" || input == "a") { 
-        cout << "\n[*] Bat dau tai " << appList.size() << " app...\n";
+        cout << "\n[*] Bắt đầu tải " << appList.size() << " ứng dụng...\n";
         for (const auto& app : appList) {
             processDownload(app);
         }
-        cout << "\n[✓] Hoan thanh tai tat ca!\n";
+        cout << "\n[✓] Hoàn thành tải tất cả!\n";
     } 
     else {
         try { 
@@ -353,33 +252,30 @@ void UtilityTools::downloadManager() {
             if (idx >= 0 && idx < (int)appList.size()) {
                 processDownload(appList[idx]);
             } else {
-                cout << "[!] Lua chon khong hop le!\n";
+                cout << "[!] Lựa chọn không hợp lệ!\n";
             }
         } catch (...) { 
-            cout << "[!] Vui long nhap so hoac chu cai hop le!\n"; 
+            cout << "[!] Lựa chọn không hợp lệ!\n"; 
         }
     }
 }
 
 void UtilityTools::processDownload(const AppInfo &app) {
-    cout << "\n[+] Dang tai: " << app.name << "\n";
+    cout << "\n[+] Đang tải: " << app.name << "\n";
     cout << "    File: " << app.fileName << "\n";
     
     string tempPath = "%temp%\\" + app.fileName;
     string fullPath = string(getenv("TEMP")) + "\\" + app.fileName;
     
-    // Xóa file cũ nếu tồn tại
     if (fs::exists(fullPath)) {
         try { fs::remove(fullPath); } catch (...) {}
     }
     
-    // Tải file với progress bar
     string cmd = "curl -L --progress-bar \"" + app.url + "\" -o \"" + tempPath + "\"";
     
-    // Chạy curl và hiển thị progress
     FILE* pipe = _popen(cmd.c_str(), "r");
     if (!pipe) {
-        cout << "    [✗] Khong the khoi tao download!\n";
+        cout << "    [✗] Không thể kết nối để tải!\n";
         return;
     }
     
@@ -391,7 +287,7 @@ void UtilityTools::processDownload(const AppInfo &app) {
             try {
                 int progress = stoi(line.substr(0, line.find('%')));
                 if (progress != lastProgress && progress % 5 == 0) {
-                    cout << "\r    Tien do: " << progress << "% ";
+                    cout << "\r    Tiến độ: " << progress << "% ";
                     cout.flush();
                     lastProgress = progress;
                 }
@@ -400,26 +296,23 @@ void UtilityTools::processDownload(const AppInfo &app) {
     }
     _pclose(pipe);
     
-    // Kiểm tra kết quả
     if (fs::exists(fullPath) && fs::file_size(fullPath) > 0) {
         auto size = fs::file_size(fullPath);
-        cout << "\n    [✓] Tai thanh cong! (" << SystemCore::formatSize(size) << ")\n";
+        cout << "\n    [✓] Tải thành công! (" << SystemCore::formatSize(size) << ")\n";
         
-        // Lưu lịch sử
         saveDownloadHistory(app.name);
         
-        // Hỏi có chạy installer không
-        cout << "    [?] Chạy file cài đặt? (Y/N): ";
+        cout << "    [?] Mở file cài đặt ngay? (Y/N): ";
         string answer;
         cin >> answer;
         
         if (answer == "y" || answer == "Y") {
             sc.runCMD("start \"\" \"" + fullPath + "\"");
         } else {
-            cout << "    [i] Da luu file tai: " << fullPath << "\n";
+            cout << "    [i] Đã lưu file tại: " << fullPath << "\n";
         }
     } else {
-        cout << "\n    [✗] Tai that bai! Vui long kiem tra ket noi mang.\n";
+        cout << "\n    [✗] Tải thất bại! Vui lòng kiểm tra lại kết nối mạng.\n";
     }
 }
 
@@ -428,12 +321,10 @@ void UtilityTools::showDownloadHistory() {
     ifstream history(historyFile);
     
     sc.cls();
-    cout << "============================================================\n";
-    cout << "           LICH SU DOWNLOAD\n";
-    cout << "============================================================\n";
+    cout << "--- LỊCH SỬ TẢI PHẦN MỀM ---\n\n";
     
     if (!history.is_open()) {
-        cout << "[i] Chua co lich su download.\n";
+        cout << "[i] Chưa có lịch sử tải nào.\n";
         return;
     }
     
@@ -443,25 +334,25 @@ void UtilityTools::showDownloadHistory() {
         cout << " [" << count++ << "] " << line << "\n";
     }
     history.close();
-    
-    cout << "============================================================\n";
+    cout << "\n";
 }
 
-// ==================== UNINSTALL BLOATWARE ====================
+// Gỡ bỏ ứng dụng rác Bloatware
 void UtilityTools::uninstallBloatware() {
     sc.cls();
     
     string listRac = "BingWeather|BingNews|SolitaireCollection|People|PowerAutomateDesktop|"
                      "Todo|GetHelp|Getstarted|OfficeHub|SkypeApp|YourPhone|FeedbackHub|"
                      "ZuneVideo|ZuneMusic|MixedReality.Portal|Clipchamp|Disney|"
-                     "MicrosoftStickyNotes|WindowsAlarms|WindowsMaps|YourPhone|"
+                     "MicrosoftStickyNotes|WindowsAlarms|WindowsMaps|"
                      "MicrosoftSolitaireCollection|GamingApp|XboxGamingOverlay|"
-                     "DevHome|OneNote|MicrosoftTeams|Cortana|ZuneMusic|ZuneVideo|"
+                     "DevHome|OneNote|MicrosoftTeams|Cortana|"
                      "Copilot|CandyCrush|King\\.com|SpiderSolitaire|FreeCell|"
-                     "Hearts|Solitaire|Hearts|Zone";
+                     "Hearts|Zone";
     
-    cout << "[*] Dang quet va xoa app rac...\n";
-    cout << "[!] Qua trinh nay can quyen Admin\n\n";
+    cout << "--- GỠ BỎ ỨNG DỤNG RÁC (BLOATWARE WINDOWS) ---\n\n";
+    cout << "[*] Đang quét và gỡ bỏ các ứng dụng rác mặc định...\n";
+    cout << "[!] Quá trình này yêu cầu quyền Administrator\n\n";
     
     string cmd = "powershell -Command \"";
     cmd += "Get-AppxPackage -AllUsers | Where-Object {$_.Name -match '" + listRac + "'} | Remove-AppxPackage -AllUsers; ";
@@ -469,5 +360,5 @@ void UtilityTools::uninstallBloatware() {
     cmd += "\"";
     
     sc.runAdmin(cmd, true);
-    
+    cout << "\n[✓] Đã dọn sạch toàn bộ Bloatware khỏi hệ thống!\n";
 }

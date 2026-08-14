@@ -14,16 +14,6 @@ static string cachedFFmpegPath = "";
 static mutex ffmpegMutex;
 
 
-static void clearScreenWin32() {
-    HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    COORD coord = {0, 0};
-    DWORD count;
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    GetConsoleScreenBufferInfo(hStdOut, &csbi);
-    FillConsoleOutputCharacter(hStdOut, ' ', csbi.dwSize.X * csbi.dwSize.Y, coord, &count);
-    SetConsoleCursorPosition(hStdOut, coord);
-}
-
 MediaProcessor::MediaProcessor() {}
 MediaProcessor::~MediaProcessor() {}
 
@@ -362,7 +352,10 @@ void MediaProcessor::processChangeSpeedBatch() {
         return;
     }
 
-    std::string speedStr = SystemCore::readString("\ttốc độ mong muốn (0.5: Slow-motion, 2.0: Tua nhanh): ");
+    cout << "\ttốc độ mong muốn (0.5: Slow-motion, 2.0: Tua nhanh): ";
+    std::string speedStr;
+    getline(cin, speedStr);
+    speedStr = SystemCore::trim(speedStr);
     float speed = 1.0f;
     try { speed = stof(speedStr); } catch(...) { speed = 1.0f; }
 
@@ -407,7 +400,7 @@ void MediaProcessor::processMediaEnhancementAuto() {
 
     while (true) {
         std::cout << std::flush;
-        clearScreenWin32();
+        system("cls");
 
         std::cout << " ==================================================\n";
         std::cout << "    BỘ TỰ ĐỘNG PHỤC CHẾ & LÀM NÉT (AI AUTO) \n";
@@ -433,19 +426,19 @@ void MediaProcessor::processMediaEnhancementAuto() {
 
         std::string imgFilter, vidFilter, vidCodec;
         if (level == 1) {
-            imgFilter = "hqdn3d=1.5:1.5:2:2,unsharp=5:5:1.2:5:5:0.0";
-            vidFilter = "hqdn3d=1.5:1.5:3:3";
-            vidCodec  = "-c:v libx264 -crf 18 -preset medium"; 
+            imgFilter = "hqdn3d=4:3:4:3,eq=saturation=1.1:contrast=1.05,cas=strength=0.5";
+            vidFilter = "hqdn3d=4:3:4:3,eq=saturation=1.1:contrast=1.05,cas=strength=0.5";
+            vidCodec  = "-c:v libx264 -crf 18 -preset fast"; 
         } 
         else if (level == 2) {
-            imgFilter = "nlmeans=s=2:p=1:r=3:threads=2,unsharp=7:7:1.8:7:7:0.0";
-            vidFilter = "hqdn3d=2.5:2.5:4:4,unsharp=5:5:0.8:5:5:0.0";
-            vidCodec  = "-c:v libx264 -crf 23 -preset medium";
+            imgFilter = "nlmeans=s=1.0:p=7:r=3,eq=saturation=1.1,cas=strength=0.6";
+            vidFilter = "hqdn3d=5:4:5:4,eq=saturation=1.1:contrast=1.05,cas=strength=0.6";
+            vidCodec  = "-c:v libx264 -crf 20 -preset medium";
         } 
         else {
-            imgFilter = "bm3d=sigma=5:block=8:bstep=4:group=1:thmse=1000,unsharp=7:7:2.2:7:7:0.0,eq=contrast=1.03:brightness=0.01";
-            vidFilter = "hqdn3d=4.0:4.0:6:6,unsharp=7:7:1.2:7:7:0.0,eq=contrast=1.05:brightness=0.02";
-            vidCodec  = "-c:v libx264 -crf 25 -preset fast";
+            imgFilter = "nlmeans=s=1.5:p=7:r=3,eq=saturation=1.15:contrast=1.1,unsharp=5:5:0.8";
+            vidFilter = "nlmeans=s=1.2:p=7:r=3,eq=saturation=1.1:contrast=1.05,unsharp=5:5:0.8";
+            vidCodec  = "-c:v libx264 -crf 22 -preset slow";
         }
 
         std::cout << "\n [*] Đang tiến hành phân tích và xử lý " << inputs.size() << " file...\n\n";

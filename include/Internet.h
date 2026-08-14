@@ -30,12 +30,11 @@ private:
     std::string getContentType(const std::string &fpath);
     std::string getLocalIP();
     void openFW();
-    std::string formatSize(long long b);
-    std::string getTime();
     HTTPRequest parseReq(const std::string &raw);
     void sendFile(SOCKET client);
     void handleClient(SOCKET client);     
     void handleChatClient(SOCKET client); 
+    void receiveFileClient();
     bool checkFileSizeAndConfirm(const std::string &path, long long &outSize);
     bool getFileSizeInfoAndPrompt(const std::string &path, long long &outSize);
 
@@ -43,11 +42,9 @@ public:
     Internet(SystemCore &s);
     ~Internet();
 
-    void showIP();
-    void renewIP();
+    void showNetworkInfo();
+    void repairNetwork();
     void wifiAudit();
-    void flushdns();
-    void netsh_tcpIP();
     void quickSharePRO();
     void startLocalChat();
     void enableWindowsDefender();
@@ -57,6 +54,7 @@ public:
     void blockDangerousPorts();
     void configureDNSoverHTTPS();
     void checkSecurityStatus();
+    void fullSecurityShield();
 };
 
 #endif 

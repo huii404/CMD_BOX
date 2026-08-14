@@ -13,25 +13,12 @@ public:
     SystemOptimizer(SystemCore &s, Internet &net);
 
     void cleanDiskPro();
-    void cleanDiskBase();
-    void QuickScanVirus();
-    void FullScanVirus();
-    void Consumer_Content();
-    void Hibernate();
-    void windowsTelemetry();
-    void reduceShutdownTime();
     void disableAllStartupApps();
-    void updateAllApps();
     void fixWindowsUpdate();
     void clearBrowserCache();
     void optimizeSystemPRO();
-    void enableSecurityPRO();
-    void optimizeNetworkPRO();
-    std::string getCurrentOS();
-    void upgradeWindowsEditionPRO();
     bool ServiceControlAPI(std::string serviceName, DWORD startupType, bool stopService);
     void turnOffServicesMenu();
-    void runBatchAsAdmin(const std::string &batContent, const std::string &description = "");
     void optimizeTaskbar();  
 };
 

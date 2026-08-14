@@ -6,8 +6,6 @@
 #include <iomanip>
 #include <ctime>
 #include <limits>
-#include <intrin.h>
-#include <winternl.h>
 
 #pragma comment(lib, "ws2_32.lib")
 namespace fs = std::filesystem;
@@ -23,8 +21,7 @@ std::string SystemCore::trim(const std::string& str) {
     return s;
 }
 
-// ==================== CONSTRUCTOR & DESTRUCTOR ====================
-
+// Constructor / Destructor
 SystemCore::SystemCore() {
     hJob = CreateJobObjectA(NULL, NULL);
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION jeli = {0};
@@ -36,40 +33,36 @@ SystemCore::~SystemCore() {
     if (hJob) CloseHandle(hJob);
 }
 
-// ==================== BASIC UTILITIES ====================
-
-void SystemCore::setColor(int color) {
-    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), color);
-}
-
+// Tiện ích cơ bản
 void SystemCore::cls() {
-    std::cout << std::flush; // Buộc đẩy hết dữ liệu cout cũ ra màn hình
-    std::fflush(stdout);     // Dọn sạch luồng stdout của hệ thống
-    
+    std::cout << std::flush;
+    std::fflush(stdout);
     system("cls"); 
 }
 
 std::string SystemCore::getTime(bool includeDate) {
-    time_t now = time(0);
-    tm *t = localtime(&now);
+    time_t now = time(nullptr);
+    tm t;
+    localtime_s(&t, &now);
     std::stringstream ss;
     if (includeDate) {
-        ss << "[" << std::setfill('0') << std::setw(2) << t->tm_mday << "/" 
-           << std::setw(2) << t->tm_mon + 1 << "/" << t->tm_year + 1900 << "-";
+        ss << "[" << std::setfill('0') << std::setw(2) << t.tm_mday << "/" 
+           << std::setw(2) << t.tm_mon + 1 << "/" << t.tm_year + 1900 << " ";
     } else {
         ss << "[";
     }
-    ss << std::setw(2) << t->tm_hour << ":" << std::setw(2) << t->tm_min << ":" 
-       << std::setw(2) << t->tm_sec << "]";
+    ss << std::setfill('0') << std::setw(2) << t.tm_hour << ":" 
+       << std::setw(2) << t.tm_min << ":" 
+       << std::setw(2) << t.tm_sec << "]";
     return ss.str();
 }
 
-
 std::string SystemCore::formatSize(long long b) {
-    static const char* units[] = {"B", "KB", "MB", "GB", "TB"};
-    double sz = (double)b;
+    if (b < 0) b = 0;
+    static const char* units[] = {"B", "KB", "MB", "GB", "TB", "PB"};
+    double sz = static_cast<double>(b);
     int i = 0;
-    while (sz >= 1024.0 && i < 4) {
+    while (sz >= 1024.0 && i < 5) {
         sz /= 1024.0;
         i++;
     }
@@ -82,9 +75,7 @@ std::string SystemCore::formatSize(long long b) {
     return std::string(buf);
 }
 
-
 bool SystemCore::runRawCommand(const std::string& command) {
-    // Chuyển đổi command sang UTF-16
     int wchars_num = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, NULL, 0);
     if (wchars_num == 0) return false;
     
@@ -118,11 +109,9 @@ bool SystemCore::runRawCommand(const std::string& command) {
     return success;
 }
 
-
 std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
     if (rawInput.empty() || rawInput == "0") return {};
 
-    // Tách chuỗi 
     std::string processed = rawInput;
     for (int i = (int)processed.length() - 3; i >= 1; --i) {
         char prev = processed[i - 1];
@@ -149,7 +138,6 @@ std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
                 if (!token.empty() && token.front() == '"') token.erase(0, 1);
                 if (!token.empty() && token.back() == '"') token.pop_back();
                 
-                // Chuẩn hóa đường dẫn (sửa \\ thành \)
                 size_t p = token.find("\\\\");
                 while (p != std::string::npos) {
                     token.replace(p, 2, "\\");
@@ -170,7 +158,6 @@ std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
     return paths;
 }
 
-
 std::string SystemCore::urlDecode(const std::string& str) {
     std::string decoded;
     for (size_t i = 0; i < str.length(); ++i) {
@@ -190,7 +177,6 @@ std::string SystemCore::urlDecode(const std::string& str) {
     return decoded;
 }
 
-
 bool SystemCore::runBatchAsAdmin(const std::string& batContent, const std::string& description) {
     char tempPath[MAX_PATH];
     GetTempPathA(MAX_PATH, tempPath);
@@ -206,7 +192,6 @@ bool SystemCore::runBatchAsAdmin(const std::string& batContent, const std::strin
     return result;
 }
 
-
 void SystemCore::waitEnter() {
     std::cout << "\nNhấn Enter để tiếp tục...";
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -219,13 +204,11 @@ int SystemCore::readInt(const std::string &prompt) {
             std::cout << prompt;
         }
         if (!std::getline(std::cin, line)) {
-            // Nếu stream bị lỗi (EOF), clear và reset lại stream
             std::cin.clear();
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             continue;
         }
         
-        // Trim khoảng trắng thừa để xử lý trường hợp người dùng vô tình bấm Space + Enter
         line = SystemCore::trim(line);
         if (line.empty()) continue;  
         
@@ -237,7 +220,7 @@ int SystemCore::readInt(const std::string &prompt) {
     }
 }
 
-// ==================== SYSTEM COMMANDS ====================
+// Thực thi lệnh hệ thống
 void SystemCore::runCMD(const std::string &cmd) {
     STARTUPINFOA si = {sizeof(si)};
     PROCESS_INFORMATION pi = {};
@@ -297,9 +280,7 @@ bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
     }
 }
 
-
-
-// ==================== MOUSE & KEYBOARD ====================
+// Giả lập bàn phím & chuột
 void SystemCore::leftClick() {
     INPUT input[2] = {};
     input[0].type = INPUT_MOUSE;
@@ -336,11 +317,4 @@ void SystemCore::pressCtrlV() {
 void SystemCore::pressEnter() {
     keybd_event(VK_RETURN, 0, 0, 0);
     keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0);
-}
-
-std::string SystemCore::readString(const std::string &prompt) {
-    std::string line;
-    std::cout << prompt;
-    std::getline(std::cin, line);
-    return SystemCore::trim(line);
 }

@@ -1,4 +1,4 @@
-// Internet.cpp - PHẦN ĐẦU FILE
+// Internet.cpp
 #include "../include/Internet.h"
 #include <iphlpapi.h>
 #pragma comment(lib, "iphlpapi.lib")
@@ -19,11 +19,10 @@
 namespace fs = std::filesystem;
 using namespace std;
 
-
-// ==================== STATIC CACHE ====================
+// Cache IP
 static string cachedIP = "";
 static time_t lastIPCheck = 0;
-static const int IP_CACHE_TTL = 60; // Cache IP trong 60 giây
+static const int IP_CACHE_TTL = 60;
 
 static map<string, string> contentTypeMap = {
     {".pdf", "application/pdf"},
@@ -42,11 +41,8 @@ static map<string, string> contentTypeMap = {
     {".xml", "application/xml"}
 };
 
-// ==================== CONSTRUCTOR/DESTRUCTOR ====================
-
 Internet::Internet(SystemCore &s) : sc(s), listenSocket(INVALID_SOCKET), 
     httpPort(8080), shareSize(0), dlCount(0) {
-    // KHÔNG làm gì nặng ở đây
 }
 
 Internet::~Internet() {
@@ -54,17 +50,15 @@ Internet::~Internet() {
         closesocket(listenSocket);
 }
 
-// ==================== TỐI ƯU getLocalIP() ====================
-
+// Lấy IP nội bộ
 string Internet::getLocalIP() {
     time_t now = time(nullptr);
     
-    // Cache IP trong 60 giây
     if (!cachedIP.empty() && (now - lastIPCheck) < IP_CACHE_TTL) {
         return cachedIP;
     }
     
-    // Cách 1: Dùng API Windows (NHANH NHẤT)
+    // Thử qua gethostbyname
     char hostname[256];
     if (gethostname(hostname, sizeof(hostname)) == 0) {
         struct hostent* host = gethostbyname(hostname);
@@ -80,7 +74,7 @@ string Internet::getLocalIP() {
         }
     }
     
-    // Cách 2: Dùng GetAdaptersInfo (nhanh hơn PowerShell)
+    // Thử qua GetAdaptersInfo
     IP_ADAPTER_INFO adapterInfo[16];
     DWORD dwSize = sizeof(adapterInfo);
     DWORD dwRetVal = GetAdaptersInfo(adapterInfo, &dwSize);
@@ -88,7 +82,6 @@ string Internet::getLocalIP() {
     if (dwRetVal == ERROR_SUCCESS) {
         PIP_ADAPTER_INFO pAdapter = adapterInfo;
         while (pAdapter) {
-            // Chỉ lấy IP private (192.168.x.x, 10.x.x.x, 172.16.x.x)
             string ip = pAdapter->IpAddressList.IpAddress.String;
             if (ip.find("192.168.") == 0 || ip.find("10.") == 0 || 
                 ip.find("172.16.") == 0 || ip.find("172.17.") == 0 ||
@@ -103,7 +96,7 @@ string Internet::getLocalIP() {
         }
     }
     
-    // Fallback: PowerShell (CHẬM NHƯNG CHÍNH XÁC)
+    // Fallback qua PowerShell
     FILE *pipe = _popen("powershell -NoProfile -Command \"(Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -like '192.168.*' -or $_.IPAddress -like '10.*'} | Select-Object -First 1).IPAddress\"","r");
     if (pipe) {
         char buf[32] = {0};
@@ -122,8 +115,6 @@ string Internet::getLocalIP() {
     return "127.0.0.1";
 }
 
-// ==================== TỐI ƯU getContentType() ====================
-
 string Internet::getContentType(const string &fpath) {
     size_t dotPos = fpath.find_last_of(".");
     if (dotPos == string::npos) return "application/octet-stream";
@@ -135,13 +126,9 @@ string Internet::getContentType(const string &fpath) {
     return (it != contentTypeMap.end()) ? it->second : "application/octet-stream";
 }
 
-
-
-// ==================== TỐI ƯU openFW() ====================
-
 void Internet::openFW() {
     static bool firewallOpened = false;
-    if (firewallOpened) return; // Chỉ mở 1 lần
+    if (firewallOpened) return;
     
     char cmd[256];
     sprintf_s(cmd, sizeof(cmd), "netsh advfirewall firewall add rule name=\"QuickShare_%d\" dir=in action=allow protocol=tcp localport=%d >nul 2>&1", httpPort, httpPort);
@@ -149,14 +136,11 @@ void Internet::openFW() {
     firewallOpened = true;
 }
 
-// ==================== CÁC HÀM KHÁC (GIỮ NGUYÊN) ====================
-
 string Internet::getField(const string &line) {
     size_t pos = line.find(":");
     if (pos != string::npos && pos + 2 < line.size()) return sc.trim(line.substr(pos + 2));
     return "";
 }
-
 
 HTTPRequest Internet::parseReq(const string &raw) {
     HTTPRequest req;
@@ -176,8 +160,6 @@ HTTPRequest Internet::parseReq(const string &raw) {
     }
     return req;
 }
-
-// ==================== sendFile() - TỐI ƯU ====================
 
 void Internet::sendFile(SOCKET client) {
     ifstream f(sharePath, ios::binary);
@@ -201,7 +183,7 @@ void Internet::sendFile(SOCKET client) {
     while (f.read(buf, CHUNK) || f.gcount() > 0) {
         int toSend = (int)f.gcount();
         if (send(client, buf, toSend, 0) <= 0) {
-            cout << "\n⚠️  Gián đoạn\n";
+            cout << "\n[!] Gián đoạn kết nối\n";
             f.close();
             return;
         }
@@ -218,14 +200,36 @@ void Internet::sendFile(SOCKET client) {
     cout << "100% ✓ [" << dlCount << "]\n";
 }
 
-// ==================== quickSharePRO() - TỐI ƯU ====================
-
 void Internet::quickSharePRO() {
+    while (true) {
+        sc.cls();
+        cout << "--- GỬI / NHẬN FILE NỘI BỘ (LAN P2P) ---\n\n";
+        cout << " [1] Gửi file (Phát file trong mạng LAN)\n";
+        cout << " [2] Nhận file (Tải từ máy khác về máy này)\n";
+        cout << " [0] Quay lại\n\n";
+        
+        int choice = sc.readInt(" -> Chọn: ");
+        if (choice == 0) return;
+        
+        if (choice == 2) {
+            receiveFileClient();
+            cout << "\nNhấn Enter để tiếp tục...";
+            cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            cin.get();
+            continue;
+        } else if (choice == 1) {
+            break; 
+        }
+    }
+
     sc.cls();
+    cout << "--- CHẾ ĐỘ GỬI FILE ---\n\n";
+    cout << "Kéo thả file cần gửi vào đây (hoặc dán đường dẫn): ";
     string path;
-    cin.ignore();
-    cout << "File (drag-drop or path): ";
     getline(cin, path);
+    if (path.empty()) {
+        getline(cin, path);
+    }
 
     if (path.length() >= 2 && path[0] == '"' && path[path.length() - 1] == '"') {
         path = path.substr(1, path.length() - 2);
@@ -241,13 +245,13 @@ void Internet::quickSharePRO() {
 
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-        cout << "WSAStartup failed\n";
+        cout << "[!] WSAStartup thất bại\n";
         return;
     }
 
     listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listenSocket == INVALID_SOCKET) {
-        cout << "Socket failed\n";
+        cout << "[!] Tạo socket thất bại\n";
         WSACleanup();
         return;
     }
@@ -258,7 +262,7 @@ void Internet::quickSharePRO() {
     addr.sin_port = htons(httpPort);
 
     if (bind(listenSocket, (sockaddr *)&addr, sizeof(addr)) == SOCKET_ERROR) {
-        cout << "Bind failed: Port " << httpPort << " đang dùng\n";
+        cout << "[!] Port " << httpPort << " đang bận\n";
         closesocket(listenSocket);
         listenSocket = INVALID_SOCKET;
         WSACleanup();
@@ -267,22 +271,13 @@ void Internet::quickSharePRO() {
 
     listen(listenSocket, SOMAXCONN);
 
-    // check
-    if (listenSocket == INVALID_SOCKET) {
-        cout << "[!] Socket không hợp lệ!\n";
-        WSACleanup();
-        return;
-    }
-
     string ip = getLocalIP();
     openFW();
 
-    cout << "\n" << string(70, '=') << "\n";
-    cout << "Server chạy!\n";
-    cout << "[IP]: " << ip << " | Port: " << httpPort << " | File: " << shareName << " (" << SystemCore::formatSize(shareSize) << ")\n\n";
+    cout << "\n[OK] Server đang hoạt động!\n";
+    cout << "[IP]: " << ip << " | Port: " << httpPort << " | File: " << shareName << " (" << SystemCore::formatSize(shareSize) << ")\n";
     cout << "[URL]: http://" << ip << ":" << httpPort << "/" << shareName << "\n\n";
-    cout << "\nCtrl+C để dừng\n";
-    cout << string(70, '=') << "\n\n";
+    cout << "Nhấn Ctrl+C để dừng server\n\n";
 
     while (true) {
         SOCKET client = accept(listenSocket, nullptr, nullptr);
@@ -291,8 +286,6 @@ void Internet::quickSharePRO() {
         }
     }
 }
-
-// ==================== CÁC HÀM KHÁC (GIỮ NGUYÊN) ====================
 
 void Internet::handleClient(SOCKET client) {
     const int BUFSIZE = 4096;
@@ -310,12 +303,10 @@ void Internet::handleClient(SOCKET client) {
         std::cout << SystemCore::getTime(false) << " | " << req.method << " " << req.path << "\n";
 
         if (req.method == "GET" && !sharePath.empty()) {
-            // Decode URL: bỏ query string, decode %20, chuẩn hóa path
             string reqPath = req.path;
             size_t qPos = reqPath.find('?');
             if (qPos != string::npos) reqPath = reqPath.substr(0, qPos);
 
-            // URL decode đơn giản
             string decoded;
             for (size_t i = 0; i < reqPath.size(); ++i) {
                 if (reqPath[i] == '%' && i + 2 < reqPath.size()) {
@@ -330,14 +321,13 @@ void Internet::handleClient(SOCKET client) {
                 }
             }
 
-            // Chỉ cho phép đúng path của file đang chia sẻ
             string expectedPath = "/" + shareName;
             if (decoded == "/" || decoded == expectedPath) {
                 sendFile(client);
             } else {
                 string err = "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nContent-Length: 9\r\nConnection: close\r\n\r\nForbidden";
                 send(client, err.c_str(), (int)err.length(), 0);
-                std::cout << SystemCore::getTime(false) << " | [!] Từ chối truy cập path: " << decoded << "\n";
+                std::cout << SystemCore::getTime(false) << " | [!] Từ chối truy cập: " << decoded << "\n";
             }
         }
     }
@@ -363,11 +353,8 @@ bool Internet::checkFileSizeAndConfirm(const string &path, long long &outSize) {
     outSize = fileSize;
 
     if (fileSize > MAX_FILE_SIZE) {
-        cout << "\n" << string(70, '=') << "\n";
-        cout << "[⚠️  CẢNH BÁO] File vượt quá giới hạn an toàn!\n";
-        cout << "Kích thước file: " << SystemCore::formatSize(fileSize) << "\n";
-        cout << "Giới hạn tối đa:  " << SystemCore::formatSize(MAX_FILE_SIZE) << "\n";
-        cout << string(70, '=') << "\n";
+        cout << "\n[!] CẢNH BÁO: File vượt quá kích thước khuyến nghị (" << SystemCore::formatSize(MAX_FILE_SIZE) << ")\n";
+        cout << "    Kích thước file: " << SystemCore::formatSize(fileSize) << "\n";
 
         string confirm;
         cout << "\n[?] Bạn vẫn muốn tiếp tục? (Y/N): ";
@@ -375,7 +362,7 @@ bool Internet::checkFileSizeAndConfirm(const string &path, long long &outSize) {
         cin.ignore();
 
         if (confirm != "y" && confirm != "Y") {
-            cout << "[i] Hủy bỏ quá trình chia sẻ.\n";
+            cout << "[i] Đã hủy chia sẻ.\n";
             return false;
         }
     }
@@ -393,35 +380,115 @@ bool Internet::getFileSizeInfoAndPrompt(const string &path, long long &outSize) 
     cout << "    - Dung lượng: " << SystemCore::formatSize(outSize) << "\n";
 
     string proceedChoice;
-    cout << "\n[?] Tiếp tục với quá trình chia sẻ? (Y/N): ";
+    cout << "\n[?] Bắt đầu chia sẻ? (Y/N): ";
     cin >> proceedChoice;
     cin.ignore();
 
     if (proceedChoice != "y" && proceedChoice != "Y") {
-        cout << "[i] Người dùng đã hủy bỏ.\n";
+        cout << "[i] Đã hủy chia sẻ.\n";
         return false;
     }
 
     return true;
 }
 
-void Internet::showIP() {
-    sc.runCMD("chcp 437 >nul & ipconfig | findstr /i \"IPv4 Subnet Gateway\" & chcp 65001 >nul");
+void Internet::showNetworkInfo() {
+    sc.cls();
+    cout << "--- THÔNG TIN MẠNG & KẾT NỐI ---\n\n";
+
+    cout << "[*] Địa chỉ IP nội bộ (LAN): " << getLocalIP() << "\n";
+    
+    cout << "[*] Đang truy vấn Public IP (Internet)... ";
+    FILE *pipe = _popen("curl -s --max-time 3 https://api.ipify.org", "r");
+    if (pipe) {
+        char buf[64] = {0};
+        if (fgets(buf, sizeof(buf), pipe)) {
+            string pubIp = sc.trim(string(buf));
+            if (!pubIp.empty()) cout << pubIp << "\n";
+            else cout << "(Không có kết nối Internet)\n";
+        } else {
+            cout << "(Không có kết nối Internet)\n";
+        }
+        _pclose(pipe);
+    } else {
+        cout << "(Không thể kết nối)\n";
+    }
+
+    cout << "\n[*] Cấu hình chi tiết các Card mạng (Network Adapters):\n";
+    sc.runCMD("chcp 437 >nul & ipconfig /all | findstr /i \"Description IPv4 Subnet Default DNS Lease DHCP\" & chcp 65001 >nul");
+    cout << "\n";
 }
 
-void Internet::renewIP() { sc.runCMD("ipconfig /renew"); }
-void Internet::flushdns() { sc.runCMD("ipconfig /flushdns"); }
-void Internet::netsh_tcpIP() { sc.runAdmin("netsh int ip reset"); }
+void Internet::repairNetwork() {
+    sc.cls();
+    cout << "--- SỬA LỖI & KHÔI PHỤC MẠNG ---\n\n";
+
+    cout << "[1/5] Xóa bộ đệm DNS (Flush DNS)...\n";
+    sc.runCMD("ipconfig /flushdns >nul 2>&1");
+    cout << "      -> [OK]\n";
+
+    cout << "[2/5] Đặt lại Winsock Catalog...\n";
+    sc.runAdmin("netsh winsock reset", true);
+    cout << "      -> [OK]\n";
+
+    cout << "[3/5] Đặt lại ngăn xếp giao thức TCP/IP...\n";
+    sc.runAdmin("netsh int ip reset", true);
+    cout << "      -> [OK]\n";
+
+    cout << "[4/5] Xóa bảng ARP Cache...\n";
+    sc.runAdmin("netsh interface ip delete arpcache", true);
+    cout << "      -> [OK]\n";
+
+    cout << "[5/5] Làm mới địa chỉ IP (Release & Renew)...\n";
+    sc.runCMD("ipconfig /release >nul 2>&1 & ipconfig /renew >nul 2>&1");
+    cout << "      -> [OK]\n";
+
+    cout << "\n[✓] Đã hoàn tất sửa lỗi và khôi phục toàn bộ cài đặt mạng!\n";
+}
+
+void Internet::fullSecurityShield() {
+    sc.cls();
+    cout << "--- KÍCH HOẠT BẢO MẬT TOÀN DIỆN ---\n\n";
+
+    string batContent = "";
+    batContent += "powershell -Command \"Set-MpPreference -DisableRealtimeMonitoring $false\"\n";
+    batContent += "\"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -SignatureUpdate\n";
+    batContent += "netsh advfirewall set allprofiles state on\n";
+    batContent += "powershell -Command \"Set-MpPreference -EnableControlledFolderAccess Enabled\"\n";
+    batContent += "sc config RemoteRegistry start= disabled\n";
+    batContent += "sc stop RemoteRegistry\n";
+    batContent += "sc config TermService start= disabled\n";
+    batContent += "sc stop TermService\n";
+    batContent += "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters\" /v SMB1 /t REG_DWORD /d 0 /f\n";
+    batContent += "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient\" /v EnableMulticast /t REG_DWORD /d 0 /f\n";
+    batContent += "powershell -Command \"Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-NetAdapter -Name $_.Name -NetLuid $_.NetLuid -NetBIOSSetting Disabled }\"\n";
+
+    vector<int> ports = {445, 139, 135, 137, 138};
+    for (int p : ports) {
+        string ruleName = "Block_Dangerous_Port_" + to_string(p);
+        batContent += "netsh advfirewall firewall delete rule name=\"" + ruleName + "\"\n";
+        batContent += "netsh advfirewall firewall delete rule name=\"" + ruleName + "_out\"\n";
+        batContent += "netsh advfirewall firewall add rule name=\"" + ruleName + "\" dir=in action=block protocol=TCP localport=" + to_string(p) + "\n";
+        batContent += "netsh advfirewall firewall add rule name=\"" + ruleName + "_out\" dir=out action=block protocol=TCP localport=" + to_string(p) + "\n";
+    }
+
+    batContent += "powershell -Command \"Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ServerAddresses ('1.1.1.1','1.0.0.1') }\"\n";
+    batContent += "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\" /v EnableAutoDoh /t REG_DWORD /d 2 /f\n";
+    batContent += "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection\" /v AllowTelemetry /t REG_DWORD /d 0 /f\n";
+
+    SystemCore::runBatchAsAdmin(batContent, "Tăng cường bảo mật");
+
+    checkSecurityStatus();
+    cout << "\n[✓] Đã kích hoạt toàn bộ lá chắn bảo mật hệ thống & mạng!\n";
+}
 
 void Internet::wifiAudit() {
     sc.cls();
-    cout << "====================================================\n";
-    cout << "          DANH SÁCH CẤU HÌNH WIFi ĐÃ LƯU            \n";
-    cout << "====================================================\n";
+    cout << "--- MẬT KHẨU WIFI ĐÃ LƯU ---\n\n";
 
     FILE *pipe = _popen("netsh wlan show profiles", "r");
     if (!pipe) {
-        cout << "[!] Không thể truy cập cấu hình mạng không dây.\n";
+        cout << "[!] Không thể truy cập cấu hình Wi-Fi.\n";
         return;
     }
 
@@ -439,17 +506,16 @@ void Internet::wifiAudit() {
     _pclose(pipe);
 
     if (wifiList.empty()) {
-        cout << "[i] Không tìm thấy cấu hình WiFi nào được lưu trên máy.\n";
+        cout << "[i] Không tìm thấy cấu hình Wi-Fi nào trên máy.\n";
         return;
     }
 
     for (size_t i = 0; i < wifiList.size(); ++i) {
-        cout << " [" << i + 1 << "] WiFi: " << wifiList[i] << "\n";
+        cout << " [" << i + 1 << "] " << wifiList[i] << "\n";
     }
-    cout << " [0] Quay lại\n";
-    cout << "====================================================\n";
+    cout << " [0] Quay lại\n\n";
 
-    int choice = sc.readInt(" -> Nhập số thứ tự WiFi muốn xem mật khẩu: ");
+    int choice = sc.readInt(" -> Nhập số thứ tự Wi-Fi muốn xem mật khẩu: ");
     if (choice == 0) return;
 
     if (choice < 1 || choice > static_cast<int>(wifiList.size())) {
@@ -476,14 +542,11 @@ void Internet::wifiAudit() {
     _pclose(p2);
 
     sc.cls();
-    cout << "====================================================\n";
-    cout << "          THÔNG TIN KẾT NỐI ĐƯỢC TRÍCH XUẤT         \n";
-    cout << "====================================================\n";
-    cout << " Tên WiFi   : " << selectedWifi << "\n";
+    cout << "--- THÔNG TIN KẾT NỐI WIFI ---\n\n";
+    cout << " Tên Wi-Fi  : " << selectedWifi << "\n";
     cout << " Mật khẩu   : " << pass << "\n";
     cout << " Bảo mật    : " << auth << "\n";
-    cout << " Mã hóa     : " << cipher << "\n";
-    cout << "====================================================\n";
+    cout << " Mã hóa     : " << cipher << "\n\n";
 }
 
 void Internet::startLocalChat() {
@@ -519,12 +582,10 @@ void Internet::startLocalChat() {
     listen(listenSocket, SOMAXCONN);
 
     string ip = getLocalIP();
-    cout << "====================================================\n";
-    cout << "[CHAT SERVER] DANG CHAY TAI: http://" << ip << ":" << httpPort << "\n";
-    cout << "====================================================\n";
-    cout << "Nguoi dung cung mang Wi-Fi co the truy cap link tren de chat.\n";
-    cout << "Nhan [Ctrl + C] de dong Server khi ket thuc.\n";
-    cout << "====================================================\n\n";
+    cout << "--- PHÒNG CHAT NỘI BỘ MẠNG LAN ---\n\n";
+    cout << "[Chat Server]: http://" << ip << ":" << httpPort << "\n";
+    cout << "Các thiết bị trong cùng mạng Wi-Fi có thể truy cập link trên để chat.\n";
+    cout << "Nhấn Ctrl+C để đóng server.\n\n";
 
     while (true) {
         SOCKET client = accept(listenSocket, nullptr, nullptr);
@@ -690,4 +751,128 @@ void Internet::checkSecurityStatus() {
     cout << "\n[*] Cấu hình DNS:\n";
     sc.runCMD("ipconfig /all | findstr \"DNS Servers\"");
     cout << "==================================================\n";
+}
+
+void Internet::receiveFileClient() {
+    sc.cls();
+    cout << "========== CHẾ ĐỘ NHẬN FILE ==========\n";
+    cout << "Nhập IP của máy gửi (VD: 192.168.1.5): ";
+    string ip;
+    getline(cin, ip);
+    if (ip.empty()) {
+        getline(cin, ip); // Bù cho khoảng trắng nếu có
+    }
+    ip = sc.trim(ip);
+
+    if (ip.empty()) return;
+
+    WSADATA wsa;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+        cout << "[!] Không thể khởi tạo Winsock.\n";
+        return;
+    }
+
+    SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock == INVALID_SOCKET) {
+        cout << "[!] Lỗi tạo Socket.\n";
+        WSACleanup();
+        return;
+    }
+
+    sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(8080);
+    if (inet_pton(AF_INET, ip.c_str(), &addr.sin_addr) <= 0) {
+        cout << "[!] Định dạng IP không hợp lệ.\n";
+        closesocket(sock);
+        WSACleanup();
+        return;
+    }
+
+    cout << "\n[*] Đang kết nối đến " << ip << ":8080 ...\n";
+    if (connect(sock, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
+        cout << "[!] Không thể kết nối. Hãy chắc chắn máy gửi đang mở phát file và đã tắt tường lửa (hoặc cho phép cổng 8080).\n";
+        closesocket(sock);
+        WSACleanup();
+        return;
+    }
+
+    string req = "GET / HTTP/1.1\r\nHost: " + ip + "\r\nConnection: close\r\n\r\n";
+    send(sock, req.c_str(), req.length(), 0);
+
+    // Đọc header HTTP
+    string headers = "";
+    char ch;
+    while(recv(sock, &ch, 1, 0) > 0) {
+        headers += ch;
+        if(headers.length() >= 4 && headers.substr(headers.length()-4) == "\r\n\r\n") {
+            break;
+        }
+    }
+
+    if (headers.find("200 OK") == string::npos) {
+        cout << "[!] Phản hồi từ Máy gửi không hợp lệ hoặc bị từ chối.\n";
+        closesocket(sock);
+        WSACleanup();
+        return;
+    }
+
+    string filename = "received_file.dat";
+    size_t cdPos = headers.find("filename=\"");
+    if(cdPos != string::npos) {
+        size_t endPos = headers.find("\"", cdPos + 10);
+        if(endPos != string::npos) {
+            filename = headers.substr(cdPos + 10, endPos - cdPos - 10);
+        }
+    }
+
+    long long fileSize = 0;
+    size_t clPos = headers.find("Content-Length: ");
+    if(clPos != string::npos) {
+        size_t endPos = headers.find("\r\n", clPos);
+        if(endPos != string::npos) {
+            fileSize = stoll(headers.substr(clPos + 16, endPos - clPos - 16));
+        }
+    }
+
+    char userProfile[MAX_PATH];
+    GetEnvironmentVariableA("USERPROFILE", userProfile, MAX_PATH);
+    string savePath = string(userProfile) + "\\Downloads\\" + filename;
+
+    ofstream out(savePath, ios::binary);
+    if (!out.is_open()) {
+        cout << "[!] Lỗi: Không thể tạo file tại " << savePath << "\n";
+        closesocket(sock);
+        WSACleanup();
+        return;
+    }
+
+    cout << "[*] Đang tải: " << filename << " (" << SystemCore::formatSize(fileSize) << ")\n";
+    
+    char buf[65536]; // Buffer 64KB
+    int bytesRead;
+    long long totalRead = 0;
+    int lastProg = 0;
+    
+    cout << "Tiến độ: ";
+    while((bytesRead = recv(sock, buf, sizeof(buf), 0)) > 0) {
+        out.write(buf, bytesRead);
+        totalRead += bytesRead;
+        
+        if (fileSize > 0) {
+            int prog = (int)((totalRead * 100) / fileSize);
+            if (prog > lastProg && prog % 10 == 0) {
+                cout << prog << "% ";
+                cout.flush();
+                lastProg = prog;
+            }
+        }
+    }
+    cout << "100% ✓\n";
+    
+    out.close();
+    closesocket(sock);
+    WSACleanup();
+    
+    cout << "\n[OK] Đã tải xong! File lưu tại: " << savePath << "\n";
 }
