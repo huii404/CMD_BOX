@@ -24,7 +24,6 @@ static void wipeFolderContents(const fs::path &dirPath) {
 
 void SystemOptimizer::cleanDiskPro() {
     sc.cls();
-    cout << "--- TIẾN TRÌNH DỌN RÁC CHUYÊN SÂU PRO ---\n\n";
 
     long long bytesBefore = 0;
     try {
@@ -96,7 +95,6 @@ void SystemOptimizer::cleanDiskPro() {
 
 void SystemOptimizer::disableAllStartupApps() {
     sc.cls();
-    cout << "--- QUẢN LÝ ỨNG DỤNG KHỞI ĐỘNG CÙNG WINDOWS ---\n\n";
     cout << "[*] Đang quét và tắt các ứng dụng không thiết yếu...\n\n";
     int removedCount = 0;
     const struct { HKEY hKeyRoot; LPCSTR subKey; string name; } targets[] = {
@@ -300,7 +298,6 @@ void SystemOptimizer::cleanDevCaches() {
 
 void SystemOptimizer::optimizeSystemPRO() {
     sc.cls();
-    cout << "--- TỐI ƯU HÓA HỆ THỐNG TOÀN DIỆN (PRO 1-CLICK) ---\n\n";
 
     string batContent = "";
     batContent += "del /s /f /q \"%systemroot%\\temp\\*\" & rd /s /q \"%systemroot%\\temp\" & md \"%systemroot%\\temp\"\n";
@@ -397,7 +394,6 @@ void SystemOptimizer::turnOffServicesMenu() {
 
     while (true) {
         sc.cls();
-        std::cout << "--- DANH SÁCH DỊCH VỤ HỆ THỐNG CÓ THỂ TỐI ƯU ---\n\n";
         
         for (size_t i = 0; i < targetSvcs.size(); ++i) {
             std::cout << " [" << std::setw(2) << i + 1 << "] " 
@@ -450,7 +446,6 @@ void SystemOptimizer::turnOffServicesMenu() {
                 int idx = std::stoi(input) - 1;
                 if (idx >= 0 && idx < (int)targetSvcs.size()) {
                     sc.cls();
-                    std::cout << "--- CẤU HÌNH DỊCH VỤ ---\n\n";
                     std::cout << "Dịch vụ: " << targetSvcs[idx].desc << " [" << targetSvcs[idx].name << "]\n\n";
                     std::cout << " [1] Chuyển về MANUAL (Thụ động)\n";
                     std::cout << " [2] Chuyển về DISABLED (Tắt hẳn)\n";
@@ -483,7 +478,6 @@ void SystemOptimizer::turnOffServicesMenu() {
 
 void SystemOptimizer::optimizeTaskbar() {
     sc.cls();
-    cout << "--- TỐI ƯU TASKBAR WINDOWS 11 ---\n\n";
     
     struct TaskbarSetting {
         std::string keyPath;

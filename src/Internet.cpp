@@ -152,7 +152,6 @@ HTTPRequest Internet::parseReq(const string &raw) {
 
 void Internet::showNetworkInfo() {
     sc.cls();
-    cout << "--- THÔNG TIN MẠNG & KẾT NỐI ---\n\n";
 
     cout << "[*] Địa chỉ IP nội bộ (LAN): " << getLocalIP() << "\n";
     
@@ -179,7 +178,6 @@ void Internet::showNetworkInfo() {
 
 void Internet::repairNetwork() {
     sc.cls();
-    cout << "--- SỬA LỖI & KHÔI PHỤC MẠNG ---\n\n";
 
     cout << "[1/5] Xóa bộ đệm DNS (Flush DNS)...\n";
     sc.runCMD("ipconfig /flushdns >nul 2>&1");
@@ -206,7 +204,6 @@ void Internet::repairNetwork() {
 
 void Internet::fullSecurityShield() {
     sc.cls();
-    cout << "--- KÍCH HOẠT BẢO MẬT TOÀN DIỆN ---\n\n";
 
     string batContent = "";
     batContent += "powershell -Command \"Set-MpPreference -DisableRealtimeMonitoring $false\"\n";
@@ -242,7 +239,6 @@ void Internet::fullSecurityShield() {
 
 void Internet::wifiAudit() {
     sc.cls();
-    cout << "--- MẬT KHẨU WIFI ĐÃ LƯU ---\n\n";
 
     FILE *pipe = _popen("netsh wlan show profiles", "r");
     if (!pipe) {
@@ -300,7 +296,6 @@ void Internet::wifiAudit() {
     _pclose(p2);
 
     sc.cls();
-    cout << "--- THÔNG TIN KẾT NỐI WIFI ---\n\n";
     cout << " Tên Wi-Fi  : " << selectedWifi << "\n";
     cout << " Mật khẩu   : " << pass << "\n";
     cout << " Bảo mật    : " << auth << "\n";
@@ -340,7 +335,6 @@ void Internet::startLocalChat() {
     listen(listenSocket, SOMAXCONN);
 
     string ip = getLocalIP();
-    cout << "--- PHÒNG CHAT NỘI BỘ MẠNG LAN ---\n\n";
     cout << "[Chat Server]: http://" << ip << ":" << httpPort << "\n";
     cout << "Các thiết bị trong cùng mạng Wi-Fi có thể truy cập link trên để chat.\n";
     cout << "Nhấn Ctrl+C để đóng server.\n\n";

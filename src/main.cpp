@@ -69,14 +69,20 @@ public:
     AppUI() = default;
     ~AppUI() = default;
 
-    void mainMenu() {
+    void renderStatusBox() {
         bool admin = SystemCore::isElevated();
-        cout << "--- CMD BOX - SYSTEM TOOLKIT ---\n";
+        std::string devInfo = SystemCore::getDeviceStatus();
         if (admin) {
-            cout << " [Trạng thái: Administrator ✓ (Đầy đủ quyền)]\n\n";
+            cout << "[Quyền hạn] : Administrator\n";
         } else {
-            cout << " [Trạng thái: User ⚠️ (Khuyên chạy Run as Administrator)]\n\n";
+            cout << "[Quyền hạn] : User\n";
         }
+        cout << "[Thiết bị]  : " << devInfo << "\n";
+    }
+
+    void mainMenu() {
+        renderStatusBox();
+        cout << "\n\n\n";
         cout << " [1] Bảo trì & Tối ưu hệ thống\n";
         cout << " [2] Mạng & Bảo mật\n";
         cout << " [3] Công cụ tự động & Tiện ích\n";

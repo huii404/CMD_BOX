@@ -252,6 +252,28 @@ bool SystemCore::isElevated() {
     return elevated;
 }
 
+std::string SystemCore::getDeviceStatus() {
+    SYSTEM_POWER_STATUS sps;
+    if (GetSystemPowerStatus(&sps)) {
+        bool hasBattery = !(sps.BatteryFlag & 128) && (sps.BatteryLifePercent != 255);
+        if (hasBattery) {
+            int percent = static_cast<int>(sps.BatteryLifePercent);
+            std::string status = "Laptop (Pin: " + std::to_string(percent) + "%";
+            if (sps.ACLineStatus == 1) {
+                status += " - Đang sạc ⚡)";
+            } else if (sps.ACLineStatus == 0) {
+                status += " - Đang dùng pin 🔋)";
+            } else {
+                status += ")";
+            }
+            return status;
+        } else {
+            return "PC (Máy bàn)";
+        }
+    }
+    return "PC (Máy bàn)";
+}
+
 bool SystemCore::checkEmergencyStop() {
     if ((GetAsyncKeyState(VK_ESCAPE) & 0x8000) || (GetAsyncKeyState(VK_F6) & 0x8000)) {
         GetAsyncKeyState(VK_ESCAPE);

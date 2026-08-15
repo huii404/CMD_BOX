@@ -41,7 +41,6 @@ static bool sleepWithEmergencyCheck(int totalMs) {
 // Auto click chuột theo vị trí
 void UtilityTools::autoClickPoint() {
     sc.cls();
-    cout << "--- AUTO CLICK CHUỘT ---\n";
     cout << "[i] Nhấn phím ESC hoặc F6 bất kỳ lúc nào để DỪNG KHẨN CẤP\n\n";
     
     int times = sc.readInt("Số lần click: ");
@@ -104,7 +103,6 @@ void UtilityTools::autoClickPoint() {
 // Spam văn bản tự động
 void UtilityTools::spamText() {
     sc.cls();
-    cout << "--- SPAM TEXT (TỰ ĐỘNG GỬI) ---\n";
     cout << "[i] Nhấn phím ESC hoặc F6 bất kỳ lúc nào để DỪNG KHẨN CẤP\n\n";
     
     string content; 
@@ -190,7 +188,6 @@ void UtilityTools::spamText() {
 // Tự động paste danh sách dữ liệu
 void UtilityTools::autoPasteData() {
     sc.cls();
-    cout << "--- AUTO PASTE DỮ LIỆU ---\n";
     cout << "[i] Nhấn phím ESC hoặc F6 bất kỳ lúc nào để DỪNG KHẨN CẤP\n\n";
     
     int n = sc.readInt("Số dòng dữ liệu: ");
@@ -287,7 +284,6 @@ void UtilityTools::downloadManager() {
     };
 
     sc.cls();
-    cout << "--- TRÌNH TẢI & CÀI ĐẶT PHẦN MỀM ---\n\n";
     
     for (size_t i = 0; i < appList.size(); i++) {
         cout << " [" << setw(2) << i + 1 << "] " << left << setw(28) << appList[i].name;
@@ -391,7 +387,6 @@ void UtilityTools::showDownloadHistory() {
     ifstream history(historyFile);
     
     sc.cls();
-    cout << "--- LỊCH SỬ TẢI PHẦN MỀM ---\n\n";
     
     if (!history.is_open()) {
         cout << "[i] Chưa có lịch sử tải nào.\n";
@@ -420,7 +415,6 @@ void UtilityTools::uninstallBloatware() {
                      "Copilot|CandyCrush|King\\.com|SpiderSolitaire|FreeCell|"
                      "Hearts|Zone";
     
-    cout << "--- GỠ BỎ ỨNG DỤNG RÁC (BLOATWARE WINDOWS) ---\n\n";
     cout << "[*] Đang quét và gỡ bỏ các ứng dụng rác mặc định...\n";
     cout << "[!] Quá trình này yêu cầu quyền Administrator\n\n";
     
