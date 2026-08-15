@@ -8,23 +8,18 @@
 #include <vector>
 #include "SystemCore.h"
 
-struct HTTPRequest {
-    std::string method, path, httpVersion;
-    std::map<std::string, std::string> headers;
-};
-
 class Internet {
 private:
     SystemCore &sc;
-    SOCKET listenSocket;
-    int httpPort;
-    std::vector<std::string> chatHistory;
 
     std::string getField(const std::string &line);
-    std::string getContentType(const std::string &fpath);
     std::string getLocalIP();
-    HTTPRequest parseReq(const std::string &raw);
-    void handleChatClient(SOCKET client); 
+
+    // Native Win32 Registry & Service Helpers
+    static bool readRegDword(HKEY hRoot, const std::string &subKey, const std::string &valueName, DWORD &outVal);
+    static bool writeRegDword(HKEY hRoot, const std::string &subKey, const std::string &valueName, DWORD val);
+    static bool isServiceRunningNative(const std::string &serviceName);
+    static bool isServiceDisabledNative(const std::string &serviceName);
 
 public:
     Internet(SystemCore &s);
@@ -33,15 +28,17 @@ public:
     void showNetworkInfo();
     void repairNetwork();
     void wifiAudit();
-    void startLocalChat();
-    void enableWindowsDefender();
-    void enableFirewall();
-    void enableControlledFolderAccess();
-    void disableInsecureProtocols();
-    void blockDangerousPorts();
-    void configureDNSoverHTTPS();
     void checkSecurityStatus();
     void fullSecurityShield();
+    void checkHostsFileSecurity();
+
+    // Các hàm Toggle bảo mật có kiểm tra trạng thái trước & sau
+    void toggleDefender(bool enable, int &alreadyCount, int &newlyCount, int &failedCount);
+    void toggleFirewall(bool enable, int &alreadyCount, int &newlyCount, int &failedCount);
+    void toggleControlledFolderAccess(bool enable, int &alreadyCount, int &newlyCount, int &failedCount);
+    void toggleInsecureProtocols(bool block, int &alreadyCount, int &newlyCount, int &failedCount);
+    void toggleDangerousPorts(bool block, int &alreadyCount, int &newlyCount, int &failedCount);
+    void toggleDNSoverHTTPS(bool enable, int &alreadyCount, int &newlyCount, int &failedCount);
 };
 
 #endif 

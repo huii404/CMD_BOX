@@ -93,7 +93,6 @@ public:
 
     void menuBaoTriToiUu() {
         cls();
-        cout << "--- BẢO TRÌ & TỐI ƯU HỆ THỐNG ---\n\n";
         cout << " [1] Dọn rác chuyên sâu PRO (Browser, Temp, Logs, Cache)\n";
         cout << " [2] Quản lý & Tắt ứng dụng khởi động cùng Windows\n";
         cout << " [3] Quản lý & Tối ưu dịch vụ Windows (Services Control)\n";
@@ -106,20 +105,18 @@ public:
 
     void menuMangBaoMat() {
         cls();
-        cout << "--- MẠNG & BẢO MẬT ---\n\n";
         cout << " [1] Xem thông tin mạng chi tiết (LAN, Public IP, DNS)\n";
         cout << " [2] Sửa lỗi & Khôi phục mạng (Reset TCP/IP, Winsock, DNS)\n";
-        cout << " [3] Kích hoạt bảo mật toàn diện (Defender, Firewall, Port)\n";
-        cout << " [4] Kiểm tra trạng thái bảo mật hệ thống\n";
+        cout << " [3] Kích hoạt Lá chắn bảo mật toàn diện (Bật/Tắt PRO)\n";
+        cout << " [4] Kiểm tra trạng thái bảo mật hệ thống & Cảnh báo\n";
         cout << " [5] Xem danh sách mật khẩu Wi-Fi đã lưu\n";
-        cout << " [6] Phòng Chat nội bộ mạng LAN (Web Chat)\n";
+        cout << " [6] Quét & Bảo vệ tập tin Hosts (Chống chuyển hướng độc hại)\n";
         cout << " [0] Quay lại\n\n";
         cout << " [Chọn]: ";
     }
 
     void menuCongCuTienIch() {
         cls();
-        cout << "--- CÔNG CỤ TỰ ĐỘNG & TIỆN ÍCH ---\n\n";
         cout << " [1] Auto Click chuột\n";
         cout << " [2] Spam Text (Tự động gửi tin nhắn/văn bản)\n";
         cout << " [3] Auto Paste dữ liệu nhiều dòng\n";
@@ -131,22 +128,20 @@ public:
 
     void menuMedia() {
         cls();
-        cout << "--- BỘ XỬ LÝ MEDIA (FFMPEG) ---\n\n";
         cout << " [1] Nén dung lượng Video / Ảnh\n";
         cout << " [2] Phục chế & Làm nét Video / Ảnh\n"; 
         cout << " [3] Chuyển đổi định dạng Mp4 -> Mp3 (Tách âm thanh)\n";
         cout << " [4] Thay đổi tốc độ Video\n";
         cout << " [5] Đổi đuôi định dạng Media\n";
         cout << " [6] Chuẩn hóa tên file trong thư mục\n";
-        cout << " [7] Giấu file bí mật vào Ảnh\n"; 
-        cout << " [8] Giấu file bí mật vào Video\n";
-        cout << " [9] Dò tìm & Trích xuất file ẩn từ Media\n"; 
+        cout << " [7] Ẩn file trong file\n"; 
+        cout << " [8] Xem & Trích xuất Metadata (JSON/Tag Info)\n"; 
         cout << " [0] Quay lại\n\n";
         cout << " [Chọn]: ";
     }
 
     void run() {
-        SetConsoleTitleA("CMD BOX - System Toolkit");
+        SetConsoleTitleA("CMD BOX");
         Sleep(50);
 
         while (true) {
@@ -177,7 +172,7 @@ public:
                     else if (sub == 6) getOptimizer().optimizeSystemPRO();
                     else {
                         cout << "\n[!] Lựa chọn không hợp lệ!\n";
-                        Sleep(800);
+                        Sleep(300);
                         continue;
                     }
                     waitEnter();
@@ -197,13 +192,14 @@ public:
                     else if (sub == 3) getInternet().fullSecurityShield();
                     else if (sub == 4) getInternet().checkSecurityStatus();
                     else if (sub == 5) getInternet().wifiAudit();
-                    else if (sub == 6) getInternet().startLocalChat();
+                    else if (sub == 6) getInternet().checkHostsFileSecurity();
                     else {
                         cout << "\n[!] Lựa chọn không hợp lệ!\n";
-                        Sleep(800);
+                        Sleep(300);
                         continue;
                     }
-                    waitEnter();
+                    if (sub != 3 && sub != 4 && sub != 6)
+                        waitEnter();
                 }
                 break;
 
@@ -222,7 +218,7 @@ public:
                     else if (sub == 5) getTools().uninstallBloatware();   
                     else {
                         cout << "\n[!] Lựa chọn không hợp lệ!\n";
-                        Sleep(800);
+                        Sleep(300);
                         continue;
                     }
                     waitEnter();
@@ -243,16 +239,15 @@ public:
                     else if (sub == 4) getMedia().processChangeSpeedBatch();
                     else if (sub == 5) getMedia().processConvertFormatBatch();
                     else if (sub == 6) getMedia().normalizeMediaFilenames();
-                    else if (sub == 7) getMedia().hideFileInImage();   
-                    else if (sub == 8) getMedia().hideFileInVideo();
-                    else if (sub == 9) getMedia().extractHiddenFromMedia();
+                    else if (sub == 7) getMedia().processAnFileTrongFile();
+                    else if (sub == 8) getMedia().processExtractMetadata();
                     else {
                         cout << "\n[!] Lựa chọn không hợp lệ!\n";
-                        Sleep(800);
+                        Sleep(300);
                         continue;
                     }
 
-                    if (sub != 1 && sub != 2)
+                    if (sub != 1 && sub != 2 && sub != 7 && sub != 8)
                         waitEnter();
                 }
                 break;

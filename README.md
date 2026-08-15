@@ -13,7 +13,7 @@
 * **Quản lý tiến trình an toàn (Windows Job Objects):** Mọi tiến trình con khởi tạo từ tool đều được gắn vào Job Object của hệ điều hành. Khi người dùng đóng tool hoặc nhấn `Ctrl + C`, toàn bộ tiến trình con sẽ được dọn dẹp sạch sẽ, không gây chạy ngầm.
 * **Tối ưu hóa tài nguyên:** Khởi tạo trễ (Lazy Loading) với `std::unique_ptr` và cơ chế Thread-safe, chiếm dưới 5MB RAM khi vận hành.
 * **Giao diện Console tinh tế:** Giao diện dòng lệnh trực quan, điều hướng nhanh chóng bằng phím số.
-* **Không phụ thuộc Cloud:** Tính năng chat nội bộ hoạt động trực tiếp qua mạng LAN nội bộ bằng socket Winsock2.
+* **Không phụ thuộc Cloud:** Các tính năng hoạt động trực tiếp qua Windows API native mà không gửi dữ liệu ra bên ngoài.
 
 ---
 
@@ -35,7 +35,6 @@ Chương trình được chia thành **4 phân hệ chính**:
 * **Kích hoạt Bảo mật Toàn diện (Full Security Shield):** Bật Windows Defender & cập nhật Signature, bật Firewall, bật Controlled Folder Access, chặn các cổng nguy hiểm (445, 139, 135, 137, 138), cấu hình DNS over HTTPS (Cloudflare 1.1.1.1).
 * **Kiểm tra trạng thái bảo mật:** Báo cáo chi tiết trạng thái của Defender, Firewall, dịch vụ Remote và DNS.
 * **Xem mật khẩu Wi-Fi đã lưu:** Trích xuất tên, mật khẩu và chuẩn mã hóa của các mạng Wi-Fi từng kết nối.
-* **Phòng Chat nội bộ mạng LAN:** Máy chủ Web Chat P2P cho phép các thiết bị cùng mạng nhắn tin qua trình duyệt web.
 
 ### 3. ⚡ Công cụ Tự động & Tiện ích (`UtilityTools`)
 * **Auto Click chuột:** Tự động click theo tọa độ với tùy chỉnh số lần, delay (ms), hỗ trợ phím ngắt khẩn cấp (`ESC` / `F6`).

@@ -24,29 +24,10 @@ static string cachedIP = "";
 static time_t lastIPCheck = 0;
 static const int IP_CACHE_TTL = 60;
 
-static map<string, string> contentTypeMap = {
-    {".pdf", "application/pdf"},
-    {".txt", "text/plain"},
-    {".html", "text/html"},
-    {".zip", "application/zip"},
-    {".mp4", "video/mp4"},
-    {".mp3", "audio/mpeg"},
-    {".jpg", "image/jpeg"},
-    {".jpeg", "image/jpeg"},
-    {".png", "image/png"},
-    {".exe", "application/octet-stream"},
-    {".gif", "image/gif"},
-    {".webp", "image/webp"},
-    {".json", "application/json"},
-    {".xml", "application/xml"}
-};
-
-Internet::Internet(SystemCore &s) : sc(s), listenSocket(INVALID_SOCKET), httpPort(8080) {
+Internet::Internet(SystemCore &s) : sc(s) {
 }
 
 Internet::~Internet() {
-    if (listenSocket != INVALID_SOCKET)
-        closesocket(listenSocket);
 }
 
 // Lấy IP nội bộ
@@ -114,40 +95,10 @@ string Internet::getLocalIP() {
     return "127.0.0.1";
 }
 
-string Internet::getContentType(const string &fpath) {
-    size_t dotPos = fpath.find_last_of(".");
-    if (dotPos == string::npos) return "application/octet-stream";
-    
-    string ext = fpath.substr(dotPos);
-    transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    
-    auto it = contentTypeMap.find(ext);
-    return (it != contentTypeMap.end()) ? it->second : "application/octet-stream";
-}
-
 string Internet::getField(const string &line) {
     size_t pos = line.find(":");
     if (pos != string::npos && pos + 2 < line.size()) return sc.trim(line.substr(pos + 2));
     return "";
-}
-
-HTTPRequest Internet::parseReq(const string &raw) {
-    HTTPRequest req;
-    istringstream iss(raw);
-    string line;
-    if (getline(iss, line)) {
-        istringstream ls(line);
-        ls >> req.method >> req.path >> req.httpVersion;
-    }
-    while (getline(iss, line)) {
-        line = sc.trim(line);
-        if (line.empty()) break;
-        size_t p = line.find(":");
-        if (p != string::npos) {
-            req.headers[sc.trim(line.substr(0, p))] = sc.trim(line.substr(p + 1));
-        }
-    }
-    return req;
 }
 
 void Internet::showNetworkInfo() {
@@ -178,63 +129,43 @@ void Internet::showNetworkInfo() {
 
 void Internet::repairNetwork() {
     sc.cls();
+    std::string batContent = 
+        "@echo off\n"
+        "chcp 65001 >nul\n"
+        "title SUA LOI & KHOI PHUC CAI DAT MANG\n"
+        "color 0B\n"
+        "echo ============================================================\n"
+        "echo             SUA LOI & KHOI PHUC CAI DAT MANG\n"
+        "echo ============================================================\n"
+        "echo.\n"
+        "echo [1/5] Xoa bo dem DNS (Flush DNS)...\n"
+        "ipconfig /flushdns >nul 2>&1\n"
+        "echo       -> [OK]\n"
+        "echo [2/5] Dat lai Winsock Catalog...\n"
+        "netsh winsock reset >nul 2>&1\n"
+        "echo       -> [OK]\n"
+        "echo [3/5] Dat lai ngan xep giao thuc TCP/IP...\n"
+        "netsh int ip reset >nul 2>&1\n"
+        "echo       -> [OK]\n"
+        "echo [4/5] Xoa bang ARP Cache...\n"
+        "netsh interface ip delete arpcache >nul 2>&1\n"
+        "echo       -> [OK]\n"
+        "echo [5/5] Lam moi dia chi IP (Release & Renew)...\n"
+        "ipconfig /release >nul 2>&1 & ipconfig /renew >nul 2>&1\n"
+        "echo       -> [OK]\n"
+        "echo.\n"
+        "echo ============================================================\n"
+        "echo [✓] DA HOAN TAT SUA LOI VA KHOI PHUC CAI DAT MANG!\n"
+        "echo Cua so se tu dong dong sau 5 giay...\n"
+        "echo ============================================================\n"
+        "timeout /t 5 >nul\n";
 
-    cout << "[1/5] Xóa bộ đệm DNS (Flush DNS)...\n";
-    sc.runCMD("ipconfig /flushdns >nul 2>&1");
-    cout << "      -> [OK]\n";
-
-    cout << "[2/5] Đặt lại Winsock Catalog...\n";
-    sc.runAdmin("netsh winsock reset", true);
-    cout << "      -> [OK]\n";
-
-    cout << "[3/5] Đặt lại ngăn xếp giao thức TCP/IP...\n";
-    sc.runAdmin("netsh int ip reset", true);
-    cout << "      -> [OK]\n";
-
-    cout << "[4/5] Xóa bảng ARP Cache...\n";
-    sc.runAdmin("netsh interface ip delete arpcache", true);
-    cout << "      -> [OK]\n";
-
-    cout << "[5/5] Làm mới địa chỉ IP (Release & Renew)...\n";
-    sc.runCMD("ipconfig /release >nul 2>&1 & ipconfig /renew >nul 2>&1");
-    cout << "      -> [OK]\n";
-
-    cout << "\n[✓] Đã hoàn tất sửa lỗi và khôi phục toàn bộ cài đặt mạng!\n";
-}
-
-void Internet::fullSecurityShield() {
-    sc.cls();
-
-    string batContent = "";
-    batContent += "powershell -Command \"Set-MpPreference -DisableRealtimeMonitoring $false\"\n";
-    batContent += "\"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -SignatureUpdate\n";
-    batContent += "netsh advfirewall set allprofiles state on\n";
-    batContent += "powershell -Command \"Set-MpPreference -EnableControlledFolderAccess Enabled\"\n";
-    batContent += "sc config RemoteRegistry start= disabled\n";
-    batContent += "sc stop RemoteRegistry\n";
-    batContent += "sc config TermService start= disabled\n";
-    batContent += "sc stop TermService\n";
-    batContent += "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters\" /v SMB1 /t REG_DWORD /d 0 /f\n";
-    batContent += "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient\" /v EnableMulticast /t REG_DWORD /d 0 /f\n";
-    batContent += "powershell -Command \"Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-NetAdapter -Name $_.Name -NetLuid $_.NetLuid -NetBIOSSetting Disabled }\"\n";
-
-    vector<int> ports = {445, 139, 135, 137, 138};
-    for (int p : ports) {
-        string ruleName = "Block_Dangerous_Port_" + to_string(p);
-        batContent += "netsh advfirewall firewall delete rule name=\"" + ruleName + "\"\n";
-        batContent += "netsh advfirewall firewall delete rule name=\"" + ruleName + "_out\"\n";
-        batContent += "netsh advfirewall firewall add rule name=\"" + ruleName + "\" dir=in action=block protocol=TCP localport=" + to_string(p) + "\n";
-        batContent += "netsh advfirewall firewall add rule name=\"" + ruleName + "_out\" dir=out action=block protocol=TCP localport=" + to_string(p) + "\n";
+    cout << "[*] Đang thực thi quy trình 5 bước sửa lỗi & khôi phục mạng trong cửa sổ quản trị...\n";
+    if (SystemCore::runBatchAsAdmin(batContent, "Sửa lỗi mạng")) {
+        cout << "\n[✓] Đã hoàn tất sửa lỗi và khôi phục toàn bộ cài đặt mạng thành công!\n";
+    } else {
+        cout << "\n[✗] Thất bại khi thực thi sửa lỗi mạng (Cần cấp quyền Administrator).\n";
     }
-
-    batContent += "powershell -Command \"Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ServerAddresses ('1.1.1.1','1.0.0.1') }\"\n";
-    batContent += "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\" /v EnableAutoDoh /t REG_DWORD /d 2 /f\n";
-    batContent += "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection\" /v AllowTelemetry /t REG_DWORD /d 0 /f\n";
-
-    SystemCore::runBatchAsAdmin(batContent, "Tăng cường bảo mật");
-
-    checkSecurityStatus();
-    cout << "\n[✓] Đã kích hoạt toàn bộ lá chắn bảo mật hệ thống & mạng!\n";
 }
 
 void Internet::wifiAudit() {
@@ -302,205 +233,555 @@ void Internet::wifiAudit() {
     cout << " Mã hóa     : " << cipher << "\n\n";
 }
 
-void Internet::startLocalChat() {
-    sc.cls();
-    httpPort = 9000;
-    
-    WSADATA wsa;
-    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-        cout << "[!] Không thể khởi tạo Winsock.\n";
-        return;
+// Native Win32 Registry & Service Helpers
+bool Internet::readRegDword(HKEY hRoot, const std::string &subKey, const std::string &valueName, DWORD &outVal) {
+    HKEY hKey;
+    if (RegOpenKeyExA(hRoot, subKey.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+        return false;
     }
-    
-    listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (listenSocket == INVALID_SOCKET) {
-        cout << "[!] Không thể tạo socket.\n";
-        WSACleanup();
-        return;
+    DWORD type = 0;
+    DWORD data = 0;
+    DWORD size = sizeof(data);
+    LONG res = RegQueryValueExA(hKey, valueName.c_str(), NULL, &type, reinterpret_cast<LPBYTE>(&data), &size);
+    RegCloseKey(hKey);
+    if (res == ERROR_SUCCESS && (type == REG_DWORD || type == REG_QWORD)) {
+        outVal = data;
+        return true;
     }
+    return false;
+}
 
-    sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(httpPort);
-
-    if (bind(listenSocket, (sockaddr *)&addr, sizeof(addr)) == SOCKET_ERROR) {
-        cout << "[!] Không thể bind port " << httpPort << "\n";
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCKET;
-        WSACleanup();
-        return;
+bool Internet::writeRegDword(HKEY hRoot, const std::string &subKey, const std::string &valueName, DWORD val) {
+    HKEY hKey;
+    if (RegCreateKeyExA(hRoot, subKey.c_str(), 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) != ERROR_SUCCESS) {
+        return false;
     }
-    
-    listen(listenSocket, SOMAXCONN);
+    LONG res = RegSetValueExA(hKey, valueName.c_str(), 0, REG_DWORD, reinterpret_cast<const BYTE*>(&val), sizeof(val));
+    RegCloseKey(hKey);
+    return (res == ERROR_SUCCESS);
+}
 
-    string ip = getLocalIP();
-    cout << "[Chat Server]: http://" << ip << ":" << httpPort << "\n";
-    cout << "Các thiết bị trong cùng mạng Wi-Fi có thể truy cập link trên để chat.\n";
-    cout << "Nhấn Ctrl+C để đóng server.\n\n";
+bool Internet::isServiceRunningNative(const std::string &serviceName) {
+    SC_HANDLE hSCM = OpenSCManagerA(NULL, NULL, SC_MANAGER_CONNECT);
+    if (!hSCM) return false;
+    SC_HANDLE hService = OpenServiceA(hSCM, serviceName.c_str(), SERVICE_QUERY_STATUS);
+    if (!hService) {
+        CloseServiceHandle(hSCM);
+        return false;
+    }
+    SERVICE_STATUS_PROCESS ssp;
+    DWORD bytesNeeded;
+    bool isRunning = false;
+    if (QueryServiceStatusEx(hService, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
+        isRunning = (ssp.dwCurrentState == SERVICE_RUNNING);
+    }
+    CloseServiceHandle(hService);
+    CloseServiceHandle(hSCM);
+    return isRunning;
+}
 
-    while (true) {
-        SOCKET client = accept(listenSocket, nullptr, nullptr);
-        if (client != INVALID_SOCKET) {
-            thread([this, client]() { handleChatClient(client); }).detach();
+bool Internet::isServiceDisabledNative(const std::string &serviceName) {
+    SC_HANDLE hSCM = OpenSCManagerA(NULL, NULL, SC_MANAGER_CONNECT);
+    if (!hSCM) return false;
+    SC_HANDLE hService = OpenServiceA(hSCM, serviceName.c_str(), SERVICE_QUERY_CONFIG);
+    if (!hService) {
+        CloseServiceHandle(hSCM);
+        return false;
+    }
+    DWORD bytesNeeded = 0;
+    QueryServiceConfigA(hService, NULL, 0, &bytesNeeded);
+    bool isDisabled = false;
+    if (bytesNeeded > 0) {
+        std::vector<BYTE> buffer(bytesNeeded);
+        LPQUERY_SERVICE_CONFIGA pConfig = (LPQUERY_SERVICE_CONFIGA)buffer.data();
+        if (QueryServiceConfigA(hService, pConfig, bytesNeeded, &bytesNeeded)) {
+            isDisabled = (pConfig->dwStartType == SERVICE_DISABLED);
         }
     }
+    CloseServiceHandle(hService);
+    CloseServiceHandle(hSCM);
+    return isDisabled;
 }
 
-void Internet::handleChatClient(SOCKET client) {
-    char buf[4096];
-    int rcv = recv(client, buf, sizeof(buf) - 1, 0);
-    if (rcv <= 0) {
-        closesocket(client);
-        return;
-    }
-    buf[rcv] = '\0';
-
-    HTTPRequest req = parseReq(buf);
-
-    if (req.path == "/" || req.path == "/index.html") {
-        // HTML minified để gửi nhanh hơn
-        string html = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"
-                      "<html><head><title>C++ Local Chat</title>"
-                      "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
-                      "<style>body{font-family:sans-serif;background:#f0f2f5;display:flex;flex-direction:column;align-items:center;margin-top:20px}"
-                      "#box{width:90%;max-width:400px;height:80vh;background:#fff;border-radius:10px;box-shadow:0 4px 10px rgba(0,0,0,0.1);display:flex;flex-direction:column}"
-                      "#msgs{flex:1;overflow-y:auto;padding:15px;display:flex;flex-direction:column;gap:8px}"
-                      ".msg{background:#e4e6eb;padding:8px 12px;border-radius:15px;width:fit-content;max-width:80%;word-wrap:break-word}"
-                      "input{border:none;padding:15px;border-top:1px solid #ddd;outline:none;font-size:16px;border-bottom-left-radius:10px;border-bottom-right-radius:10px}</style></head>"
-                      "<body><h2>Chat Local</h2><div id='box'><div id='msgs'></div>"
-                      "<input type='text' id='inp' placeholder='Nhap tin nhan va nhan Enter...' onkeypress='send(event)'></div>"
-                      "<script>let msgBox=document.getElementById('msgs');"
-                      "function load(){fetch('/get').then(r=>r.text()).then(t=>{msgBox.innerHTML=t;msgBox.scrollTop=msgBox.scrollHeight;})}"
-                      "function send(e){if(e.key==='Enter'&&e.target.value.trim()!==''){fetch('/send?m='+encodeURIComponent(e.target.value));e.target.value='';load()}}"
-                      "setInterval(load,1500);</script></body></html>";
-        send(client, html.c_str(), html.length(), 0);
-    }
-    else if (req.path.find("/send") == 0) {
-        size_t pos = req.path.find("?m=");
-        if (pos != string::npos) {
-            string msg = req.path.substr(pos + 3);
-            
-            string decodedMsg = "";
-            for (size_t i = 0; i < msg.length(); ++i) {
-                if (msg[i] == '%') {
-                    if (i + 2 < msg.length()) {
-                        int value;
-                        sscanf(msg.substr(i + 1, 2).c_str(), "%x", &value);
-                        decodedMsg += static_cast<char>(value);
-                        i += 2;
-                    }
-                } else if (msg[i] == '+') {
-                    decodedMsg += ' ';
-                } else {
-                    decodedMsg += msg[i];
-                }
-            }
-
-            chatHistory.push_back(SystemCore::getTime(false) + " : " + decodedMsg);
-            cout << "[NEW MSG] " << decodedMsg << endl;
-        }
-        string ok = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
-        send(client, ok.c_str(), ok.length(), 0);
-    }
-    else if (req.path == "/get") {
-        string res = "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n";
-        for (const auto& m : chatHistory) {
-            res += "<div class='msg'>" + m + "</div>";
-        }
-        send(client, res.c_str(), res.length(), 0);
-    }
-    closesocket(client);
-}
-
-void Internet::enableWindowsDefender() {
-    sc.cls();
-    sc.runAdmin("powershell -Command \"Set-MpPreference -DisableRealtimeMonitoring $false\"", true);
-    sc.runCMD("cmd /c \"\"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -SignatureUpdate\"");
-    cout << "[+] Windows Defender – bảo vệ thời gian thực đã bật.\n";
-}
-
-void Internet::enableFirewall() {
-    sc.cls();
-    sc.runAdmin("netsh advfirewall set allprofiles state on", true);
-    cout << "[+] Tường lửa Windows đã bật cho tất cả profile.\n";
-}
-
-void Internet::enableControlledFolderAccess() {
-    sc.cls();
-    sc.runAdmin("powershell -Command \"Set-MpPreference -EnableControlledFolderAccess Enabled\"", true);
-    cout << "[+] Truy cập thư mục có kiểm soát (Controlled Folder Access) đã bật.\n";
-}
-
-void Internet::disableInsecureProtocols() {
-    sc.cls();
-    sc.runAdmin("reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters\" /v SMB1 /t REG_DWORD /d 0 /f", true);
-    sc.runAdmin("reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient\" /v EnableMulticast /t REG_DWORD /d 0 /f", true);
-    string psNetBios = "Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-NetAdapter -Name $_.Name -NetLuid $_.NetLuid -NetBIOSSetting Disabled }";
-    sc.runAdmin("powershell -Command \"" + psNetBios + "\"", true);
-    cout << "[+] Đã vô hiệu hóa các giao thức không an toàn (SMB1, LLMNR, NetBIOS).\n";
-}
-
-void Internet::blockDangerousPorts() {
-    sc.cls();
-    // Các port nguy hiểm thông thường (chặn không hỏi)
-    vector<int> normalPorts = {445, 139, 135, 137, 138};
-
-    // Port 3389 (RDP) — hỏi riêng vì nhiều người đang dùng Remote Desktop
-    cout << "\n[!] CẢNH BÁO: Port 3389 là Remote Desktop (RDP).\n";
-    cout << "    Nếu bạn đang dùng Remote Desktop để điều khiển máy này từ xa,\n";
-    cout << "    chặn port này sẽ NGẮT KẾT NỐI ngay lập tức!\n";
-    cout << "[?] Bạn có muốn chặn port 3389 (RDP) không? (Y/N): ";
-    string rdpAns;
-    cin >> rdpAns;
-    cin.ignore();
-    bool blockRDP = (rdpAns == "y" || rdpAns == "Y");
-
-    // Chặn các port thông thường
-    for (int port : normalPorts) {
-        string ruleName = "Block_Dangerous_Port_" + to_string(port);
-        sc.runAdmin("netsh advfirewall firewall delete rule name=\"" + ruleName + "\"", true);
-        sc.runAdmin("netsh advfirewall firewall delete rule name=\"" + ruleName + "_out\"", true);
-        sc.runAdmin("netsh advfirewall firewall add rule name=\"" + ruleName + "\" dir=in action=block protocol=TCP localport=" + to_string(port), true);
-        sc.runAdmin("netsh advfirewall firewall add rule name=\"" + ruleName + "_out\" dir=out action=block protocol=TCP localport=" + to_string(port), true);
-    }
-    cout << "[+] Đã chặn các cổng nguy hiểm (TCP: 445, 139, 135, 137, 138).\n";
-
-    // Chặn RDP nếu người dùng xác nhận
-    if (blockRDP) {
-        string ruleName = "Block_Dangerous_Port_3389";
-        sc.runAdmin("netsh advfirewall firewall delete rule name=\"" + ruleName + "\"", true);
-        sc.runAdmin("netsh advfirewall firewall delete rule name=\"" + ruleName + "_out\"", true);
-        sc.runAdmin("netsh advfirewall firewall add rule name=\"" + ruleName + "\" dir=in action=block protocol=TCP localport=3389", true);
-        sc.runAdmin("netsh advfirewall firewall add rule name=\"" + ruleName + "_out\" dir=out action=block protocol=TCP localport=3389", true);
-        cout << "[+] Đã chặn thêm port 3389 (RDP).\n";
+void Internet::toggleDefender(bool enable, int &alreadyCount, int &newlyCount, int &failedCount) {
+    cout << " [*] Đang kiểm tra Windows Defender Realtime Protection...\n";
+    DWORD val = 0;
+    bool hasVal = readRegDword(HKEY_LOCAL_MACHINE, "SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableRealtimeMonitoring", val);
+    
+    bool isAlready = false;
+    if (enable) {
+        if (hasVal && val == 0) isAlready = true;
     } else {
-        cout << "[i] Bỏ qua port 3389 (RDP) — giữ nguyên cấu hình hiện tại.\n";
+        if (hasVal && val == 1) isAlready = true;
+    }
+
+    if (isAlready) {
+        cout << "    [○] Defender đã ở trạng thái mong muốn từ trước.\n";
+        alreadyCount++;
+    } else {
+        string cmd = enable 
+            ? "powershell -Command \"Set-MpPreference -DisableRealtimeMonitoring $false\" & \"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -SignatureUpdate"
+            : "powershell -Command \"Set-MpPreference -DisableRealtimeMonitoring $true\"";
+        if (sc.runAdmin(cmd, true)) {
+            cout << "    [✓] Đã cập nhật trạng thái Windows Defender thành công.\n";
+            newlyCount++;
+        } else {
+            cout << "    [✗] Thất bại khi thay đổi trạng thái Defender.\n";
+            failedCount++;
+        }
     }
 }
 
-void Internet::configureDNSoverHTTPS() {
+void Internet::toggleFirewall(bool enable, int &alreadyCount, int &newlyCount, int &failedCount) {
+    cout << " [*] Đang kiểm tra Tường lửa Windows (Firewall)...\n";
+    FILE *pipe = _popen("netsh advfirewall show allprofiles state", "r");
+    bool allOn = true;
+    bool allOff = true;
+    if (pipe) {
+        char buf[256];
+        while (fgets(buf, sizeof(buf), pipe)) {
+            string line = buf;
+            if (line.find("State") != string::npos || line.find("Trạng thái") != string::npos) {
+                if (line.find("ON") == string::npos && line.find("BẬT") == string::npos) allOn = false;
+                if (line.find("OFF") == string::npos && line.find("TẮT") == string::npos) allOff = false;
+            }
+        }
+        _pclose(pipe);
+    }
+
+    if (enable && allOn) {
+        cout << "    [○] Tường lửa đã bật sẵn trên toàn bộ profile.\n";
+        alreadyCount++;
+    } else if (!enable && allOff) {
+        cout << "    [○] Tường lửa đã tắt sẵn từ trước.\n";
+        alreadyCount++;
+    } else {
+        string cmd = enable ? "netsh advfirewall set allprofiles state on" : "netsh advfirewall set allprofiles state off";
+        if (sc.runAdmin(cmd, true)) {
+            cout << (enable ? "    [✓] Đã kích hoạt Tường lửa cho toàn bộ profile.\n" : "    [✓] Đã tắt Tường lửa.\n");
+            newlyCount++;
+        } else {
+            cout << "    [✗] Thất bại khi thay đổi trạng thái Tường lửa.\n";
+            failedCount++;
+        }
+    }
+}
+
+void Internet::toggleControlledFolderAccess(bool enable, int &alreadyCount, int &newlyCount, int &failedCount) {
+    cout << " [*] Đang kiểm tra Bảo vệ chống Ransomware (Controlled Folder Access)...\n";
+    DWORD val = 0;
+    bool hasVal = readRegDword(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\Controlled Folder Access", "EnableControlledFolderAccess", val);
+    
+    if (enable && hasVal && val == 1) {
+        cout << "    [○] Chống Ransomware đã kích hoạt sẵn từ trước.\n";
+        alreadyCount++;
+    } else if (!enable && hasVal && val == 0) {
+        cout << "    [○] Chống Ransomware đã tắt sẵn từ trước.\n";
+        alreadyCount++;
+    } else {
+        string cmd = enable 
+            ? "powershell -Command \"Set-MpPreference -EnableControlledFolderAccess Enabled\""
+            : "powershell -Command \"Set-MpPreference -EnableControlledFolderAccess Disabled\"";
+        if (sc.runAdmin(cmd, true)) {
+            cout << (enable ? "    [✓] Đã bật bảo vệ thư mục chống Ransomware.\n" : "    [✓] Đã tắt bảo vệ Controlled Folder Access.\n");
+            newlyCount++;
+        } else {
+            cout << "    [✗] Không thể thay đổi thiết lập Controlled Folder Access.\n";
+            failedCount++;
+        }
+    }
+}
+
+void Internet::toggleInsecureProtocols(bool block, int &alreadyCount, int &newlyCount, int &failedCount) {
+    cout << " [*] Đang kiểm tra các giao thức mạng không an toàn (SMBv1, LLMNR, NetBIOS)...\n";
+    DWORD smbVal = 1;
+    DWORD llmnrVal = 1;
+    readRegDword(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "SMB1", smbVal);
+    readRegDword(HKEY_LOCAL_MACHINE, "SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient", "EnableMulticast", llmnrVal);
+
+    bool smbOk = block ? (smbVal == 0) : (smbVal == 1);
+    bool llmnrOk = block ? (llmnrVal == 0) : (llmnrVal == 1);
+
+    if (smbOk && llmnrOk) {
+        cout << "    [○] Các giao thức mạng đã ở trạng thái an toàn từ trước.\n";
+        alreadyCount++;
+    } else {
+        bool ok1 = writeRegDword(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "SMB1", block ? 0 : 1);
+        bool ok2 = writeRegDword(HKEY_LOCAL_MACHINE, "SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient", "EnableMulticast", block ? 0 : 1);
+        
+        string psNetBios = block
+            ? "Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-NetAdapter -Name $_.Name -NetLuid $_.NetLuid -NetBIOSSetting Disabled }"
+            : "Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-NetAdapter -Name $_.Name -NetLuid $_.NetLuid -NetBIOSSetting Default }";
+        sc.runAdmin("powershell -Command \"" + psNetBios + "\"", true);
+
+        if (ok1 && ok2) {
+            cout << (block ? "    [✓] Đã vô hiệu hóa SMBv1, LLMNR Multicast và NetBIOS.\n" : "    [✓] Đã khôi phục cài đặt mặc định cho các giao thức mạng.\n");
+            newlyCount++;
+        } else {
+            cout << "    [✗] Thất bại khi ghi Registry cho giao thức mạng.\n";
+            failedCount++;
+        }
+    }
+}
+
+void Internet::toggleDangerousPorts(bool block, int &alreadyCount, int &newlyCount, int &failedCount) {
+    cout << " [*] Đang kiểm tra bộ quy tắc tường lửa chặn cổng (Ports 445, 135-139)...\n";
+    vector<int> ports = {445, 139, 135, 137, 138};
+    bool allExist = true;
+    for (int p : ports) {
+        string chk = "netsh advfirewall firewall show rule name=\"Block_Dangerous_Port_" + to_string(p) + "\" >nul 2>&1";
+        if (system(chk.c_str()) != 0) {
+            allExist = false;
+            break;
+        }
+    }
+
+    if (block && allExist) {
+        cout << "    [○] Các cổng nguy hiểm đã được chặn từ trước trong Firewall.\n";
+        alreadyCount++;
+    } else if (!block && !allExist) {
+        cout << "    [○] Các cổng mạng đang ở trạng thái mở thông thường.\n";
+        alreadyCount++;
+    } else {
+        string batContent = "";
+        for (int p : ports) {
+            string ruleName = "Block_Dangerous_Port_" + to_string(p);
+            batContent += "netsh advfirewall firewall delete rule name=\"" + ruleName + "\"\n";
+            batContent += "netsh advfirewall firewall delete rule name=\"" + ruleName + "_out\"\n";
+            if (block) {
+                batContent += "netsh advfirewall firewall add rule name=\"" + ruleName + "\" dir=in action=block protocol=TCP localport=" + to_string(p) + "\n";
+                batContent += "netsh advfirewall firewall add rule name=\"" + ruleName + "_out\" dir=out action=block protocol=TCP localport=" + to_string(p) + "\n";
+            }
+        }
+        if (SystemCore::runBatchAsAdmin(batContent, block ? "Chặn cổng nguy hiểm" : "Mở lại cổng mạng")) {
+            cout << (block ? "    [✓] Đã tạo quy tắc chặn 2 chiều các cổng TCP (445, 135-139).\n" : "    [✓] Đã gỡ bỏ quy tắc chặn cổng mạng.\n");
+            newlyCount++;
+        } else {
+            cout << "    [✗] Thất bại khi cấu hình quy tắc chặn cổng.\n";
+            failedCount++;
+        }
+    }
+}
+
+void Internet::toggleDNSoverHTTPS(bool enable, int &alreadyCount, int &newlyCount, int &failedCount) {
+    cout << " [*] Đang kiểm tra cấu hình DNS over HTTPS (DoH Cloudflare 1.1.1.1)...\n";
+    DWORD dohVal = 0;
+    readRegDword(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters", "EnableAutoDoh", dohVal);
+
+    if (enable && dohVal == 2) {
+        cout << "    [○] DNS over HTTPS đã được kích hoạt từ trước.\n";
+        alreadyCount++;
+    } else if (!enable && dohVal == 0) {
+        cout << "    [○] DNS over HTTPS đang ở trạng thái mặc định.\n";
+        alreadyCount++;
+    } else {
+        string psDns = enable 
+            ? "Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ServerAddresses ('1.1.1.1','1.0.0.1') }"
+            : "Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ResetServerAddresses }";
+        
+        bool okDns = sc.runAdmin("powershell -Command \"" + psDns + "\"", true);
+        bool okDoh = writeRegDword(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters", "EnableAutoDoh", enable ? 2 : 0);
+
+        if (okDns && okDoh) {
+            cout << (enable ? "    [✓] Đã kích hoạt DNS over HTTPS (Cloudflare 1.1.1.1 & 1.0.0.1).\n" : "    [✓] Đã khôi phục DNS tự động từ DHCP.\n");
+            newlyCount++;
+        } else {
+            cout << "    [✗] Thất bại khi cấu hình DNS over HTTPS.\n";
+            failedCount++;
+        }
+    }
+}
+
+void Internet::fullSecurityShield() {
+    while (true) {
+        sc.cls();
+        cout << "============================================================\n";
+        cout << "         LÁ CHẮN BẢO MẬT HỆ THỐNG & MẠNG TOÀN DIỆN\n";
+        cout << "============================================================\n";
+        cout << " [1] KÍCH HOẠT TOÀN DIỆN (Defender, Firewall, Chặn Port, DoH, Chống Ransomware)\n";
+        cout << " [2] KHÔI PHỤC MẶC ĐỊNH (Mở lại Port, Tắt DoH, Cho phép chia sẻ mạng LAN)\n";
+        cout << " [0] Quay lại\n\n";
+        cout << " [Chọn]: ";
+
+        int choice = sc.readInt("");
+        if (choice == 0) break;
+
+        if (choice == 1) {
+            sc.cls();
+            cout << "============================================================\n";
+            cout << "      ĐANG KÍCH HOẠT LÁ CHẮN BẢO MẬT TOÀN DIỆN (1-CLICK)\n";
+            cout << "============================================================\n\n";
+            cout << "[*] Đang tổng hợp toàn bộ quy tắc bảo mật và khởi chạy 1 lần trong cửa sổ quản trị...\n";
+
+            std::string batContent = 
+                "@echo off\n"
+                "chcp 65001 >nul\n"
+                "title KICH HOAT LA CHAN BAO MAT HE THONG & MANG\n"
+                "color 0A\n"
+                "echo ============================================================\n"
+                "echo       DANG THIET LAP LA CHAN BAO MAT HE THONG & MANG\n"
+                "echo ============================================================\n"
+                "echo.\n"
+                "echo [1/8] Bat Windows Defender Realtime & Cap nhat Signature...\n"
+                "powershell -Command \"Set-MpPreference -DisableRealtimeMonitoring $false\" >nul 2>&1\n"
+                "\"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -SignatureUpdate >nul 2>&1\n"
+                "echo       -> [OK]\n"
+                "echo [2/8] Kich hoat Tuong lua Windows tren tat ca Profile...\n"
+                "netsh advfirewall set allprofiles state on >nul 2>&1\n"
+                "echo       -> [OK]\n"
+                "echo [3/8] Bat bao ve chong Ransomware (Controlled Folder Access)...\n"
+                "powershell -Command \"Set-MpPreference -EnableControlledFolderAccess Enabled\" >nul 2>&1\n"
+                "echo       -> [OK]\n"
+                "echo [4/8] Vo hieu hoa SMBv1, LLMNR Multicast va NetBIOS...\n"
+                "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters\" /v SMB1 /t REG_DWORD /d 0 /f >nul 2>&1\n"
+                "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient\" /v EnableMulticast /t REG_DWORD /d 0 /f >nul 2>&1\n"
+                "powershell -Command \"Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-NetAdapter -Name $_.Name -NetLuid $_.NetLuid -NetBIOSSetting Disabled }\" >nul 2>&1\n"
+                "echo       -> [OK]\n"
+                "echo [5/8] Thiet lap quy tac chan cong nguy hiem (TCP: 445, 135, 137, 138, 139)...\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_445\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_445_out\" >nul 2>&1\n"
+                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_445\" dir=in action=block protocol=TCP localport=445 >nul 2>&1\n"
+                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_445_out\" dir=out action=block protocol=TCP localport=445 >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_139\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_139_out\" >nul 2>&1\n"
+                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_139\" dir=in action=block protocol=TCP localport=139 >nul 2>&1\n"
+                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_139_out\" dir=out action=block protocol=TCP localport=139 >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_135\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_135_out\" >nul 2>&1\n"
+                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_135\" dir=in action=block protocol=TCP localport=135 >nul 2>&1\n"
+                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_135_out\" dir=out action=block protocol=TCP localport=135 >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_137\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_137_out\" >nul 2>&1\n"
+                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_137\" dir=in action=block protocol=TCP localport=137 >nul 2>&1\n"
+                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_137_out\" dir=out action=block protocol=TCP localport=137 >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_138\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_138_out\" >nul 2>&1\n"
+                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_138\" dir=in action=block protocol=TCP localport=138 >nul 2>&1\n"
+                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_138_out\" dir=out action=block protocol=TCP localport=138 >nul 2>&1\n"
+                "echo       -> [OK]\n"
+                "echo [6/8] Cau hinh DNS over HTTPS (Cloudflare 1.1.1.1 & 1.0.0.1 DoH)...\n"
+                "powershell -Command \"Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ServerAddresses ('1.1.1.1','1.0.0.1') }\" >nul 2>&1\n"
+                "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\" /v EnableAutoDoh /t REG_DWORD /d 2 /f >nul 2>&1\n"
+                "echo       -> [OK]\n"
+                "echo [7/8] Khoa va vo hieu hoa cac dich vu Remote nguy hiem...\n"
+                "sc config RemoteRegistry start= disabled >nul 2>&1\n"
+                "sc stop RemoteRegistry >nul 2>&1\n"
+                "sc config TermService start= disabled >nul 2>&1\n"
+                "sc stop TermService >nul 2>&1\n"
+                "echo       -> [OK]\n"
+                "echo [8/8] Vo hieu hoa thu thap chan doan Windows Telemetry...\n"
+                "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection\" /v AllowTelemetry /t REG_DWORD /d 0 /f >nul 2>&1\n"
+                "echo       -> [OK]\n"
+                "echo.\n"
+                "echo ============================================================\n"
+                "echo [✓] DA KICH HOAT THANH CONG TOAN BO LA CHAN BAO MAT!\n"
+                "echo Cua so se tu dong dong sau 5 giay...\n"
+                "echo ============================================================\n"
+                "timeout /t 5 >nul\n";
+
+            if (SystemCore::runBatchAsAdmin(batContent, "Kích hoạt lá chắn bảo mật")) {
+                cout << "\n[✓] Đã kích hoạt toàn bộ lá chắn bảo mật hệ thống & mạng thành công!\n";
+            } else {
+                cout << "\n[✗] Thất bại khi thực thi lá chắn bảo mật (Cần cấp quyền Administrator).\n";
+            }
+            SystemCore::waitEnter();
+        } 
+        else if (choice == 2) {
+            sc.cls();
+            cout << "============================================================\n";
+            cout << "         ĐANG KHÔI PHỤC THIẾT LẬP MẠNG MẶC ĐỊNH\n";
+            cout << "============================================================\n\n";
+            cout << "[*] Đang khởi chạy 1 lần trong cửa sổ quản trị để khôi phục mặc định...\n";
+
+            std::string batContent = 
+                "@echo off\n"
+                "chcp 65001 >nul\n"
+                "title KHOI PHUC CAI DAT MANG MAC DINH\n"
+                "color 0E\n"
+                "echo ============================================================\n"
+                "echo           DANG KHOI PHUC CAI DAT MANG MAC DINH\n"
+                "echo ============================================================\n"
+                "echo.\n"
+                "echo [1/3] Khoi phuc giao thuc chia se mang LAN (SMB1, Multicast, NetBIOS)...\n"
+                "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters\" /v SMB1 /t REG_DWORD /d 1 /f >nul 2>&1\n"
+                "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient\" /v EnableMulticast /t REG_DWORD /d 1 /f >nul 2>&1\n"
+                "powershell -Command \"Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-NetAdapter -Name $_.Name -NetLuid $_.NetLuid -NetBIOSSetting Default }\" >nul 2>&1\n"
+                "echo       -> [OK]\n"
+                "echo [2/3] Go bo quy tac chan cong mang (Mo lai TCP 445, 135-139)...\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_445\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_445_out\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_139\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_139_out\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_135\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_135_out\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_137\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_137_out\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_138\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_138_out\" >nul 2>&1\n"
+                "echo       -> [OK]\n"
+                "echo [3/3] Dat lai DNS tu dong tu Router (DHCP) & Tat DoH...\n"
+                "powershell -Command \"Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ResetServerAddresses }\" >nul 2>&1\n"
+                "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\" /v EnableAutoDoh /t REG_DWORD /d 0 /f >nul 2>&1\n"
+                "echo       -> [OK]\n"
+                "echo.\n"
+                "echo ============================================================\n"
+                "echo [✓] DA KHOI PHUC THANH CONG CAI DAT MANG MAC DINH!\n"
+                "echo Cua so se tu dong dong sau 5 giay...\n"
+                "echo ============================================================\n"
+                "timeout /t 5 >nul\n";
+
+            if (SystemCore::runBatchAsAdmin(batContent, "Khôi phục cài đặt mạng")) {
+                cout << "\n[✓] Đã hoàn tất khôi phục cài đặt mạng mặc định thành công!\n";
+            } else {
+                cout << "\n[✗] Thất bại khi khôi phục cài đặt mạng (Cần cấp quyền Administrator).\n";
+            }
+            SystemCore::waitEnter();
+        }
+    }
+}
+
+void Internet::checkHostsFileSecurity() {
     sc.cls();
-    string psDns = "Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ServerAddresses ('1.1.1.1','1.0.0.1') }";
-    sc.runAdmin("powershell -Command \"" + psDns + "\"", true);
-    sc.runAdmin("reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\" /v EnableAutoDoh /t REG_DWORD /d 2 /f", true);
-    cout << "[+] Đã cấu hình DNS over HTTPS (Cloudflare 1.1.1.1 & 1.0.0.1).\n";
+    cout << "============================================================\n";
+    cout << "     QUÉT & BẢO VỆ TẬP TIN HOSTS (CHỐNG CHUYỂN HƯỚNG WEB)\n";
+    cout << "============================================================\n\n";
+
+    std::string hostsPath = "C:\\Windows\\System32\\drivers\\etc\\hosts";
+    if (!fs::exists(hostsPath)) {
+        cout << "[!] Không tìm thấy tập tin hosts tại: " << hostsPath << "\n";
+        SystemCore::waitEnter();
+        return;
+    }
+
+    std::ifstream hf(hostsPath);
+    if (!hf) {
+        cout << "[!] Không thể mở đọc tập tin hosts (Cần quyền Administrator).\n";
+        SystemCore::waitEnter();
+        return;
+    }
+
+    std::vector<std::string> activeRules;
+    std::vector<std::string> suspiciousRules;
+    std::string line;
+
+    std::vector<std::string> sensitiveDomains = {
+        "google", "facebook", "youtube", "microsoft", "windowsupdate", 
+        "bank", "paypal", "kaspersky", "bitdefender", "virustotal", "avast"
+    };
+
+    while (std::getline(hf, line)) {
+        std::string trimmed = sc.trim(line);
+        if (trimmed.empty() || trimmed[0] == '#') continue;
+
+        activeRules.push_back(trimmed);
+
+        std::string lowerLine = trimmed;
+        std::transform(lowerLine.begin(), lowerLine.end(), lowerLine.begin(), ::tolower);
+        for (const auto &domain : sensitiveDomains) {
+            if (lowerLine.find(domain) != std::string::npos) {
+                suspiciousRules.push_back(trimmed);
+                break;
+            }
+        }
+    }
+    hf.close();
+
+    cout << "[*] Đường dẫn tập tin: " << hostsPath << "\n";
+    cout << "[*] Tổng số quy tắc điều hướng đang kích hoạt: " << activeRules.size() << "\n\n";
+
+    if (!activeRules.empty()) {
+        cout << "--- Danh sách các dòng điều hướng trong hosts ---\n";
+        for (const auto &r : activeRules) {
+            cout << "  -> " << r << "\n";
+        }
+        cout << "--------------------------------------------------\n\n";
+    }
+
+    if (!suspiciousRules.empty()) {
+        cout << "[!] CẢNH BÁO: Phát hiện " << suspiciousRules.size() << " quy tắc điều hướng đáng ngờ (chuyển hướng tên miền nhạy cảm):\n";
+        for (const auto &sr : suspiciousRules) {
+            cout << "  [✗ NGHI VẤN] " << sr << "\n";
+        }
+        cout << "\n";
+    } else {
+        cout << "[✓] Tập tin hosts an toàn, không phát hiện điều hướng độc hại.\n\n";
+    }
+
+    cout << " [1] Khôi phục tập tin hosts sạch gốc chuẩn Microsoft\n";
+    cout << " [0] Quay lại\n\n";
+    cout << " [Chọn]: ";
+
+    int choice = sc.readInt("");
+    if (choice == 1) {
+        std::string defaultHosts = 
+            "# Copyright (c) 1993-2009 Microsoft Corp.\n"
+            "#\n"
+            "# This is a sample HOSTS file used by Microsoft TCP/IP for Windows.\n"
+            "#\n"
+            "# localhost name resolution is handled within DNS itself.\n"
+            "#\t127.0.0.1       localhost\n"
+            "#\t::1             localhost\n";
+
+        std::string tempBat = "@echo off\n";
+        tempBat += "attrib -r -s -h \"C:\\Windows\\System32\\drivers\\etc\\hosts\" >nul 2>&1\n";
+        tempBat += "(echo # Clean Hosts File & echo 127.0.0.1 localhost & echo ::1 localhost) > \"C:\\Windows\\System32\\drivers\\etc\\hosts\"\n";
+
+        if (SystemCore::runBatchAsAdmin(tempBat, "Khôi phục tập tin hosts")) {
+            cout << "\n[✓] Đã khôi phục tập tin hosts về trạng thái sạch gốc thành công!\n";
+        } else {
+            cout << "\n[✗] Thất bại khi ghi đè tập tin hosts (Cần quyền Administrator).\n";
+        }
+        SystemCore::waitEnter();
+    }
 }
 
 void Internet::checkSecurityStatus() {
     sc.cls();
-    cout << "\n========== BÁO CÁO TRẠNG THÁI BẢO MẬT ==========\n";
-    cout << "[*] Windows Defender:\n";
-    sc.runCMD("powershell -Command \"Get-MpComputerStatus | Select-Object AntivirusEnabled, RealTimeProtectionEnabled, IoavProtectionEnabled\"");
-    cout << "\n[*] Tường lửa Windows:\n";
-    sc.runCMD("netsh advfirewall show allprofiles | findstr \"State\"");
-    cout << "\n[*] Trạng thái các dịch vụ từ xa:\n";
-    vector<string> svcs = {"RemoteRegistry", "TermService", "RasAuto", "RasMan"};
-    for (auto &svc : svcs) {
-        string cmd = "sc query " + svc + " | findstr STATE";
-        sc.runCMD(cmd);
+    cout << "\n================ BÁO CÁO TRẠNG THÁI BẢO MẬT CHI TIẾT ================\n\n";
+
+    // 1. Windows Defender
+    cout << "[1] Windows Defender (Antivirus & Real-time Protection):\n";
+    sc.runCMD("powershell -Command \"Get-MpComputerStatus | Select-Object AntivirusEnabled, RealTimeProtectionEnabled, IoavProtectionEnabled, AntispywareEnabled, FullScanAge\"");
+
+    // 2. Tường lửa
+    cout << "\n[2] Trạng thái Tường lửa Windows (All Profiles):\n";
+    sc.runCMD("netsh advfirewall show allprofiles | findstr /i \"State Profile Bật Tắt ON OFF\"");
+
+    // 3. Cổng nguy hiểm
+    cout << "\n[3] Trạng thái Quy tắc chặn Port nguy hiểm:\n";
+    vector<int> ports = {445, 139, 135, 137, 138};
+    for (int p : ports) {
+        string chk = "netsh advfirewall firewall show rule name=\"Block_Dangerous_Port_" + to_string(p) + "\" >nul 2>&1";
+        if (system(chk.c_str()) == 0) {
+            cout << "    [✓] Port " << p << " : ĐÃ CHẶN (An toàn)\n";
+        } else {
+            cout << "    [!] Port " << p << " : ĐANG MỞ (Chưa chặn)\n";
+        }
     }
-    cout << "\n[*] Cấu hình DNS:\n";
-    sc.runCMD("ipconfig /all | findstr \"DNS Servers\"");
-    cout << "==================================================\n";
+
+    // 4. Dịch vụ điều khiển từ xa
+    cout << "\n[4] Dịch vụ nhạy cảm & Điều khiển từ xa:\n";
+    vector<pair<string, string>> svcs = {
+        {"RemoteRegistry", "Truy cập Registry từ xa"},
+        {"TermService", "Remote Desktop Service"},
+        {"RasMan", "Remote Access Connection Manager"}
+    };
+    for (auto &s : svcs) {
+        bool running = isServiceRunningNative(s.first);
+        bool disabled = isServiceDisabledNative(s.first);
+        cout << "    [-] " << s.second << " (" << s.first << "): " 
+             << (running ? "\x1b[31mĐANG CHẠY\x1b[0m" : "ĐÃ DỪNG") 
+             << " | Khởi động: " << (disabled ? "\x1b[32mDISABLED (Khóa)\x1b[0m" : "ENABLED (Bật)") << "\n";
+    }
+
+    // 5. Cấu hình DNS & DoH
+    cout << "\n[5] Cấu hình DNS & DNS over HTTPS (DoH):\n";
+    DWORD dohVal = 0;
+    readRegDword(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters", "EnableAutoDoh", dohVal);
+    cout << "    [-] Mã hóa DoH: " << (dohVal == 2 ? "\x1b[32mĐÃ BẬT (DoH Active)\x1b[0m" : "\x1b[33mCHƯA BẬT (DoH Disabled)\x1b[0m") << "\n";
+    cout << "    [-] Máy chủ DNS hiện tại:\n";
+    sc.runCMD("ipconfig /all | findstr /i \"DNS\"");
+
+    cout << "\n======================================================================\n";
+    SystemCore::waitEnter();
 }

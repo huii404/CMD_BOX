@@ -260,18 +260,18 @@ std::string SystemCore::getDeviceStatus() {
             int percent = static_cast<int>(sps.BatteryLifePercent);
             std::string status = "Laptop (Pin: " + std::to_string(percent) + "%";
             if (sps.ACLineStatus == 1) {
-                status += " - Đang sạc ⚡)";
+                status += " - Đang sạc)";
             } else if (sps.ACLineStatus == 0) {
-                status += " - Đang dùng pin 🔋)";
+                status += " - Đang dùng)";
             } else {
                 status += ")";
             }
             return status;
         } else {
-            return "PC (Máy bàn)";
+            return "PC";
         }
     }
-    return "PC (Máy bàn)";
+    return "PC";
 }
 
 bool SystemCore::checkEmergencyStop() {

@@ -23,7 +23,7 @@ public:
 
     void cls();
     static std::string getTime(bool includeDate = true);
-    void waitEnter();
+    static void waitEnter();
     static std::string trim(const std::string& str);
     static int readInt(const std::string &prompt);
     static std::string formatSize(long long b);
