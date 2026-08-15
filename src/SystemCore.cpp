@@ -238,7 +238,34 @@ void SystemCore::runCMD(const std::string &cmd) {
     }
 }
 
+bool SystemCore::isElevated() {
+    bool elevated = false;
+    HANDLE hToken = NULL;
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+        TOKEN_ELEVATION elevation;
+        DWORD cbSize = sizeof(TOKEN_ELEVATION);
+        if (GetTokenInformation(hToken, TokenElevation, &elevation, sizeof(elevation), &cbSize)) {
+            elevated = (elevation.TokenIsElevated != 0);
+        }
+        CloseHandle(hToken);
+    }
+    return elevated;
+}
+
+bool SystemCore::checkEmergencyStop() {
+    if ((GetAsyncKeyState(VK_ESCAPE) & 0x8000) || (GetAsyncKeyState(VK_F6) & 0x8000)) {
+        GetAsyncKeyState(VK_ESCAPE);
+        GetAsyncKeyState(VK_F6);
+        return true;
+    }
+    return false;
+}
+
 bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
+    if (isElevated()) {
+        return SystemCore::runRawCommand("cmd.exe /c " + cmd);
+    }
+
     if (!silent) {
         std::string answer;
         std::cout << "Chạy quyền Admin cho lệnh [" << cmd << "] (Y/N): ";
@@ -293,11 +320,22 @@ void SystemCore::leftClick() {
 void SystemCore::setClipboard(const std::string &text) {
     if (!OpenClipboard(nullptr)) return;
     EmptyClipboard();
-    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, text.size() + 1);
-    if (hMem) {
-        memcpy(GlobalLock(hMem), text.c_str(), text.size() + 1);
-        GlobalUnlock(hMem);
-        if (!SetClipboardData(CF_TEXT, hMem)) GlobalFree(hMem);
+
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, NULL, 0);
+    if (wlen > 0) {
+        HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, wlen * sizeof(wchar_t));
+        if (hMem) {
+            wchar_t* pMem = static_cast<wchar_t*>(GlobalLock(hMem));
+            if (pMem) {
+                MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, pMem, wlen);
+                GlobalUnlock(hMem);
+                if (!SetClipboardData(CF_UNICODETEXT, hMem)) {
+                    GlobalFree(hMem);
+                }
+            } else {
+                GlobalFree(hMem);
+            }
+        }
     }
     CloseClipboard();
 }

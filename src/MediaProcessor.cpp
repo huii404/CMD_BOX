@@ -13,11 +13,12 @@ namespace fs = std::filesystem;
 static string cachedFFmpegPath = "";
 static mutex ffmpegMutex;
 
+static GpuCodecInfo cachedGpuInfo;
+static bool hasDetectedGpu = false;
+static mutex gpuDetectionMutex;
 
 MediaProcessor::MediaProcessor() {}
 MediaProcessor::~MediaProcessor() {}
-
-
 
 string MediaProcessor::getFFmpegPath() {
     if (!cachedFFmpegPath.empty()) {
@@ -61,11 +62,69 @@ string MediaProcessor::getFFmpegPath() {
     return cachedFFmpegPath;
 }
 
+GpuCodecInfo MediaProcessor::getGpuEncoder() {
+    if (hasDetectedGpu) return cachedGpuInfo;
+    lock_guard<mutex> lock(gpuDetectionMutex);
+    if (hasDetectedGpu) return cachedGpuInfo;
+
+    string ffmpeg = getFFmpegPath();
+
+    // 1. Kiểm tra NVIDIA NVENC
+    string testNvenc = ffmpeg + " -hide_banner -loglevel error -f lavfi -i color=s=64x64:d=0.1 -c:v h264_nvenc -f null -";
+    if (SystemCore::runRawCommand(testNvenc)) {
+        cachedGpuInfo.encoder = "h264_nvenc";
+        cachedGpuInfo.compressParams = "-c:v h264_nvenc -preset p4 -cq 26 -pix_fmt yuv420p";
+        cachedGpuInfo.speedParams = "-c:v h264_nvenc -preset p4 -cq 23 -pix_fmt yuv420p";
+        cachedGpuInfo.enhanceParamsLevel1 = "-c:v h264_nvenc -preset p3 -cq 20 -pix_fmt yuv420p";
+        cachedGpuInfo.enhanceParamsLevel2 = "-c:v h264_nvenc -preset p5 -cq 22 -pix_fmt yuv420p";
+        cachedGpuInfo.enhanceParamsLevel3 = "-c:v h264_nvenc -preset p7 -cq 24 -pix_fmt yuv420p";
+        cachedGpuInfo.displayName = "NVIDIA NVENC (GPU Tăng tốc phần cứng)";
+        hasDetectedGpu = true;
+        return cachedGpuInfo;
+    }
+
+    // 2. Kiểm tra Intel QuickSync (QSV)
+    string testQsv = ffmpeg + " -hide_banner -loglevel error -f lavfi -i color=s=64x64:d=0.1 -c:v h264_qsv -f null -";
+    if (SystemCore::runRawCommand(testQsv)) {
+        cachedGpuInfo.encoder = "h264_qsv";
+        cachedGpuInfo.compressParams = "-c:v h264_qsv -global_quality 26 -pix_fmt yuv420p";
+        cachedGpuInfo.speedParams = "-c:v h264_qsv -global_quality 23 -pix_fmt yuv420p";
+        cachedGpuInfo.enhanceParamsLevel1 = "-c:v h264_qsv -preset fast -global_quality 20 -pix_fmt yuv420p";
+        cachedGpuInfo.enhanceParamsLevel2 = "-c:v h264_qsv -preset medium -global_quality 22 -pix_fmt yuv420p";
+        cachedGpuInfo.enhanceParamsLevel3 = "-c:v h264_qsv -preset slow -global_quality 24 -pix_fmt yuv420p";
+        cachedGpuInfo.displayName = "Intel QuickSync (GPU Tăng tốc phần cứng)";
+        hasDetectedGpu = true;
+        return cachedGpuInfo;
+    }
+
+    // 3. Kiểm tra AMD AMF
+    string testAmf = ffmpeg + " -hide_banner -loglevel error -f lavfi -i color=s=64x64:d=0.1 -c:v h264_amf -f null -";
+    if (SystemCore::runRawCommand(testAmf)) {
+        cachedGpuInfo.encoder = "h264_amf";
+        cachedGpuInfo.compressParams = "-c:v h264_amf -rc cqp -qp_p 26 -qp_i 26 -pix_fmt yuv420p";
+        cachedGpuInfo.speedParams = "-c:v h264_amf -rc cqp -qp_p 23 -qp_i 23 -pix_fmt yuv420p";
+        cachedGpuInfo.enhanceParamsLevel1 = "-c:v h264_amf -quality speed -rc cqp -qp_p 20 -qp_i 20 -pix_fmt yuv420p";
+        cachedGpuInfo.enhanceParamsLevel2 = "-c:v h264_amf -quality balanced -rc cqp -qp_p 22 -qp_i 22 -pix_fmt yuv420p";
+        cachedGpuInfo.enhanceParamsLevel3 = "-c:v h264_amf -quality quality -rc cqp -qp_p 24 -qp_i 24 -pix_fmt yuv420p";
+        cachedGpuInfo.displayName = "AMD AMF (GPU Tăng tốc phần cứng)";
+        hasDetectedGpu = true;
+        return cachedGpuInfo;
+    }
+
+    // 4. Fallback CPU
+    cachedGpuInfo.encoder = "libx264";
+    cachedGpuInfo.compressParams = "-c:v libx264 -crf 24 -preset fast -pix_fmt yuv420p";
+    cachedGpuInfo.speedParams = "-c:v libx264 -crf 23 -preset fast -pix_fmt yuv420p";
+    cachedGpuInfo.enhanceParamsLevel1 = "-c:v libx264 -crf 18 -preset fast -pix_fmt yuv420p";
+    cachedGpuInfo.enhanceParamsLevel2 = "-c:v libx264 -crf 20 -preset medium -pix_fmt yuv420p";
+    cachedGpuInfo.enhanceParamsLevel3 = "-c:v libx264 -crf 22 -preset slow -pix_fmt yuv420p";
+    cachedGpuInfo.displayName = "CPU (libx264 Software Encoder)";
+    hasDetectedGpu = true;
+    return cachedGpuInfo;
+}
 
 void MediaProcessor::compressImage(const string& inputPath, const string& outputPath, int quality) {
     string ffmpeg = getFFmpegPath();
-    // THÊM: -map_metadata 0 để giữ metadata gốc
-    // THÊM: -movflags +faststart để tối ưu streaming
     string cmd = ffmpeg + " -y -i \"" + inputPath + "\" -map_metadata 0 -movflags +faststart -q:v " + to_string(quality) + " \"" + outputPath + "\"";
     cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu dung lượng ảnh...";
     if (SystemCore::runRawCommand(cmd)) cout << "\n -> Thành công! Đã xuất file: " << outputPath << "\n";
@@ -74,14 +133,13 @@ void MediaProcessor::compressImage(const string& inputPath, const string& output
 
 void MediaProcessor::extractAudioCore(const std::string& inputPath, const std::string& outputPath) {
     std::string ffmpeg = getFFmpegPath();
-    // THÊM: -map_metadata 0 để giữ metadata của audio
     std::string cmd = ffmpeg + " -y -i \"" + inputPath + "\" -map_metadata 0 -vn -q:a 2 \"" + outputPath + "\"";
     SystemCore::runRawCommand(cmd);
 }
 
-
 void MediaProcessor::changeSpeedCore(const std::string& inputPath, const std::string& outputPath, float speedMultiplier) {
     std::string ffmpeg = getFFmpegPath();
+    GpuCodecInfo gpu = getGpuEncoder();
     float videoPts = 1.0f / speedMultiplier;
     
     std::ostringstream ossSpeed, ossPts;
@@ -97,8 +155,7 @@ void MediaProcessor::changeSpeedCore(const std::string& inputPath, const std::st
 
     std::string filter = "-vf \"setpts=" + ptsStr + "*PTS\" -af \"" + audioFilter + "\"";
     
-    // THÊM: -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 để giữ metadata cho từng stream
-    std::string cmd = ffmpeg + " -y -i \"" + inputPath + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 " + filter + " -c:v libx264 -crf 23 -c:a aac \"" + outputPath + "\"";
+    std::string cmd = ffmpeg + " -y -i \"" + inputPath + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 " + filter + " " + gpu.speedParams + " -c:a aac \"" + outputPath + "\"";
     SystemCore::runRawCommand(cmd);
 }
 
@@ -108,6 +165,8 @@ void MediaProcessor::processMediaAuto() {
     int totalOptimizedCount = 0;
     int totalSkippedCount = 0;
     long long totalBytesSaved = 0;
+
+    GpuCodecInfo gpu = getGpuEncoder();
 
     while (true) {
         // === FIX: Xóa buffer input và flush console ===
@@ -223,8 +282,8 @@ void MediaProcessor::processMediaAuto() {
             }
             else if (find(videoExts.begin(), videoExts.end(), ext) != videoExts.end()) {
                 string ffmpeg = getFFmpegPath();
-                string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + input + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 -c:v libx264 -crf 24 -pix_fmt yuv420p -c:a aac -b:a 128k \"" + tempOutPath.string() + "\"";
-                cout << " \x1b[35m[Media]\x1b[0m Đang đóng gói Video mã hóa ẩn";
+                string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + input + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 " + gpu.compressParams + " -c:a aac -b:a 128k \"" + tempOutPath.string() + "\"";
+                cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu Video (" << gpu.encoder << ")...";
                 renderSuccess = SystemCore::runRawCommand(cmd) && fs::exists(tempOutPath);
             }
             else {
@@ -397,6 +456,7 @@ void MediaProcessor::processMediaEnhancementAuto() {
     std::vector<std::string> imageExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".heic" };
     std::vector<std::string> videoExts = { ".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm", ".m4v" };
     std::string ffmpeg = getFFmpegPath();
+    GpuCodecInfo gpu = getGpuEncoder();
 
     while (true) {
         std::cout << std::flush;
@@ -404,6 +464,7 @@ void MediaProcessor::processMediaEnhancementAuto() {
 
         std::cout << " ==================================================\n";
         std::cout << "    BỘ TỰ ĐỘNG PHỤC CHẾ & LÀM NÉT (AI AUTO) \n";
+        std::cout << "    Phần cứng: " << gpu.displayName << "\n";
         std::cout << " ==================================================\n\n";
 
         cout << " -> Kéo thả N file Ảnh/Video để làm nét ( 0 để thoát): ";
@@ -428,17 +489,17 @@ void MediaProcessor::processMediaEnhancementAuto() {
         if (level == 1) {
             imgFilter = "hqdn3d=4:3:4:3,eq=saturation=1.1:contrast=1.05,cas=strength=0.5";
             vidFilter = "hqdn3d=4:3:4:3,eq=saturation=1.1:contrast=1.05,cas=strength=0.5";
-            vidCodec  = "-c:v libx264 -crf 18 -preset fast"; 
+            vidCodec  = gpu.enhanceParamsLevel1; 
         } 
         else if (level == 2) {
             imgFilter = "nlmeans=s=1.0:p=7:r=3,eq=saturation=1.1,cas=strength=0.6";
             vidFilter = "hqdn3d=5:4:5:4,eq=saturation=1.1:contrast=1.05,cas=strength=0.6";
-            vidCodec  = "-c:v libx264 -crf 20 -preset medium";
+            vidCodec  = gpu.enhanceParamsLevel2;
         } 
         else {
             imgFilter = "nlmeans=s=1.5:p=7:r=3,eq=saturation=1.15:contrast=1.1,unsharp=5:5:0.8";
             vidFilter = "nlmeans=s=1.2:p=7:r=3,eq=saturation=1.1:contrast=1.05,unsharp=5:5:0.8";
-            vidCodec  = "-c:v libx264 -crf 22 -preset slow";
+            vidCodec  = gpu.enhanceParamsLevel3;
         }
 
         std::cout << "\n [*] Đang tiến hành phân tích và xử lý " << inputs.size() << " file...\n\n";
@@ -678,11 +739,10 @@ void MediaProcessor::processConvertFormatBatch() {
 
                 string cmd;
                 if (incompatible) {
-                    // === FIX: NẾU KHÔNG TƯƠNG THÍCH, RENDER LẠI ===
-                    cout << "    -> [Thông báo] Đang chuyển đổi codec để tương thích...\n";
-                    cmd = ffmpeg + " -y -i \"" + input + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 -c:v libx264 -crf 23 -c:a aac \"" + outPath.string() + "\"";
+                    GpuCodecInfo gpu = getGpuEncoder();
+                    cout << "    -> [Thông báo] Đang chuyển đổi codec (" << gpu.encoder << ")...\n";
+                    cmd = ffmpeg + " -y -i \"" + input + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 " + gpu.speedParams + " -c:a aac \"" + outPath.string() + "\"";
                 } else {
-                    // === FIX: TƯƠNG THÍCH, DÙNG -c copy ===
                     cmd = ffmpeg + " -y -i \"" + input + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 -c copy \"" + outPath.string() + "\"";
                 }
 

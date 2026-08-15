@@ -16,6 +16,7 @@ public:
     void disableAllStartupApps();
     void fixWindowsUpdate();
     void clearBrowserCache();
+    void cleanDevCaches();
     void optimizeSystemPRO();
     bool ServiceControlAPI(std::string serviceName, DWORD startupType, bool stopService);
     void turnOffServicesMenu();

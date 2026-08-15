@@ -70,7 +70,13 @@ public:
     ~AppUI() = default;
 
     void mainMenu() {
-        cout << "--- CMD BOX - SYSTEM TOOLKIT ---\n\n";
+        bool admin = SystemCore::isElevated();
+        cout << "--- CMD BOX - SYSTEM TOOLKIT ---\n";
+        if (admin) {
+            cout << " [Trạng thái: Administrator ✓ (Đầy đủ quyền)]\n\n";
+        } else {
+            cout << " [Trạng thái: User ⚠️ (Khuyên chạy Run as Administrator)]\n\n";
+        }
         cout << " [1] Bảo trì & Tối ưu hệ thống\n";
         cout << " [2] Mạng & Bảo mật\n";
         cout << " [3] Công cụ tự động & Tiện ích\n";
@@ -100,8 +106,7 @@ public:
         cout << " [3] Kích hoạt bảo mật toàn diện (Defender, Firewall, Port)\n";
         cout << " [4] Kiểm tra trạng thái bảo mật hệ thống\n";
         cout << " [5] Xem danh sách mật khẩu Wi-Fi đã lưu\n";
-        cout << " [6] Gửi / Nhận file nội bộ (LAN P2P tốc độ cao)\n";
-        cout << " [7] Phòng Chat nội bộ mạng LAN (Web Chat)\n";
+        cout << " [6] Phòng Chat nội bộ mạng LAN (Web Chat)\n";
         cout << " [0] Quay lại\n\n";
         cout << " [Chọn]: ";
     }
@@ -186,8 +191,7 @@ public:
                     else if (sub == 3) getInternet().fullSecurityShield();
                     else if (sub == 4) getInternet().checkSecurityStatus();
                     else if (sub == 5) getInternet().wifiAudit();
-                    else if (sub == 6) getInternet().quickSharePRO();
-                    else if (sub == 7) getInternet().startLocalChat();
+                    else if (sub == 6) getInternet().startLocalChat();
                     else {
                         cout << "\n[!] Lựa chọn không hợp lệ!\n";
                         Sleep(800);

@@ -11,6 +11,17 @@ namespace fs = std::filesystem;
 
 SystemOptimizer::SystemOptimizer(SystemCore &s, Internet &net) : sc(s), n(net) {}
 
+static void wipeFolderContents(const fs::path &dirPath) {
+    if (!fs::exists(dirPath)) return;
+    try {
+        for (const auto &entry : fs::directory_iterator(dirPath)) {
+            try {
+                fs::remove_all(entry.path());
+            } catch (...) {}
+        }
+    } catch (...) {}
+}
+
 void SystemOptimizer::cleanDiskPro() {
     sc.cls();
     cout << "--- TIẾN TRÌNH DỌN RÁC CHUYÊN SÂU PRO ---\n\n";
@@ -29,7 +40,6 @@ void SystemOptimizer::cleanDiskPro() {
     userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\Microsoft\\Windows\\Recent\\*\" 2>nul"); });
     userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Low\\Microsoft\\CryptnetUrlCache\\*\" 2>nul"); });
     userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\D3DSCache\\*\" 2>nul"); });
-    userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\pip\\Cache\\*\" 2>nul"); });
     userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\NVIDIA\\GLCache\\*\" 2>nul"); });
     userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\Explorer\\thumbcache_*.db\" 2>nul"); });
     userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\Temp\\*\" 2>nul"); });
@@ -38,11 +48,12 @@ void SystemOptimizer::cleanDiskPro() {
     for (auto& t : userThreads) t.join();
     cout << "[✓] Đã dọn cache người dùng\n";
 
-    // Dọn browser, thùng rác, dns
+    // Dọn browser đa profile, rác dev, thùng rác, dns
     clearBrowserCache();
+    cleanDevCaches();
     sc.runCMD("powershell -NoProfile -Command \"Clear-RecycleBin -Force -ErrorAction SilentlyContinue\"");
     sc.runCMD("ipconfig /flushdns");
-    cout << "[✓] Đã dọn Browser, Recycle Bin, DNS\n";
+    cout << "[✓] Đã dọn Browser đa profile, Dev Caches, Recycle Bin, DNS\n";
 
     // Dọn rác hệ thống với quyền admin
     string batContent = "";
@@ -167,34 +178,124 @@ void SystemOptimizer::clearBrowserCache() {
     char *appData = std::getenv("APPDATA");
     if (!localAppData) return;
     string baseLocal = string(localAppData);
-    vector<string> cachePaths = {
-        baseLocal + "\\Google\\Chrome\\User Data\\Default\\Cache", baseLocal + "\\Google\\Chrome\\User Data\\Default\\Code Cache",
-        baseLocal + "\\Microsoft\\Edge\\User Data\\Default\\Cache", baseLocal + "\\CocCoc\\Browser\\User Data\\Default\\Cache",
-        baseLocal + "\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Cache", baseLocal + "\\Vivaldi\\User Data\\Default\\Cache",
-        baseLocal + "\\Opera Software\\Opera Stable\\Cache", baseLocal + "\\Opera Software\\Opera GX Stable\\Cache"
+
+    vector<string> chromiumBases = {
+        baseLocal + "\\Google\\Chrome\\User Data",
+        baseLocal + "\\Microsoft\\Edge\\User Data",
+        baseLocal + "\\CocCoc\\Browser\\User Data",
+        baseLocal + "\\BraveSoftware\\Brave-Browser\\User Data",
+        baseLocal + "\\Vivaldi\\User Data",
+        baseLocal + "\\Opera Software\\Opera Stable",
+        baseLocal + "\\Opera Software\\Opera GX Stable"
     };
 
-    cout << "[*] Đang dọn cache trình duyệt...\n";
-    for (const string &path : cachePaths) {
-        if (fs::exists(path)) {
-            try {
-                for (const auto &entry : fs::directory_iterator(path)) fs::remove_all(entry.path());
-            } catch (...) {}
-        }
+    if (appData) {
+        string baseApp = string(appData);
+        chromiumBases.push_back(baseApp + "\\Opera Software\\Opera Stable");
+        chromiumBases.push_back(baseApp + "\\Opera Software\\Opera GX Stable");
     }
+
+    vector<string> cacheFolderNames = {
+        "Cache", "Code Cache", "GPUCache", "DawnCache", "ShaderCache", 
+        "GrShaderCache", "GraphiteDawnCache", "Service Worker\\CacheStorage", 
+        "Service Worker\\ScriptCache"
+    };
+
+    cout << "[*] Đang quét và dọn cache trình duyệt đa profile...\n";
+
+    for (const string &baseDir : chromiumBases) {
+        if (!fs::exists(baseDir)) continue;
+
+        try {
+            for (const auto &entry : fs::directory_iterator(baseDir)) {
+                if (!entry.is_directory()) continue;
+                string dirName = entry.path().filename().string();
+                
+                bool isProfile = (dirName == "Default" || dirName.rfind("Profile", 0) == 0 || 
+                                  dirName == "Guest Profile" || dirName == "System Profile");
+                
+                if (isProfile) {
+                    for (const auto &cacheName : cacheFolderNames) {
+                        fs::path targetCache = entry.path() / cacheName;
+                        wipeFolderContents(targetCache);
+                    }
+                } else if (dirName == "ShaderCache" || dirName == "GrShaderCache" || dirName == "DawnCache") {
+                    wipeFolderContents(entry.path());
+                }
+            }
+        } catch (...) {}
+    }
+
+    // Firefox Profiles
     if (appData) {
         string ffPath = string(appData) + "\\Mozilla\\Firefox\\Profiles";
         if (fs::exists(ffPath)) {
-            for (const auto &profile : fs::directory_iterator(ffPath)) {
-                string cacheDir = profile.path().string() + "\\cache2";
-                if (fs::exists(cacheDir)) {
-                    try {
-                        for (const auto &entry : fs::directory_iterator(cacheDir)) fs::remove_all(entry.path());
-                    } catch (...) {}
+            try {
+                for (const auto &profile : fs::directory_iterator(ffPath)) {
+                    if (profile.is_directory()) {
+                        wipeFolderContents(profile.path() / "cache2");
+                        wipeFolderContents(profile.path() / "startupCache");
+                        wipeFolderContents(profile.path() / "jumpListCache");
+                    }
                 }
-            }
+            } catch (...) {}
         }
     }
+
+    string ffLocal = baseLocal + "\\Mozilla\\Firefox\\Profiles";
+    if (fs::exists(ffLocal)) {
+        try {
+            for (const auto &profile : fs::directory_iterator(ffLocal)) {
+                if (profile.is_directory()) {
+                    wipeFolderContents(profile.path() / "cache2");
+                    wipeFolderContents(profile.path() / "startupCache");
+                }
+            }
+        } catch (...) {}
+    }
+}
+
+void SystemOptimizer::cleanDevCaches() {
+    char *localAppData = std::getenv("LOCALAPPDATA");
+    char *appData = std::getenv("APPDATA");
+    char *userProfile = std::getenv("USERPROFILE");
+
+    cout << "[*] Đang quét và dọn rác lập trình viên (Dev Caches)...\n";
+
+    vector<fs::path> devCachePaths;
+
+    if (localAppData) {
+        string baseLocal = string(localAppData);
+        devCachePaths.push_back(baseLocal + "\\npm-cache");
+        devCachePaths.push_back(baseLocal + "\\Yarn\\Cache");
+        devCachePaths.push_back(baseLocal + "\\pip\\cache");
+        devCachePaths.push_back(baseLocal + "\\NuGet\\v3-cache");
+        devCachePaths.push_back(baseLocal + "\\go-build");
+        devCachePaths.push_back(baseLocal + "\\pnpm\\store");
+    }
+
+    if (appData) {
+        string baseApp = string(appData);
+        devCachePaths.push_back(baseApp + "\\npm-cache");
+        devCachePaths.push_back(baseApp + "\\Code\\Cache");
+        devCachePaths.push_back(baseApp + "\\Code\\CachedData");
+        devCachePaths.push_back(baseApp + "\\Code\\CachedExtensionVSIXs");
+        devCachePaths.push_back(baseApp + "\\Code\\User\\workspaceStorage");
+    }
+
+    if (userProfile) {
+        string baseUser = string(userProfile);
+        devCachePaths.push_back(baseUser + "\\.gradle\\caches");
+        devCachePaths.push_back(baseUser + "\\.gradle\\daemon");
+        devCachePaths.push_back(baseUser + "\\.cargo\\registry\\cache");
+        devCachePaths.push_back(baseUser + "\\.nuget\\packages");
+        devCachePaths.push_back(baseUser + "\\.android\\cache");
+    }
+
+    for (const auto &path : devCachePaths) {
+        wipeFolderContents(path);
+    }
+    cout << "[✓] Đã dọn sạch các bộ nhớ đệm lập trình (Node/NPM, Pip, Yarn, NuGet, Gradle, Rust, VS Code)\n";
 }
 
 void SystemOptimizer::optimizeSystemPRO() {
@@ -232,6 +333,7 @@ void SystemOptimizer::optimizeSystemPRO() {
     SystemCore::runBatchAsAdmin(batContent, "Tối ưu hệ thống PRO");
 
     clearBrowserCache(); 
+    cleanDevCaches();
 
     sc.runCMD("cmd /c \"mkdir \"%LocalAppData%\\EmptyFolderTmp\" 2>nul\"");
     sc.runCMD("cmd /c \"robocopy \"%LocalAppData%\\EmptyFolderTmp\" \"%temp%\" /mir /w:0 /r:0 /log:nul\"");

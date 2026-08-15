@@ -27,10 +27,22 @@ static void saveDownloadHistory(const string& appName) {
     } catch (...) {}
 }
 
+static bool sleepWithEmergencyCheck(int totalMs) {
+    int elapsed = 0;
+    while (elapsed < totalMs) {
+        if (SystemCore::checkEmergencyStop()) return true;
+        int step = (totalMs - elapsed > 20) ? 20 : (totalMs - elapsed);
+        Sleep(step);
+        elapsed += step;
+    }
+    return SystemCore::checkEmergencyStop();
+}
+
 // Auto click chuột theo vị trí
 void UtilityTools::autoClickPoint() {
     sc.cls();
-    cout << "--- AUTO CLICK CHUỘT ---\n\n";
+    cout << "--- AUTO CLICK CHUỘT ---\n";
+    cout << "[i] Nhấn phím ESC hoặc F6 bất kỳ lúc nào để DỪNG KHẨN CẤP\n\n";
     
     int times = sc.readInt("Số lần click: ");
     if (times <= 0) {
@@ -47,33 +59,53 @@ void UtilityTools::autoClickPoint() {
     cout << "\nDi chuyển chuột đến vị trí cần click...\n";
     for (int i = delaySec; i > 0; i--) { 
         cout << " " << i << "... "; cout.flush(); 
-        Sleep(1000); 
+        if (sleepWithEmergencyCheck(1000)) {
+            cout << "\n[!] Đã hủy bởi người dùng.\n";
+            return;
+        }
     }
     
     POINT p; 
     GetCursorPos(&p);
     cout << "\n\n[*] Bắt đầu click tại tọa độ: (" << p.x << ", " << p.y << ")\n";
-    cout << "[*] Số lần: " << times << " | Delay: " << intervalMs << "ms\n\n";
+    cout << "[*] Số lần: " << times << " | Delay: " << intervalMs << "ms\n";
+    cout << "[*] (Nhấn ESC / F6 để dừng ngay lập tức)\n\n";
     
+    bool stopped = false;
+    int executed = 0;
     for (int i = 0; i < times; i++) { 
+        if (SystemCore::checkEmergencyStop()) {
+            stopped = true;
+            break;
+        }
+
         SetCursorPos(p.x, p.y); 
         sc.leftClick();
+        executed++;
         
         if (times > 20 && i % (times / 20) == 0) {
             cout << "\r[+] Tiến độ: " << (i * 100 / times) << "% ";
             cout.flush();
         }
         
-        Sleep(intervalMs); 
+        if (sleepWithEmergencyCheck(intervalMs)) {
+            stopped = true;
+            break;
+        }
     }
     
-    cout << "\n\n[✓] Hoàn thành " << times << " lần click!\n";
+    if (stopped) {
+        cout << "\n\n[!] ĐÃ DỪNG KHẨN CẤP (Đã click " << executed << "/" << times << " lần)\n";
+    } else {
+        cout << "\n\n[✓] Hoàn thành " << times << " lần click!\n";
+    }
 }
 
 // Spam văn bản tự động
 void UtilityTools::spamText() {
     sc.cls();
-    cout << "--- SPAM TEXT (TỰ ĐỘNG GỬI) ---\n\n";
+    cout << "--- SPAM TEXT (TỰ ĐỘNG GỬI) ---\n";
+    cout << "[i] Nhấn phím ESC hoặc F6 bất kỳ lúc nào để DỪNG KHẨN CẤP\n\n";
     
     string content; 
     cout << "Nhập text cần gửi: ";
@@ -103,11 +135,15 @@ void UtilityTools::spamText() {
     cout << "    - Nội dung: " << content << "\n";
     cout << "    - Số lần: " << times << "\n";
     cout << "    - Delay: " << delayMs << "ms\n";
+    cout << "    - Phím ngắt: ESC / F6\n";
     
     cout << "\nBắt đầu sau 3 giây...\n";
     for (int i = 3; i > 0; i--) { 
         cout << " " << i << "... "; cout.flush(); 
-        Sleep(1000); 
+        if (sleepWithEmergencyCheck(1000)) {
+            cout << "\n[!] Đã hủy bởi người dùng.\n";
+            return;
+        }
     }
     cout << "\n";
     
@@ -120,26 +156,42 @@ void UtilityTools::spamText() {
         Sleep(100);
     }
     
+    bool stopped = false;
+    int executed = 0;
     for (int i = 0; i < times; i++) { 
+        if (SystemCore::checkEmergencyStop()) {
+            stopped = true;
+            break;
+        }
+
         sc.setClipboard(content); 
         sc.pressCtrlV();
         sc.pressEnter();
+        executed++;
         
         if ((i + 1) % 10 == 0 || i == times - 1) {
             cout << "\r[+] Đã gửi: " << (i + 1) << "/" << times << " ";
             cout.flush();
         }
         
-        Sleep(delayMs); 
+        if (sleepWithEmergencyCheck(delayMs)) {
+            stopped = true;
+            break;
+        }
     }
     
-    cout << "\n\n[✓] Hoàn thành gửi " << times << " lần!\n";
+    if (stopped) {
+        cout << "\n\n[!] ĐÃ DỪNG KHẨN CẤP (Đã gửi " << executed << "/" << times << " lần)\n";
+    } else {
+        cout << "\n\n[✓] Hoàn thành gửi " << times << " lần!\n";
+    }
 }
 
 // Tự động paste danh sách dữ liệu
 void UtilityTools::autoPasteData() {
     sc.cls();
-    cout << "--- AUTO PASTE DỮ LIỆU ---\n\n";
+    cout << "--- AUTO PASTE DỮ LIỆU ---\n";
+    cout << "[i] Nhấn phím ESC hoặc F6 bất kỳ lúc nào để DỪNG KHẨN CẤP\n\n";
     
     int n = sc.readInt("Số dòng dữ liệu: ");
     if (n <= 0) {
@@ -170,7 +222,10 @@ void UtilityTools::autoPasteData() {
     cout << "\nBắt đầu sau 3 giây...\n";
     for (int i = 3; i > 0; i--) { 
         cout << " " << i << "... "; cout.flush(); 
-        Sleep(1000); 
+        if (sleepWithEmergencyCheck(1000)) {
+            cout << "\n[!] Đã hủy bởi người dùng.\n";
+            return;
+        }
     }
     cout << "\n";
     
@@ -183,18 +238,33 @@ void UtilityTools::autoPasteData() {
         Sleep(100);
     }
     
+    bool stopped = false;
+    int executed = 0;
     for (int i = 0; i < n; i++) {
+        if (SystemCore::checkEmergencyStop()) {
+            stopped = true;
+            break;
+        }
+
         sc.setClipboard(dataList[i]);
         sc.pressCtrlV();
         sc.pressEnter();
+        executed++;
         
         cout << "\r[+] Đã dán: " << (i + 1) << "/" << n << " ";
         cout.flush();
         
-        Sleep(delayMs);
+        if (sleepWithEmergencyCheck(delayMs)) {
+            stopped = true;
+            break;
+        }
     }
     
-    cout << "\n\n[✓] Hoàn thành dán " << n << " dòng!\n";
+    if (stopped) {
+        cout << "\n\n[!] ĐÃ DỪNG KHẨN CẤP (Đã dán " << executed << "/" << n << " dòng)\n";
+    } else {
+        cout << "\n\n[✓] Hoàn thành dán " << n << " dòng!\n";
+    }
 }
 
 // Trình tải & Cài đặt phần mềm tự động

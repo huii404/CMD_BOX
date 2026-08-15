@@ -34,6 +34,8 @@ public:
 
     void runCMD(const std::string &cmd); // system-user
     static bool runAdmin(const std::string &cmd, bool silent = false); // system-admin
+    static bool isElevated();
+    static bool checkEmergencyStop();
     
     // Chuột & bàn phím
     void leftClick();

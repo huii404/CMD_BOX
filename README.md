@@ -13,7 +13,7 @@
 * **Quản lý tiến trình an toàn (Windows Job Objects):** Mọi tiến trình con khởi tạo từ tool đều được gắn vào Job Object của hệ điều hành. Khi người dùng đóng tool hoặc nhấn `Ctrl + C`, toàn bộ tiến trình con sẽ được dọn dẹp sạch sẽ, không gây chạy ngầm.
 * **Tối ưu hóa tài nguyên:** Khởi tạo trễ (Lazy Loading) với `std::unique_ptr` và cơ chế Thread-safe, chiếm dưới 5MB RAM khi vận hành.
 * **Giao diện Console tinh tế:** Giao diện dòng lệnh trực quan, điều hướng nhanh chóng bằng phím số.
-* **Không phụ thuộc Cloud:** Các tính năng chia sẻ file, chat nội bộ hoạt động trực tiếp qua mạng LAN nội bộ bằng socket Winsock2.
+* **Không phụ thuộc Cloud:** Tính năng chat nội bộ hoạt động trực tiếp qua mạng LAN nội bộ bằng socket Winsock2.
 
 ---
 
@@ -22,7 +22,7 @@
 Chương trình được chia thành **4 phân hệ chính**:
 
 ### 1. 🛠️ Bảo trì & Tối ưu Hệ thống (`SystemOptimizer`)
-* **Dọn rác chuyên sâu PRO:** Quét đa luồng, làm sạch bộ nhớ đệm của hơn 8 trình duyệt (Chrome, Edge, CocCoc, Brave, Vivaldi, Opera, Opera GX, Firefox), thư mục Temp, Prefetch, Thumbcache, CBS Logs, Delivery Optimization, Windows Update Cache và dọn sạch Thùng rác.
+* **Dọn rác chuyên sâu PRO:** Quét đa luồng, làm sạch toàn diện đa Profile của hơn 8 trình duyệt (Chrome, Edge, CocCoc, Brave, Vivaldi, Opera, Opera GX, Firefox), dọn rác Lập trình viên (Node/NPM, Yarn, Pip, NuGet, Gradle, Rust/Cargo, Go, VS Code Cache), thư mục Temp, Prefetch, Thumbcache, CBS Logs, Delivery Optimization, Windows Update Cache và dọn sạch Thùng rác.
 * **Quản lý & Tắt ứng dụng khởi động:** Quét các Registry Run keys với Whitelist thông minh bảo vệ driver phần cứng, âm thanh (Realtek, Waves), card màn hình (NVIDIA, AMD, Intel) và OEM tools (ASUS, Dell, Lenovo, HP).
 * **Quản lý Dịch vụ Windows (Services Control API):** Tinh chỉnh hoặc vô hiệu hóa các dịch vụ ngầm không cần thiết (Windows Update, Telemetry, Maps, Xbox Services, Error Reporting...) thông qua Win32 Service Manager.
 * **Tinh chỉnh Taskbar Windows 11:** Ẩn các nút không dùng trên Taskbar (Search Box, Widgets, Chat/Teams, Task View, News & Interests, Copilot, Snap Assist).
@@ -35,17 +35,17 @@ Chương trình được chia thành **4 phân hệ chính**:
 * **Kích hoạt Bảo mật Toàn diện (Full Security Shield):** Bật Windows Defender & cập nhật Signature, bật Firewall, bật Controlled Folder Access, chặn các cổng nguy hiểm (445, 139, 135, 137, 138), cấu hình DNS over HTTPS (Cloudflare 1.1.1.1).
 * **Kiểm tra trạng thái bảo mật:** Báo cáo chi tiết trạng thái của Defender, Firewall, dịch vụ Remote và DNS.
 * **Xem mật khẩu Wi-Fi đã lưu:** Trích xuất tên, mật khẩu và chuẩn mã hóa của các mạng Wi-Fi từng kết nối.
-* **Chia sẻ file nội bộ (LAN P2P):** Khởi tạo máy chủ HTTP tốc độ cao để truyền file trực tiếp giữa máy tính và điện thoại/máy tính khác trong cùng mạng LAN.
 * **Phòng Chat nội bộ mạng LAN:** Máy chủ Web Chat P2P cho phép các thiết bị cùng mạng nhắn tin qua trình duyệt web.
 
 ### 3. ⚡ Công cụ Tự động & Tiện ích (`UtilityTools`)
-* **Auto Click chuột:** Tự động click theo tọa độ với tùy chỉnh số lần, delay (ms) và thời gian chuẩn bị.
-* **Spam Text:** Tự động gửi tin nhắn hoặc văn bản lặp lại kèm thao tác xuống dòng.
-* **Auto Paste dữ liệu:** Hỗ trợ nhập và dán tự động danh sách dữ liệu nhiều dòng.
+* **Auto Click chuột:** Tự động click theo tọa độ với tùy chỉnh số lần, delay (ms), hỗ trợ phím ngắt khẩn cấp (`ESC` / `F6`).
+* **Spam Text:** Tự động gửi tin nhắn hoặc văn bản lặp lại, hỗ trợ gõ chuẩn Tiếng Việt Unicode (`CF_UNICODETEXT`) và dừng khẩn cấp bằng `ESC` / `F6`.
+* **Auto Paste dữ liệu:** Hỗ trợ nhập và dán tự động danh sách dữ liệu nhiều dòng chuẩn Unicode và ngắt khẩn cấp bằng phím tắt.
 * **Trình tải & Cài đặt phần mềm:** Tải nhanh các phần mềm phổ biến (Chrome, CocCoc, Brave, EVKey, OpenKey, Zalo, Discord, Telegram, 7-Zip, WinRAR, WARP, VS Code, Notepad++, Git) kèm thanh tiến trình trực quan.
 * **Gỡ bỏ ứng dụng rác (Bloatware Windows):** Quét và gỡ bỏ tận gốc các ứng dụng mặc định thừa thãi trên Windows bằng PowerShell script.
 
-### 4. 🎬 Bộ xử lý Media (`MediaProcessor` - FFmpeg)
+### 4. 🎬 Bộ xử lý Media (`MediaProcessor` - FFmpeg & GPU Acceleration)
+* **Tăng tốc phần cứng GPU:** Tự động nhận diện GPU (NVIDIA NVENC, Intel QuickSync, AMD AMF) để tăng tốc độ render, nén và xử lý video siêu tốc.
 * **Nén dung lượng Media:** Tự động tối ưu dung lượng Video / Ảnh mà vẫn giữ nguyên metadata gốc (EXIF, GPS).
 * **Phục chế & Làm nét:** Sử dụng các bộ lọc chuyên sâu để khử nhiễu và tăng độ nét.
 * **Chuyển đổi Mp4 -> Mp3:** Trích xuất âm thanh từ video nhanh chóng.
