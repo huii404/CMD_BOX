@@ -1,6 +1,5 @@
 # 🛠️ CMD BOX - SYSTEM TOOLKIT
-
-> **Tác giả:** [huii404](https://github.com/huii404)  
+ 
 > **Ngôn ngữ:** C++17 | **Nền tảng:** Windows (x64)
 
 ---
@@ -98,7 +97,3 @@ g++ -std=c++17 -Iinclude src/*.cpp -o bin/cmd_box.exe -lws2_32 -liphlpapi -stati
 * **Khuyến nghị:** Nhấp chuột phải vào `cmd_box.exe` và chọn **Run as Administrator** để sử dụng đầy đủ các tính năng tối ưu hệ thống, chỉnh sửa Registry, Service API và cấu hình tường lửa.
 
 ---
-
-## V. Giấy phép & Đóng góp
-
-Dự án được phát triển và duy trì bởi **huii404**. Mọi đóng góp và báo lỗi xin vui lòng tạo Issue hoặc Pull Request trên GitHub.

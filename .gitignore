@@ -4,3 +4,4 @@ bin/main.exe
 bin/ffprobe.exe
 build.bat
 .vscode/tasks.json
+bin/*

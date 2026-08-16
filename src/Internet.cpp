@@ -134,10 +134,6 @@ void Internet::repairNetwork() {
         "chcp 65001 >nul\n"
         "title SUA LOI & KHOI PHUC CAI DAT MANG\n"
         "color 0B\n"
-        "echo ============================================================\n"
-        "echo             SUA LOI & KHOI PHUC CAI DAT MANG\n"
-        "echo ============================================================\n"
-        "echo.\n"
         "echo [1/5] Xoa bo dem DNS (Flush DNS)...\n"
         "ipconfig /flushdns >nul 2>&1\n"
         "echo       -> [OK]\n"
@@ -154,10 +150,8 @@ void Internet::repairNetwork() {
         "ipconfig /release >nul 2>&1 & ipconfig /renew >nul 2>&1\n"
         "echo       -> [OK]\n"
         "echo.\n"
-        "echo ============================================================\n"
         "echo [✓] DA HOAN TAT SUA LOI VA KHOI PHUC CAI DAT MANG!\n"
-        "echo Cua so se tu dong dong sau 5 giay...\n"
-        "echo ============================================================\n"
+        "echo Cua so se tu dong dong sau 5 giay...\n"     
         "timeout /t 5 >nul\n";
 
     cout << "[*] Đang thực thi quy trình 5 bước sửa lỗi & khôi phục mạng trong cửa sổ quản trị...\n";
@@ -323,10 +317,10 @@ void Internet::toggleDefender(bool enable, int &alreadyCount, int &newlyCount, i
             ? "powershell -Command \"Set-MpPreference -DisableRealtimeMonitoring $false\" & \"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -SignatureUpdate"
             : "powershell -Command \"Set-MpPreference -DisableRealtimeMonitoring $true\"";
         if (sc.runAdmin(cmd, true)) {
-            cout << "    [✓] Đã cập nhật trạng thái Windows Defender thành công.\n";
+            cout << "[✓] Đã cập nhật trạng thái.\n";
             newlyCount++;
         } else {
-            cout << "    [✗] Thất bại khi thay đổi trạng thái Defender.\n";
+            cout << "[✗] Thất bại khi thay đổi trạng thái.\n";
             failedCount++;
         }
     }
@@ -350,18 +344,18 @@ void Internet::toggleFirewall(bool enable, int &alreadyCount, int &newlyCount, i
     }
 
     if (enable && allOn) {
-        cout << "    [○] Tường lửa đã bật sẵn trên toàn bộ profile.\n";
+        cout << "[○] Tường lửa đã bật sẵn trên toàn bộ profile.\n";
         alreadyCount++;
     } else if (!enable && allOff) {
-        cout << "    [○] Tường lửa đã tắt sẵn từ trước.\n";
+        cout << "[○] Tường lửa đã tắt sẵn từ trước.\n";
         alreadyCount++;
     } else {
         string cmd = enable ? "netsh advfirewall set allprofiles state on" : "netsh advfirewall set allprofiles state off";
         if (sc.runAdmin(cmd, true)) {
-            cout << (enable ? "    [✓] Đã kích hoạt Tường lửa cho toàn bộ profile.\n" : "    [✓] Đã tắt Tường lửa.\n");
+            cout << (enable ? "[✓] Đã kích hoạt Tường lửa cho toàn bộ profile.\n" : "    [✓] Đã tắt Tường lửa.\n");
             newlyCount++;
         } else {
-            cout << "    [✗] Thất bại khi thay đổi trạng thái Tường lửa.\n";
+            cout << "[✗] Thất bại khi thay đổi trạng thái Tường lửa.\n";
             failedCount++;
         }
     }
@@ -495,9 +489,9 @@ void Internet::toggleDNSoverHTTPS(bool enable, int &alreadyCount, int &newlyCoun
 void Internet::fullSecurityShield() {
     while (true) {
         sc.cls();
-        cout << "============================================================\n";
+        cout << "============\n";
         cout << "         LÁ CHẮN BẢO MẬT HỆ THỐNG & MẠNG TOÀN DIỆN\n";
-        cout << "============================================================\n";
+        cout << "============\n";
         cout << " [1] KÍCH HOẠT TOÀN DIỆN (Defender, Firewall, Chặn Port, DoH, Chống Ransomware)\n";
         cout << " [2] KHÔI PHỤC MẶC ĐỊNH (Mở lại Port, Tắt DoH, Cho phép chia sẻ mạng LAN)\n";
         cout << " [0] Quay lại\n\n";
@@ -508,9 +502,9 @@ void Internet::fullSecurityShield() {
 
         if (choice == 1) {
             sc.cls();
-            cout << "============================================================\n";
+            cout << "============\n";
             cout << "      ĐANG KÍCH HOẠT LÁ CHẮN BẢO MẬT TOÀN DIỆN (1-CLICK)\n";
-            cout << "============================================================\n\n";
+            cout << "============\n\n";
             cout << "[*] Đang tổng hợp toàn bộ quy tắc bảo mật và khởi chạy 1 lần trong cửa sổ quản trị...\n";
 
             std::string batContent = 
@@ -518,9 +512,9 @@ void Internet::fullSecurityShield() {
                 "chcp 65001 >nul\n"
                 "title KICH HOAT LA CHAN BAO MAT HE THONG & MANG\n"
                 "color 0A\n"
-                "echo ============================================================\n"
+                
                 "echo       DANG THIET LAP LA CHAN BAO MAT HE THONG & MANG\n"
-                "echo ============================================================\n"
+                
                 "echo.\n"
                 "echo [1/8] Bat Windows Defender Realtime & Cap nhat Signature...\n"
                 "powershell -Command \"Set-MpPreference -DisableRealtimeMonitoring $false\" >nul 2>&1\n"
@@ -573,10 +567,10 @@ void Internet::fullSecurityShield() {
                 "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection\" /v AllowTelemetry /t REG_DWORD /d 0 /f >nul 2>&1\n"
                 "echo       -> [OK]\n"
                 "echo.\n"
-                "echo ============================================================\n"
+                
                 "echo [✓] DA KICH HOAT THANH CONG TOAN BO LA CHAN BAO MAT!\n"
                 "echo Cua so se tu dong dong sau 5 giay...\n"
-                "echo ============================================================\n"
+                
                 "timeout /t 5 >nul\n";
 
             if (SystemCore::runBatchAsAdmin(batContent, "Kích hoạt lá chắn bảo mật")) {
@@ -588,9 +582,9 @@ void Internet::fullSecurityShield() {
         } 
         else if (choice == 2) {
             sc.cls();
-            cout << "============================================================\n";
+            cout << "============\n";
             cout << "         ĐANG KHÔI PHỤC THIẾT LẬP MẠNG MẶC ĐỊNH\n";
-            cout << "============================================================\n\n";
+            cout << "============\n\n";
             cout << "[*] Đang khởi chạy 1 lần trong cửa sổ quản trị để khôi phục mặc định...\n";
 
             std::string batContent = 
@@ -598,9 +592,9 @@ void Internet::fullSecurityShield() {
                 "chcp 65001 >nul\n"
                 "title KHOI PHUC CAI DAT MANG MAC DINH\n"
                 "color 0E\n"
-                "echo ============================================================\n"
+                
                 "echo           DANG KHOI PHUC CAI DAT MANG MAC DINH\n"
-                "echo ============================================================\n"
+                
                 "echo.\n"
                 "echo [1/3] Khoi phuc giao thuc chia se mang LAN (SMB1, Multicast, NetBIOS)...\n"
                 "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters\" /v SMB1 /t REG_DWORD /d 1 /f >nul 2>&1\n"
@@ -624,10 +618,10 @@ void Internet::fullSecurityShield() {
                 "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\" /v EnableAutoDoh /t REG_DWORD /d 0 /f >nul 2>&1\n"
                 "echo       -> [OK]\n"
                 "echo.\n"
-                "echo ============================================================\n"
+                
                 "echo [✓] DA KHOI PHUC THANH CONG CAI DAT MANG MAC DINH!\n"
                 "echo Cua so se tu dong dong sau 5 giay...\n"
-                "echo ============================================================\n"
+                
                 "timeout /t 5 >nul\n";
 
             if (SystemCore::runBatchAsAdmin(batContent, "Khôi phục cài đặt mạng")) {
@@ -642,9 +636,9 @@ void Internet::fullSecurityShield() {
 
 void Internet::checkHostsFileSecurity() {
     sc.cls();
-    cout << "============================================================\n";
+    cout << "============\n";
     cout << "     QUÉT & BẢO VỆ TẬP TIN HOSTS (CHỐNG CHUYỂN HƯỚNG WEB)\n";
-    cout << "============================================================\n\n";
+    cout << "============\n\n";
 
     std::string hostsPath = "C:\\Windows\\System32\\drivers\\etc\\hosts";
     if (!fs::exists(hostsPath)) {
@@ -737,7 +731,7 @@ void Internet::checkHostsFileSecurity() {
 
 void Internet::checkSecurityStatus() {
     sc.cls();
-    cout << "\n================ BÁO CÁO TRẠNG THÁI BẢO MẬT CHI TIẾT ================\n\n";
+    cout << "\n BÁO CÁO TRẠNG THÁI BẢO MẬT CHI TIẾT \n\n";
 
     // 1. Windows Defender
     cout << "[1] Windows Defender (Antivirus & Real-time Protection):\n";
@@ -782,6 +776,6 @@ void Internet::checkSecurityStatus() {
     cout << "    [-] Máy chủ DNS hiện tại:\n";
     sc.runCMD("ipconfig /all | findstr /i \"DNS\"");
 
-    cout << "\n======================================================================\n";
+    cout << "\n======\n";
     SystemCore::waitEnter();
 }

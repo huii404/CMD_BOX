@@ -86,31 +86,31 @@ public:
         cout << " [1] Bảo trì & Tối ưu hệ thống\n";
         cout << " [2] Mạng & Bảo mật\n";
         cout << " [3] Công cụ tự động & Tiện ích\n";
-        cout << " [4] Xử lý Media (FFmpeg)\n";
+        cout << " [4] Xử lý Media\n";
         cout << " [0] Thoát\n\n";
         cout << " [Chọn]: ";
     }
 
     void menuBaoTriToiUu() {
         cls();
-        cout << " [1] Dọn rác chuyên sâu PRO (Browser, Temp, Logs, Cache)\n";
+        cout << " [1] Dọn rác chuyên sâu PRO \n";
         cout << " [2] Quản lý & Tắt ứng dụng khởi động cùng Windows\n";
-        cout << " [3] Quản lý & Tối ưu dịch vụ Windows (Services Control)\n";
-        cout << " [4] Tinh chỉnh giao diện & Tối ưu Taskbar Win 11\n";
-        cout << " [5] Sửa lỗi Windows Update (Kẹt 0% / Lỗi dịch vụ)\n";
-        cout << " [6] Tối ưu hóa tổng thể hệ thống (PRO 1-Click)\n";
+        cout << " [3] Quản lý & Tối ưu dịch vụ Windows\n";
+        cout << " [4] Chỉnh giao diện & Taskbar Win 11\n";
+        cout << " [5] Sửa lỗi Windows Update\n";
+        cout << " [6] Tối ưu hóa tổng thể hệ thống\n";
         cout << " [0] Quay lại\n\n";
         cout << " [Chọn]: ";
     }
 
     void menuMangBaoMat() {
         cls();
-        cout << " [1] Xem thông tin mạng chi tiết (LAN, Public IP, DNS)\n";
+        cout << " [1] Xem thông tin mạng chi tiết\n";
         cout << " [2] Sửa lỗi & Khôi phục mạng (Reset TCP/IP, Winsock, DNS)\n";
         cout << " [3] Kích hoạt Lá chắn bảo mật toàn diện (Bật/Tắt PRO)\n";
         cout << " [4] Kiểm tra trạng thái bảo mật hệ thống & Cảnh báo\n";
         cout << " [5] Xem danh sách mật khẩu Wi-Fi đã lưu\n";
-        cout << " [6] Quét & Bảo vệ tập tin Hosts (Chống chuyển hướng độc hại)\n";
+        cout << " [6] Quét & Bảo vệ tập tin Hostsn";
         cout << " [0] Quay lại\n\n";
         cout << " [Chọn]: ";
     }
@@ -129,8 +129,8 @@ public:
     void menuMedia() {
         cls();
         cout << " [1] Nén dung lượng Video / Ảnh\n";
-        cout << " [2] Phục chế & Làm nét Video / Ảnh\n"; 
-        cout << " [3] Chuyển đổi định dạng Mp4 -> Mp3 (Tách âm thanh)\n";
+        cout << " [2] Làm nét Video / Ảnh\n"; 
+        cout << " [3] Mp4 -> Mp3\n";
         cout << " [4] Thay đổi tốc độ Video\n";
         cout << " [5] Đổi đuôi định dạng Media\n";
         cout << " [6] Chuẩn hóa tên file trong thư mục\n";
