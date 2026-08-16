@@ -72,72 +72,68 @@ public:
     void renderStatusBox() {
         bool admin = SystemCore::isElevated();
         std::string devInfo = SystemCore::getDeviceStatus();
-        if (admin) {
-            cout << "[Quyền hạn] : Administrator\n";
-        } else {
-            cout << "[Quyền hạn] : User\n";
-        }
-        cout << "[Thiết bị]  : " << devInfo << "\n";
+        cout << "Quyền hạn : " << (admin ? "Administrator" : "User") << "\n"
+             << "Thiết bị  : " << devInfo << "\n";
     }
 
     void mainMenu() {
         renderStatusBox();
-        cout << "\n\n\n";
-        cout << " [1] Bảo trì & Tối ưu hệ thống\n";
-        cout << " [2] Mạng & Bảo mật\n";
-        cout << " [3] Công cụ tự động & Tiện ích\n";
-        cout << " [4] Xử lý Media\n";
-        cout << " [0] Thoát\n\n";
-        cout << " [Chọn]: ";
+        cout << "\n\n\n"
+             << " [1] Bảo trì & Tối ưu hệ thống\n"
+             << " [2] Mạng & Bảo mật\n"
+             << " [3] Công cụ tự động & Tiện ích\n"
+             << " [4] Xử lý Media\n"
+             << " [0] Thoát\n\n"
+             << " [Chọn]: ";
     }
 
     void menuBaoTriToiUu() {
         cls();
-        cout << " [1] Dọn rác chuyên sâu PRO \n";
-        cout << " [2] Quản lý & Tắt ứng dụng khởi động cùng Windows\n";
-        cout << " [3] Quản lý & Tối ưu dịch vụ Windows\n";
-        cout << " [4] Chỉnh giao diện & Taskbar Win 11\n";
-        cout << " [5] Sửa lỗi Windows Update\n";
-        cout << " [6] Tối ưu hóa tổng thể hệ thống\n";
-        cout << " [0] Quay lại\n\n";
-        cout << " [Chọn]: ";
+        cout << " [1] Dọn rác chuyên sâu PRO\n"
+             << " [2] Quản lý & Tắt ứng dụng khởi động cùng Windows\n"
+             << " [3] Quản lý & Tối ưu dịch vụ Windows\n"
+             << " [4] Chỉnh giao diện & Taskbar Win 11\n"
+             << " [5] Sửa lỗi Windows Update\n"
+             << " [6] Tối ưu hóa tổng thể hệ thống\n"
+             << " [0] Quay lại\n\n"
+             << " [Chọn]: ";
     }
 
     void menuMangBaoMat() {
         cls();
-        cout << " [1] Xem thông tin mạng chi tiết\n";
-        cout << " [2] Sửa lỗi & Khôi phục mạng (Reset TCP/IP, Winsock, DNS)\n";
-        cout << " [3] Kích hoạt Lá chắn bảo mật toàn diện (Bật/Tắt PRO)\n";
-        cout << " [4] Kiểm tra trạng thái bảo mật hệ thống & Cảnh báo\n";
-        cout << " [5] Xem danh sách mật khẩu Wi-Fi đã lưu\n";
-        cout << " [6] Quét & Bảo vệ tập tin Hostsn";
-        cout << " [0] Quay lại\n\n";
-        cout << " [Chọn]: ";
+        cout << " [1] Xem thông tin mạng chi tiết\n"
+             << " [2] Sửa lỗi & Khôi phục mạng (Reset TCP/IP, Winsock, DNS)\n"
+             << " [3] Kích hoạt Lá chắn bảo mật toàn diện (Bật/Tắt PRO)\n"
+             << " [4] Kiểm tra trạng thái bảo mật hệ thống & Cảnh báo\n"
+             << " [5] Xem danh sách mật khẩu Wi-Fi đã lưu\n"
+             << " [6] Quét & Bảo vệ tập tin Hosts\n"
+             << " [0] Quay lại\n\n"
+             << " [Chọn]: ";
     }
 
     void menuCongCuTienIch() {
         cls();
-        cout << " [1] Auto Click chuột\n";
-        cout << " [2] Spam Text (Tự động gửi tin nhắn/văn bản)\n";
-        cout << " [3] Auto Paste dữ liệu nhiều dòng\n";
-        cout << " [4] Trình tải & Cài đặt phần mềm tự động\n";
-        cout << " [5] Gỡ bỏ ứng dụng rác mặc định (Bloatware Windows)\n";
-        cout << " [0] Quay lại\n\n";
-        cout << " [Chọn]: ";
+        cout << " [1] Auto Click chuột\n"
+             << " [2] Spam Text (Tự động gửi văn bản)\n"
+             << " [3] Auto Paste dữ liệu nhiều dòng\n"
+             << " [4] Tải & Cài đặt phần mềm tự động\n"
+             << " [5] Gỡ bỏ ứng dụng rác mặc định (Bloatware)\n"
+             << " [0] Quay lại\n\n"
+             << " [Chọn]: ";
     }
 
     void menuMedia() {
         cls();
-        cout << " [1] Nén dung lượng Video / Ảnh\n";
-        cout << " [2] Làm nét Video / Ảnh\n"; 
-        cout << " [3] Mp4 -> Mp3\n";
-        cout << " [4] Thay đổi tốc độ Video\n";
-        cout << " [5] Đổi đuôi định dạng Media\n";
-        cout << " [6] Chuẩn hóa tên file trong thư mục\n";
-        cout << " [7] Ẩn file trong file\n"; 
-        cout << " [8] Xem & Trích xuất Metadata (JSON/Tag Info)\n"; 
-        cout << " [0] Quay lại\n\n";
-        cout << " [Chọn]: ";
+        cout << " [1] Nén dung lượng Video / Ảnh\n"
+             << " [2] Làm nét Video / Ảnh\n"
+             << " [3] Mp4 -> Mp3\n"
+             << " [4] Thay đổi tốc độ Video\n"
+             << " [5] Đổi đuôi định dạng Media\n"
+             << " [6] Chuẩn hóa tên file trong thư mục\n"
+             << " [7] Ẩn file trong file\n"
+             << " [8] Xem & Trích xuất Metadata (JSON/Tag Info)\n"
+             << " [0] Quay lại\n\n"
+             << " [Chọn]: ";
     }
 
     void run() {
@@ -171,7 +167,7 @@ public:
                     else if (sub == 5) getOptimizer().fixWindowsUpdate();
                     else if (sub == 6) getOptimizer().optimizeSystemPRO();
                     else {
-                        cout << "\n[!] Lựa chọn không hợp lệ!\n";
+                        cout << "\nLựa chọn không hợp lệ!\n";
                         Sleep(300);
                         continue;
                     }
@@ -194,7 +190,7 @@ public:
                     else if (sub == 5) getInternet().wifiAudit();
                     else if (sub == 6) getInternet().checkHostsFileSecurity();
                     else {
-                        cout << "\n[!] Lựa chọn không hợp lệ!\n";
+                        cout << "\nLựa chọn không hợp lệ!\n";
                         Sleep(300);
                         continue;
                     }
@@ -217,7 +213,7 @@ public:
                     else if (sub == 4) getTools().downloadManager();
                     else if (sub == 5) getTools().uninstallBloatware();   
                     else {
-                        cout << "\n[!] Lựa chọn không hợp lệ!\n";
+                        cout << "\nLựa chọn không hợp lệ!\n";
                         Sleep(300);
                         continue;
                     }
@@ -242,7 +238,7 @@ public:
                     else if (sub == 7) getMedia().processAnFileTrongFile();
                     else if (sub == 8) getMedia().processExtractMetadata();
                     else {
-                        cout << "\n[!] Lựa chọn không hợp lệ!\n";
+                        cout << "\nLựa chọn không hợp lệ!\n";
                         Sleep(300);
                         continue;
                     }

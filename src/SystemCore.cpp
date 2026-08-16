@@ -147,7 +147,7 @@ std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
                 if (std::filesystem::exists(token)) {
                     paths.push_back(token);
                 } else {
-                    std::cout << "    [!] Không tìm thấy: " << token << "\n";
+                    std::cout << "    Không tìm thấy: " << token << "\n";
                 }
                 token.clear();
             }
@@ -215,7 +215,7 @@ int SystemCore::readInt(const std::string &prompt) {
         try {
             return std::stoi(line);
         } catch (...) {
-            std::cout << "[!] Vui lòng nhập số hợp lệ.\n";
+            std::cout << "Vui lòng nhập số hợp lệ.\n";
         }
     }
 }
@@ -312,7 +312,7 @@ bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
     sei.fMask     = SEE_MASK_NOCLOSEPROCESS;
 
     if (ShellExecuteExW(&sei)) {
-        std::cout << "[OK] Đang chạy lệnh với quyền Admin...\n";
+        std::cout << "Đang chạy lệnh với quyền Admin...\n";
         if (sei.hProcess) {
             WaitForSingleObject(sei.hProcess, INFINITE);
             CloseHandle(sei.hProcess);
@@ -321,9 +321,9 @@ bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
     } else {
         DWORD err = GetLastError();
         if (err == ERROR_CANCELLED) {
-            std::cout << "[!] Người dùng từ chối cấp quyền Admin.\n";
+            std::cout << "Người dùng từ chối cấp quyền Admin.\n";
         } else {
-            std::cout << "[!] Không thể lấy quyền Admin. (Mã lỗi: " << err << ")\n";
+            std::cout << "Không thể lấy quyền Admin (Mã lỗi: " << err << ")\n";
         }
         return false;
     }

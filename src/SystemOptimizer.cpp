@@ -31,7 +31,7 @@ void SystemOptimizer::cleanDiskPro() {
         bytesBefore = space.available;
     } catch (...) {}
 
-    cout << "[*] Đang quét và dọn rác toàn diện...\n\n";
+    cout << "Đang quét và dọn rác toàn diện...\n\n";
 
     // Dọn cache người dùng bằng đa luồng
     vector<thread> userThreads;
@@ -45,14 +45,14 @@ void SystemOptimizer::cleanDiskPro() {
     userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\Local\\Microsoft\\Windows\\WER\\*\" 2>nul"); });
     
     for (auto& t : userThreads) t.join();
-    cout << "[✓] Đã dọn cache người dùng\n";
+    cout << "Đã dọn cache người dùng.\n";
 
     // Dọn browser đa profile, rác dev, thùng rác, dns
     clearBrowserCache();
     cleanDevCaches();
     sc.runCMD("powershell -NoProfile -Command \"Clear-RecycleBin -Force -ErrorAction SilentlyContinue\"");
     sc.runCMD("ipconfig /flushdns");
-    cout << "[✓] Đã dọn Browser đa profile, Dev Caches, Recycle Bin, DNS\n";
+    cout << "Đã dọn Browser đa profile, Dev Caches, Thùng rác, DNS.\n";
 
     // Dọn rác hệ thống với quyền admin
     string batContent = "";
@@ -87,15 +87,15 @@ void SystemOptimizer::cleanDiskPro() {
     sc.cls();
     long long freed = bytesAfter - bytesBefore;
     if (freed > 0) {
-        cout << "\n[✓] Đã giải phóng: " << SystemCore::formatSize(freed) << "\n";
+        cout << "\nĐã giải phóng: " << SystemCore::formatSize(freed) << "\n";
     }
 
-    cout << "\n[✓] Đã hoàn tất dọn dẹp hệ thống!\n";
+    cout << "\nHoàn tất dọn dẹp hệ thống!\n";
 }
 
 void SystemOptimizer::disableAllStartupApps() {
     sc.cls();
-    cout << "[*] Đang quét và tắt các ứng dụng không thiết yếu...\n\n";
+    cout << "Đang quét và tắt các ứng dụng không thiết yếu...\n\n";
     int removedCount = 0;
     const struct { HKEY hKeyRoot; LPCSTR subKey; string name; } targets[] = {
         {HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Run", "HKCU"},
@@ -151,24 +151,24 @@ void SystemOptimizer::disableAllStartupApps() {
             }
             for (const string &delName : toDelete) {
                 if (RegDeleteValueA(hKey, delName.c_str()) == ERROR_SUCCESS) {
-                    cout << "[-] Đã tắt: " << delName << " (" << target.name << ")\n";
+                    cout << "  Đã tắt: " << delName << " (" << target.name << ")\n";
                     removedCount++;
                 }
             }
             RegCloseKey(hKey);
         }
     }
-    cout << "\n[✓] Đã tắt thành công " << removedCount << " ứng dụng khởi động thừa.\n";
+    cout << "\nĐã tắt thành công " << removedCount << " ứng dụng khởi động thừa.\n";
 }
 
 void SystemOptimizer::fixWindowsUpdate() {
-    cout << "[1/3] Đang dừng dịch vụ Windows Update...\n";
+    cout << "1/3. Đang dừng dịch vụ Windows Update...\n";
     sc.runAdmin("net stop wuauserv", true); sc.runAdmin("net stop cryptSvc", true); sc.runAdmin("net stop bits", true); sc.runAdmin("net stop msiserver", true);
-    cout << "[2/3] Đang xóa bộ nhớ đệm cập nhật kẹt...\n";
+    cout << "2/3. Đang xóa bộ nhớ đệm cập nhật kẹt...\n";
     sc.runCMD("del /f /q %windir%\\SoftwareDistribution\\*.*"); sc.runAdmin("rd /s /q %windir%\\SoftwareDistribution", true); sc.runAdmin("rd /s /q %windir%\\system32\\catroot2", true);
-    cout << "[3/3] Đang khởi động lại dịch vụ...\n";
+    cout << "3/3. Đang khởi động lại dịch vụ...\n";
     sc.runAdmin("net start wuauserv", true); sc.runAdmin("net start cryptSvc", true); sc.runAdmin("net start bits", true); sc.runAdmin("net start msiserver", true);
-    cout << "\n[✓] Đã khôi phục và reset Windows Update thành công!\n";
+    cout << "\nĐã khôi phục và reset Windows Update thành công!\n";
 }
 
 void SystemOptimizer::clearBrowserCache() {
@@ -199,7 +199,7 @@ void SystemOptimizer::clearBrowserCache() {
         "Service Worker\\ScriptCache"
     };
 
-    cout << "[*] Đang quét và dọn cache trình duyệt đa profile...\n";
+    cout << "Đang quét và dọn cache trình duyệt đa profile...\n";
 
     for (const string &baseDir : chromiumBases) {
         if (!fs::exists(baseDir)) continue;
@@ -258,7 +258,7 @@ void SystemOptimizer::cleanDevCaches() {
     char *appData = std::getenv("APPDATA");
     char *userProfile = std::getenv("USERPROFILE");
 
-    cout << "[*] Đang quét và dọn rác lập trình viên (Dev Caches)...\n";
+    cout << "Đang quét và dọn rác lập trình viên (Dev Caches)...\n";
 
     vector<fs::path> devCachePaths;
 
@@ -293,7 +293,7 @@ void SystemOptimizer::cleanDevCaches() {
     for (const auto &path : devCachePaths) {
         wipeFolderContents(path);
     }
-    cout << "[✓] Đã dọn sạch các bộ nhớ đệm lập trình (Node/NPM, Pip, Yarn, NuGet, Gradle, Rust, VS Code)\n";
+    cout << "Đã dọn sạch các bộ nhớ đệm lập trình (Node/NPM, Pip, Yarn, NuGet, Gradle, Rust, VS Code).\n";
 }
 
 void SystemOptimizer::optimizeSystemPRO() {
@@ -326,7 +326,7 @@ void SystemOptimizer::optimizeSystemPRO() {
     batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v SnapAssist /t REG_DWORD /d 0 /f\n";
     batContent += "taskkill /f /im explorer.exe & start explorer.exe\n";
 
-    cout << "[*] Đang áp dụng các thiết lập tối ưu hệ thống...\n";
+    cout << "Đang áp dụng các thiết lập tối ưu hệ thống...\n";
     SystemCore::runBatchAsAdmin(batContent, "Tối ưu hệ thống PRO");
 
     clearBrowserCache(); 
@@ -345,7 +345,7 @@ void SystemOptimizer::optimizeSystemPRO() {
     sc.runCMD("del /f /s /q \"%LocalAppData%\\D3DSCache\\*\"");
     sc.runCMD("del /f /s /q %windir%\\WindowsUpdate.log");
 
-    cout << "\n[✓] Toàn bộ hệ thống đã được tối ưu hóa thành công!\n";
+    cout << "\nToàn bộ hệ thống đã được tối ưu hóa thành công!\n";
 }
 
 bool SystemOptimizer::ServiceControlAPI(std::string serviceName, DWORD startupType, bool stopService) {
@@ -400,10 +400,9 @@ void SystemOptimizer::turnOffServicesMenu() {
                       << std::left << std::setw(30) << (targetSvcs[i].desc.substr(0, 45) + "...") 
                       << " [" << targetSvcs[i].name << "]\n";
         }
-        std::cout << "\n [A] Cấu hình tất cả dịch vụ cùng lúc\n";
-        std::cout << " [0] Quay lại\n\n";
-        
-        std::cout << "Chọn số thứ tự dịch vụ muốn xử lý đơn lẻ, hoặc [A]/[0]: ";
+        std::cout << "\n [A] Cấu hình tất cả dịch vụ cùng lúc\n"
+                  << " [0] Quay lại\n\n"
+                  << "Chọn số thứ tự dịch vụ muốn xử lý đơn lẻ, hoặc [A]/[0]: ";
         std::string input;
         std::cin >> input;
 
@@ -413,32 +412,32 @@ void SystemOptimizer::turnOffServicesMenu() {
         std::string modeName = "";
 
         if (input == "A" || input == "a") {
-            std::cout << "\n[?] Bạn muốn cấu hình TẤT CẢ các dịch vụ theo cách nào?\n";
-            std::cout << " [1] Tối ưu thụ động (Manual - Chỉ chạy khi cần thiết)\n";
-            std::cout << " [2] Vô hiệu hóa     (Disabled - Tắt hoàn toàn)\n";
-            std::cout << " [0] Hủy bỏ\n\n";
+            std::cout << "\nBạn muốn cấu hình TẤT CẢ các dịch vụ theo cách nào?\n"
+                      << " [1] Tối ưu thụ động (Manual - Chỉ chạy khi cần thiết)\n"
+                      << " [2] Vô hiệu hóa     (Disabled - Tắt hoàn toàn)\n"
+                      << " [0] Hủy bỏ\n\n";
             int action = sc.readInt("Chọn: ");
             if (action == 0) continue;
 
             startType = (action == 1) ? SERVICE_DEMAND_START : SERVICE_DISABLED;
             modeName = (action == 1) ? "MANUAL" : "DISABLED";
 
-            std::cout << "\n[*] Đang thực thi cấu hình...\n";
+            std::cout << "\nĐang thực thi cấu hình...\n";
             int successCount = 0;
             for (const auto &s : targetSvcs) {
                 if (ServiceControlAPI(s.name, startType, true)) {
-                    std::cout << "[OK] -> " << modeName << ": " << s.name << "\n";
+                    std::cout << "  -> " << modeName << ": " << s.name << "\n";
                     successCount++;
                 } else {
-                    std::cout << "[!] Thất bại: " << s.name << "\n";
+                    std::cout << "  Thất bại: " << s.name << "\n";
                 }
             }
-            std::cout << "\n[✓] Hoàn tất! Đã tối ưu " << successCount << "/" << targetSvcs.size() << " dịch vụ.\n";
+            std::cout << "\nHoàn tất! Đã tối ưu " << successCount << "/" << targetSvcs.size() << " dịch vụ.\n";
             sc.waitEnter();
         }
         else {
             if (input.empty()) {
-                std::cout << "[!] Vui lòng nhập lựa chọn!\n";
+                std::cout << "Vui lòng nhập lựa chọn!\n";
                 Sleep(800);
                 continue;
             }
@@ -446,30 +445,30 @@ void SystemOptimizer::turnOffServicesMenu() {
                 int idx = std::stoi(input) - 1;
                 if (idx >= 0 && idx < (int)targetSvcs.size()) {
                     sc.cls();
-                    std::cout << "Dịch vụ: " << targetSvcs[idx].desc << " [" << targetSvcs[idx].name << "]\n\n";
-                    std::cout << " [1] Chuyển về MANUAL (Thụ động)\n";
-                    std::cout << " [2] Chuyển về DISABLED (Tắt hẳn)\n";
-                    std::cout << " [0] Hủy bỏ\n\n";
+                    std::cout << "Dịch vụ: " << targetSvcs[idx].desc << " [" << targetSvcs[idx].name << "]\n\n"
+                              << " [1] Chuyển về MANUAL (Thụ động)\n"
+                              << " [2] Chuyển về DISABLED (Tắt hẳn)\n"
+                              << " [0] Hủy bỏ\n\n";
                     int action = sc.readInt("Chọn hướng xử lý: ");
                     if (action == 0) continue;
 
                     startType = (action == 1) ? SERVICE_DEMAND_START : SERVICE_DISABLED;
                     modeName = (action == 1) ? "MANUAL" : "DISABLED";
 
-                    std::cout << "\n[*] Đang xử lý dịch vụ " << targetSvcs[idx].name << "...\n";
+                    std::cout << "\nĐang xử lý dịch vụ " << targetSvcs[idx].name << "...\n";
                     if (ServiceControlAPI(targetSvcs[idx].name, startType, true)) {
-                        std::cout << "[OK] Đã chuyển trạng thái sang -> " << modeName << "\n";
+                        std::cout << "Đã chuyển trạng thái sang -> " << modeName << "\n";
                     } else {
-                        std::cout << "[!] Thất bại! Cần chạy công cụ bằng quyền Administrator.\n";
+                        std::cout << "Thất bại! Cần chạy công cụ bằng quyền Administrator.\n";
                     }
                     sc.waitEnter();
                 } else {
-                    std::cout << "[!] Lựa chọn không hợp lệ!\n";
+                    std::cout << "Lựa chọn không hợp lệ!\n";
                     Sleep(800);
                 }
             }
             catch (...) {
-                std::cout << "[!] Lựa chọn không hợp lệ!\n";
+                std::cout << "Lựa chọn không hợp lệ!\n";
                 Sleep(800);
             }
         }
@@ -499,7 +498,7 @@ void SystemOptimizer::optimizeTaskbar() {
     int newlyDisabled = 0;
     int failedCount = 0;
     
-    cout << "[*] Đang kiểm tra trạng thái Taskbar...\n\n";
+    cout << "Đang kiểm tra trạng thái Taskbar...\n\n";
     
     for (const auto& setting : settings) {
         HKEY hKey;
@@ -517,45 +516,45 @@ void SystemOptimizer::optimizeTaskbar() {
             
             if (!isAlreadyDisabled) {
                 if (RegSetValueExA(hKey, setting.valueName.c_str(), 0, REG_DWORD, (const BYTE*)&setting.targetValue, sizeof(DWORD)) == ERROR_SUCCESS) {
-                    std::cout << "    [✓] Đã tắt: " << setting.description << "\n";
+                    std::cout << "    Đã tắt: " << setting.description << "\n";
                     newlyDisabled++;
                 } else {
-                    std::cout << "    [✗] Lỗi tắt: " << setting.description << "\n";
+                    std::cout << "    Lỗi tắt: " << setting.description << "\n";
                     failedCount++;
                 }
             } else {
-                std::cout << "    [○] Đã tắt từ trước: " << setting.description << "\n";
+                std::cout << "    Đã tắt từ trước: " << setting.description << "\n";
             }
             
             RegCloseKey(hKey);
         } else {
             if (RegCreateKeyExA(HKEY_CURRENT_USER, setting.keyPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
                 if (RegSetValueExA(hKey, setting.valueName.c_str(), 0, REG_DWORD, (const BYTE*)&setting.targetValue, sizeof(DWORD)) == ERROR_SUCCESS) {
-                    std::cout << "    [✓] Đã tạo và tắt: " << setting.description << "\n";
+                    std::cout << "    Đã tạo và tắt: " << setting.description << "\n";
                     newlyDisabled++;
                 } else {
-                    std::cout << "    [✗] Lỗi tạo key: " << setting.description << "\n";
+                    std::cout << "    Lỗi tạo key: " << setting.description << "\n";
                     failedCount++;
                 }
                 RegCloseKey(hKey);
             } else {
-                std::cout << "    [✗] Không thể tạo key: " << setting.description << "\n";
+                std::cout << "    Không thể tạo key: " << setting.description << "\n";
                 failedCount++;
             }
         }
     }
     
-    cout << "\n[*] Đã tắt sẵn từ trước: " << alreadyDisabled << " nút\n";
-    cout << "[*] Vừa tắt thành công:   " << newlyDisabled << " nút\n";
+    cout << "\nĐã tắt sẵn từ trước: " << alreadyDisabled << " nút\n"
+         << "Vừa tắt thành công:   " << newlyDisabled << " nút\n";
     if (failedCount > 0) {
-        cout << "[✗] Thất bại:            " << failedCount << " nút\n";
+        cout << "Thất bại:            " << failedCount << " nút\n";
     }
     
     if (newlyDisabled > 0 || failedCount > 0) {
-        cout << "\n[*] Khởi động lại Explorer để áp dụng thay đổi...\n";
+        cout << "\nKhởi động lại Explorer để áp dụng thay đổi...\n";
         sc.runCMD("taskkill /f /im explorer.exe & start explorer.exe");
-        cout << "[✓] Đã khởi động lại Explorer\n";
+        cout << "Đã khởi động lại Explorer.\n";
     } else {
-        cout << "\n[○] Không có thay đổi nào. Taskbar đã được tối ưu.\n";
+        cout << "\nKhông có thay đổi nào. Taskbar đã được tối ưu.\n";
     }
 }
