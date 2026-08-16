@@ -107,6 +107,7 @@ public:
              << " [4] Kiểm tra trạng thái bảo mật hệ thống & Cảnh báo\n"
              << " [5] Xem danh sách mật khẩu Wi-Fi đã lưu\n"
              << " [6] Quét & Bảo vệ tập tin Hosts\n"
+             << " [7] Sửa lỗi LocalSend & Mở cổng HTTP/LAN (Fix Socket 10013 / Port 53317)\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
     }
@@ -189,12 +190,13 @@ public:
                     else if (sub == 4) getInternet().checkSecurityStatus();
                     else if (sub == 5) getInternet().wifiAudit();
                     else if (sub == 6) getInternet().checkHostsFileSecurity();
+                    else if (sub == 7) getInternet().fixLocalSend();
                     else {
                         cout << "\nLựa chọn không hợp lệ!\n";
                         Sleep(300);
                         continue;
                     }
-                    if (sub != 3 && sub != 4 && sub != 6)
+                    if (sub != 3 && sub != 4 && sub != 6 && sub != 7)
                         waitEnter();
                 }
                 break;
