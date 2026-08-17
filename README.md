@@ -30,11 +30,10 @@ Chương trình được chia thành **4 phân hệ chính**:
 
 ### 2. 🌐 Mạng & Bảo mật (`Internet`)
 * **Thông tin mạng chi tiết:** Xem địa chỉ IP nội bộ (LAN), truy vấn Public IP qua Internet, thông tin Adapter mạng, Subnet Mask và DNS Server.
-* **Sửa lỗi & Khôi phục mạng (Network Repair):** Quy trình 5 bước tự động (Flush DNS, Reset Winsock Catalog, Reset TCP/IP Stack, xóa ARP Cache, Release & Renew IP).
+* **Sửa lỗi & Khôi phục mạng toàn diện (Network Repair PRO):** Quy trình 8 bước tự động: Flush DNS, Reset Winsock Catalog, Reset TCP/IP Stack, xóa ARP Cache, Release & Renew IP, khởi động lại WinNAT & HNS (giải phóng dải cổng bị Hyper-V/Docker/WSL2 chiếm giữ và khắc phục triệt để lỗi Socket 10013), mở cổng Tường lửa Firewall cho HTTP LAN & LocalSend (TCP/UDP 53317), và chuyển trạng thái mạng sang Private Network.
 * **Kích hoạt Bảo mật Toàn diện (Full Security Shield):** Bật Windows Defender & cập nhật Signature, bật Firewall, bật Controlled Folder Access, chặn các cổng nguy hiểm (445, 139, 135, 137, 138), cấu hình DNS over HTTPS (Cloudflare 1.1.1.1).
 * **Kiểm tra trạng thái bảo mật:** Báo cáo chi tiết trạng thái của Defender, Firewall, dịch vụ Remote và DNS.
 * **Xem mật khẩu Wi-Fi đã lưu:** Trích xuất tên, mật khẩu và chuẩn mã hóa của các mạng Wi-Fi từng kết nối.
-* **Sửa lỗi LocalSend & Mở cổng HTTP/LAN:** Khắc phục triệt để lỗi `SocketException (errno = 10013 / Port 53317)` do Windows NAT (WinNAT), Hyper-V/WSL2/Docker Dynamic Port Exclusion, mở cổng Tường lửa In/Out (TCP/UDP 53317) và chuyển Network Category sang Private.
 
 ### 3. ⚡ Công cụ Tự động & Tiện ích (`UtilityTools`)
 * **Auto Click chuột:** Tự động click theo tọa độ với tùy chỉnh số lần, delay (ms), hỗ trợ phím ngắt khẩn cấp (`ESC` / `F6`).

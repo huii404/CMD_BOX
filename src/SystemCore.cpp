@@ -11,14 +11,10 @@
 namespace fs = std::filesystem;
 
 std::string SystemCore::trim(const std::string& str) {
-    std::string s = str;
-    while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' ')) {
-        s.pop_back();
-    }
-    while (!s.empty() && s.front() == ' ') {
-        s.erase(0, 1);
-    }
-    return s;
+    size_t first = str.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return "";
+    size_t last = str.find_last_not_of(" \t\r\n");
+    return str.substr(first, (last - first + 1));
 }
 
 // Constructor / Destructor
@@ -110,51 +106,63 @@ bool SystemCore::runRawCommand(const std::string& command) {
 }
 
 std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
-    if (rawInput.empty() || rawInput == "0") return {};
+    std::string str = trim(rawInput);
+    if (str.empty() || str == "0") return {};
 
-    std::string processed = rawInput;
-    for (int i = (int)processed.length() - 3; i >= 1; --i) {
-        char prev = processed[i - 1];
-        char curr = processed[i];
-        char next = processed[i + 1];
-        char next2 = processed[i + 2];
-        bool isPrevNonSpace = (prev != ' ' && prev != '\t' && prev != '"' && prev != '\0');
-        bool isDriveLetter = ((curr >= 'A' && curr <= 'Z') || (curr >= 'a' && curr <= 'z'));
-        bool isDrivePattern = (next == ':' && next2 == '\\');
-        if (isPrevNonSpace && isDriveLetter && isDrivePattern) {
-            processed.insert(i, " ");
-        }
-    }
-    
     std::vector<std::string> paths;
-    std::string token;
+    paths.reserve(8);
+
+    std::string current;
+    current.reserve(260);
     bool inQuotes = false;
-    for (size_t i = 0; i <= processed.size(); ++i) {
-        char c = (i < processed.size()) ? processed[i] : '\0';
-        if (c == '"') { inQuotes = !inQuotes; continue; }
-        bool isSep = (!inQuotes && (c == ' ' || c == '\t' || c == '\0'));
-        if (isSep) {
-            if (!token.empty()) {
-                if (!token.empty() && token.front() == '"') token.erase(0, 1);
-                if (!token.empty() && token.back() == '"') token.pop_back();
-                
-                size_t p = token.find("\\\\");
-                while (p != std::string::npos) {
-                    token.replace(p, 2, "\\");
-                    p = token.find("\\\\", p + 1);
+
+    for (size_t i = 0; i < str.length(); ++i) {
+        char c = str[i];
+        if (c == '"') {
+            inQuotes = !inQuotes;
+            continue;
+        }
+
+        // Tách đường dẫn liền nhau khi kéo thả nhiều file (vd: C:\a.mp4D:\b.mp4)
+        if (!inQuotes && i + 2 < str.length()) {
+            char curr = str[i];
+            char next = str[i + 1];
+            char next2 = str[i + 2];
+            bool isDriveLetter = ((curr >= 'A' && curr <= 'Z') || (curr >= 'a' && curr <= 'z'));
+            if (isDriveLetter && next == ':' && (next2 == '\\' || next2 == '/')) {
+                if (!current.empty() && current.back() != ' ' && current.back() != '\t') {
+                    std::string p = trim(current);
+                    if (!p.empty()) {
+                        if (fs::exists(p)) paths.push_back(p);
+                        else std::cout << "    Không tìm thấy: " << p << "\n";
+                    }
+                    current.clear();
                 }
-                
-                if (std::filesystem::exists(token)) {
-                    paths.push_back(token);
-                } else {
-                    std::cout << "    Không tìm thấy: " << token << "\n";
-                }
-                token.clear();
             }
-        } else if (c != '\0') {
-            token += c;
+        }
+
+        if (!inQuotes && (c == ' ' || c == '\t' || c == '\r' || c == '\n')) {
+            if (!current.empty()) {
+                std::string p = trim(current);
+                if (!p.empty()) {
+                    if (fs::exists(p)) paths.push_back(p);
+                    else std::cout << "    Không tìm thấy: " << p << "\n";
+                }
+                current.clear();
+            }
+        } else {
+            current += c;
         }
     }
+
+    if (!current.empty()) {
+        std::string p = trim(current);
+        if (!p.empty()) {
+            if (fs::exists(p)) paths.push_back(p);
+            else std::cout << "    Không tìm thấy: " << p << "\n";
+        }
+    }
+
     return paths;
 }
 

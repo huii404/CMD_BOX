@@ -131,31 +131,57 @@ void Internet::repairNetwork() {
     std::string batContent = 
         "@echo off\n"
         "chcp 65001 >nul\n"
-        "title SUA LOI & KHOI PHUC CAI DAT MANG\n"
+        "title SUA LOI & KHOI PHUC CAI DAT MANG TOAN DIEN\n"
         "color 0B\n"
-        "echo 1/5. Xoa bo dem DNS (Flush DNS)...\n"
+        "echo ============================================================\n"
+        "echo       QUY TRINH SUA LOI & KHOI PHUC CAI DAT MANG TOAN DIEN\n"
+        "echo ============================================================\n"
+        "echo.\n"
+        "echo 1/8. Xoa bo dem DNS (Flush DNS)...\n"
         "ipconfig /flushdns >nul 2>&1\n"
         "echo       -> OK\n"
-        "echo 2/5. Dat lai Winsock Catalog...\n"
+        "echo 2/8. Dat lai Winsock Catalog...\n"
         "netsh winsock reset >nul 2>&1\n"
         "echo       -> OK\n"
-        "echo 3/5. Dat lai ngan xep giao thuc TCP/IP...\n"
+        "echo 3/8. Dat lai ngan xep giao thuc TCP/IP...\n"
         "netsh int ip reset >nul 2>&1\n"
         "echo       -> OK\n"
-        "echo 4/5. Xoa bang ARP Cache...\n"
+        "echo 4/8. Xoa bang ARP Cache...\n"
         "netsh interface ip delete arpcache >nul 2>&1\n"
         "echo       -> OK\n"
-        "echo 5/5. Lam moi dia chi IP (Release & Renew)...\n"
+        "echo 5/8. Lam moi dia chi IP (Release & Renew)...\n"
         "ipconfig /release >nul 2>&1 & ipconfig /renew >nul 2>&1\n"
         "echo       -> OK\n"
+        "echo 6/8. Khoi dong lai WinNAT & HNS (Giai phong port bi chiem/loi Socket 10013)...\n"
+        "taskkill /f /im localsend.exe >nul 2>&1\n"
+        "taskkill /f /im localsend_app.exe >nul 2>&1\n"
+        "net stop winnat >nul 2>&1 & net start winnat >nul 2>&1\n"
+        "net stop hns >nul 2>&1 & net start hns >nul 2>&1\n"
+        "netsh int ipv4 set dynamicport tcp start=49152 num=16384 >nul 2>&1\n"
+        "netsh int ipv4 set dynamicport udp start=49152 num=16384 >nul 2>&1\n"
+        "echo       -> OK\n"
+        "echo 7/8. Cau hinh Tuong lua cho phep ket noi HTTP LAN & LocalSend (TCP/UDP 53317)...\n"
+        "netsh advfirewall firewall delete rule name=\"LocalSend_HTTP_TCP_53317\" >nul 2>&1\n"
+        "netsh advfirewall firewall delete rule name=\"LocalSend_Discovery_UDP_53317\" >nul 2>&1\n"
+        "netsh advfirewall firewall delete rule name=\"LocalSend_App_Allow\" >nul 2>&1\n"
+        "netsh advfirewall firewall add rule name=\"LocalSend_HTTP_TCP_53317\" dir=in action=allow protocol=TCP localport=53317 >nul 2>&1\n"
+        "netsh advfirewall firewall add rule name=\"LocalSend_HTTP_TCP_53317\" dir=out action=allow protocol=TCP localport=53317 >nul 2>&1\n"
+        "netsh advfirewall firewall add rule name=\"LocalSend_Discovery_UDP_53317\" dir=in action=allow protocol=UDP localport=53317 >nul 2>&1\n"
+        "netsh advfirewall firewall add rule name=\"LocalSend_Discovery_UDP_53317\" dir=out action=allow protocol=UDP localport=53317 >nul 2>&1\n"
+        "powershell -Command \"Get-ChildItem -Path @($env:LOCALAPPDATA, $env:ProgramFiles, ${env:ProgramFiles(x86)}) -Filter 'localsend*.exe' -Recurse -ErrorAction SilentlyContinue | ForEach-Object { New-NetFirewallRule -DisplayName 'LocalSend_App_Allow' -Direction Inbound -Program $_.FullName -Action Allow -Profile Any -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName 'LocalSend_App_Allow' -Direction Outbound -Program $_.FullName -Action Allow -Profile Any -ErrorAction SilentlyContinue }\" >nul 2>&1\n"
+        "echo       -> OK\n"
+        "echo 8/8. Dat mang sang che do Private Network (Cho phep truyen file noi bo)...\n"
+        "powershell -Command \"Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Private\" >nul 2>&1\n"
+        "echo       -> OK\n"
         "echo.\n"
-        "echo DA HOAN TAT SUA LOI VA KHOI PHUC CAI DAT MANG!\n"
-        "echo Cua so se tu dong dong sau 5 giay...\n"     
+        "echo ============================================================\n"
+        "echo DA HOAN TAT SUA LOI VA KHOI PHUC CAI DAT MANG TOAN DIEN!\n"
+        "echo Cua so se tu dong dong sau 5 giay...\n"
         "timeout /t 5 >nul\n";
 
-    cout << "Đang thực thi quy trình 5 bước sửa lỗi & khôi phục mạng trong cửa sổ quản trị...\n";
-    if (SystemCore::runBatchAsAdmin(batContent, "Sửa lỗi mạng")) {
-        cout << "\nĐã hoàn tất sửa lỗi và khôi phục toàn bộ cài đặt mạng thành công!\n";
+    cout << "Đang thực thi quy trình 8 bước sửa lỗi & khôi phục toàn diện mạng trong cửa sổ quản trị...\n";
+    if (SystemCore::runBatchAsAdmin(batContent, "Sửa lỗi mạng toàn diện")) {
+        cout << "\nĐã hoàn tất sửa lỗi và khôi phục toàn bộ cài đặt mạng, dịch vụ chia sẻ LAN & LocalSend thành công!\n";
     } else {
         cout << "\nThất bại khi thực thi sửa lỗi mạng (Cần cấp quyền Administrator).\n";
     }
@@ -769,228 +795,4 @@ void Internet::checkSecurityStatus() {
 
     cout << "\n======\n";
     SystemCore::waitEnter();
-}
-
-void Internet::checkLocalSendPort() {
-    sc.cls();
-    cout << "======================================================================\n"
-         << "        KIỂM TRA TRẠNG THÁI CỔNG 53317 & DỊCH VỤ LOCALSEND / HTTP\n"
-         << "======================================================================\n\n";
-
-    // 1. Kiểm tra tiến trình đang chiếm port 53317
-    cout << "1. Kiểm tra tiến trình chiếm cổng 53317 (TCP / UDP):\n";
-    FILE *pNetstat = _popen("netstat -ano | findstr 53317", "r");
-    bool hasBinding = false;
-    if (pNetstat) {
-        char buf[512];
-        while (fgets(buf, sizeof(buf), pNetstat)) {
-            cout << "    -> " << sc.trim(string(buf)) << "\n";
-            hasBinding = true;
-        }
-        _pclose(pNetstat);
-    }
-    if (!hasBinding) {
-        cout << "    -> Cổng 53317 hiện không có tiến trình nào chiếm dụng.\n";
-    }
-
-    // 2. Kiểm tra dải cổng bị loại trừ (Excluded Port Range của WinNAT / Hyper-V)
-    cout << "\n2. Kiểm tra dải cổng bị loại trừ bởi WinNAT / Hyper-V (Gây lỗi errno 10013):\n";
-    FILE *pExcluded = _popen("netsh int ipv4 show excludedportrange protocol=tcp", "r");
-    bool conflictDetected = false;
-    if (pExcluded) {
-        char buf[512];
-        while (fgets(buf, sizeof(buf), pExcluded)) {
-            string line = sc.trim(string(buf));
-            if (line.empty()) continue;
-            
-            // Tìm các dòng chứa số cổng
-            stringstream ss(line);
-            int startPort = 0, endPort = 0;
-            if (ss >> startPort >> endPort) {
-                if (startPort <= 53317 && 53317 <= endPort) {
-                    cout << "    \x1b[31m[CẢNH BÁO XUNG ĐỘT]\x1b[0m Cổng 53317 nằm trong dải bị loại trừ: " 
-                         << startPort << " - " << endPort << " (WinNAT / Hyper-V)\n";
-                    conflictDetected = true;
-                }
-            }
-        }
-        _pclose(pExcluded);
-    }
-    if (!conflictDetected) {
-        cout << "    -> Cổng 53317 không bị chặn bởi dải cổng ExcludedPortRange hiện tại.\n";
-    } else {
-        cout << "    => Cần khởi động lại dịch vụ WinNAT (net stop winnat & net start winnat) để giải phóng cổng này!\n";
-    }
-
-    // 3. Kiểm tra Firewall Rule
-    cout << "\n3. Kiểm tra Quy tắc Tường lửa Windows (Firewall) cho LocalSend:\n";
-    int fwTcp = system("netsh advfirewall firewall show rule name=\"LocalSend_HTTP_TCP_53317\" >nul 2>&1");
-    int fwUdp = system("netsh advfirewall firewall show rule name=\"LocalSend_Discovery_UDP_53317\" >nul 2>&1");
-
-    cout << "    - Rule TCP In/Out 53317 (HTTP API/Transfer) : " 
-         << (fwTcp == 0 ? "\x1b[32mĐÃ MỞ (Cho phép)\x1b[0m" : "\x1b[33mCHƯA TẠO RULE (Có thể bị chặn)\x1b[0m") << "\n";
-    cout << "    - Rule UDP In/Out 53317 (Multicast Discovery): " 
-         << (fwUdp == 0 ? "\x1b[32mĐÃ MỞ (Cho phép)\x1b[0m" : "\x1b[33mCHƯA TẠO RULE (Có thể bị chặn)\x1b[0m") << "\n";
-
-    // 4. Kiểm tra Network Category (Public vs Private)
-    cout << "\n4. Kiểm tra cấu hình Mạng (Network Profile):\n";
-    FILE *pNetCat = _popen("powershell -NoProfile -Command \"Get-NetConnectionProfile | Select-Object -Property InterfaceAlias, NetworkCategory | Format-Table -HideTableHeaders\"", "r");
-    if (pNetCat) {
-        char buf[512];
-        while (fgets(buf, sizeof(buf), pNetCat)) {
-            string line = sc.trim(string(buf));
-            if (!line.empty()) {
-                cout << "    -> " << line << "\n";
-            }
-        }
-        _pclose(pNetCat);
-    }
-
-    cout << "\n======================================================================\n";
-    SystemCore::waitEnter();
-}
-
-void Internet::fixLocalSend() {
-    while (true) {
-        sc.cls();
-        cout << "======================================================================\n"
-             << "          SỬA LỖI & KHÔI PHỤC KẾT NỐI LOCALSEND / HTTP SOCKET\n"
-             << "             (Khắc phục lỗi SocketException errno = 10013 / Port 53317)\n"
-             << "======================================================================\n"
-             << " [1] Tự động sửa lỗi toàn diện (WinNAT, Firewall, Cổng 53317, Private LAN) [Khuyên dùng]\n"
-             << " [2] Khởi động lại dịch vụ WinNAT (Giải phóng dải cổng bị Hyper-V/WSL chiếm giữ)\n"
-             << " [3] Cấu hình & Mở Tường lửa Windows (Cho phép TCP & UDP Port 53317)\n"
-             << " [4] Chuyển đổi trạng thái mạng sang Mạng riêng tư (Private Network)\n"
-             << " [5] Kiểm tra chi tiết xung đột cổng 53317 & Dải cổng bị loại trừ\n"
-             << " [0] Quay lại\n\n"
-             << " [Chọn]: ";
-
-        int choice = sc.readInt("");
-        if (choice == 0) break;
-
-        if (choice == 1) {
-            sc.cls();
-            cout << "======================================================================\n"
-                 << "         ĐANG TỰ ĐỘNG SỬA LỖI TOÀN DIỆN CHO LOCALSEND & HTTP\n"
-                 << "======================================================================\n\n"
-                 << "Đang chuẩn bị kịch bản sửa lỗi và khởi chạy với quyền Administrator...\n";
-
-            std::string batContent = 
-                "@echo off\n"
-                "chcp 65001 >nul\n"
-                "title KHOI PHUC VA SUA LOI LOCALSEND / HTTP SOCKET (PORT 53317)\n"
-                "color 0B\n"
-                "echo ============================================================\n"
-                "echo   QUY TRINH SUA LOI TOAN DIEN LOCALSEND & KET NOI LAN/HTTP\n"
-                "echo ============================================================\n"
-                "echo.\n"
-                "echo 1/6. Dong cac tien trinh LocalSend dang bi treo hoac chiem port...\n"
-                "taskkill /f /im localsend.exe >nul 2>&1\n"
-                "taskkill /f /im localsend_app.exe >nul 2>&1\n"
-                "echo       -> OK\n"
-                "echo.\n"
-                "echo 2/6. Khoi dong lai dich vu WinNAT (Giai phong port 53317 bi loi WSAEACCES 10013)...\n"
-                "net stop winnat >nul 2>&1\n"
-                "net start winnat >nul 2>&1\n"
-                "echo       -> OK (Da giai phong dai port bi chiem giu boi Hyper-V / WinNAT)\n"
-                "echo.\n"
-                "echo 3/6. Khoi dong lai Host Network Service (HNS)...\n"
-                "net stop hns >nul 2>&1\n"
-                "net start hns >nul 2>&1\n"
-                "echo       -> OK\n"
-                "echo.\n"
-                "echo 4/6. Mo quy tac Tuong lua (Firewall) cho LocalSend & Cong 53317 (TCP/UDP)...\n"
-                "netsh advfirewall firewall delete rule name=\"LocalSend_HTTP_TCP_53317\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"LocalSend_Discovery_UDP_53317\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"LocalSend_App_Allow\" >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"LocalSend_HTTP_TCP_53317\" dir=in action=allow protocol=TCP localport=53317 >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"LocalSend_HTTP_TCP_53317\" dir=out action=allow protocol=TCP localport=53317 >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"LocalSend_Discovery_UDP_53317\" dir=in action=allow protocol=UDP localport=53317 >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"LocalSend_Discovery_UDP_53317\" dir=out action=allow protocol=UDP localport=53317 >nul 2>&1\n"
-                "powershell -Command \"Get-ChildItem -Path @($env:LOCALAPPDATA, $env:ProgramFiles, ${env:ProgramFiles(x86)}) -Filter 'localsend*.exe' -Recurse -ErrorAction SilentlyContinue | ForEach-Object { New-NetFirewallRule -DisplayName 'LocalSend_App_Allow' -Direction Inbound -Program $_.FullName -Action Allow -Profile Any -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName 'LocalSend_App_Allow' -Direction Outbound -Program $_.FullName -Action Allow -Profile Any -ErrorAction SilentlyContinue }\" >nul 2>&1\n"
-                "echo       -> OK (Da tao Rule cho phep LocalSend va Port 53317)\n"
-                "echo.\n"
-                "echo 5/6. Dat trang thai Card mang sang che do Private (Cho phep tim thay thiet bi LAN)...\n"
-                "powershell -Command \"Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Private\" >nul 2>&1\n"
-                "echo       -> OK (Mang da chuyen sang che do Private)\n"
-                "echo.\n"
-                "echo 6/6. Dat lai cau hinh dai Dynamic Port Range an toan...\n"
-                "netsh int ipv4 set dynamicport tcp start=49152 num=16384 >nul 2>&1\n"
-                "netsh int ipv4 set dynamicport udp start=49152 num=16384 >nul 2>&1\n"
-                "echo       -> OK\n"
-                "echo.\n"
-                "echo ============================================================\n"
-                "echo DA HOAN TAT SUA LOI LOCALSEND & KHOI PHUC DICH VU HTTP LAN!\n"
-                "echo Ban hay mo lai ung dung LocalSend de kiem tra.\n"
-                "echo Cua so se tu dong dong sau 5 giay...\n"
-                "timeout /t 5 >nul\n";
-
-            if (SystemCore::runBatchAsAdmin(batContent, "Sửa lỗi LocalSend")) {
-                cout << "\nĐã hoàn tất quy trình sửa lỗi toàn diện cho LocalSend thành công!\n"
-                     << "Hãy mở lại LocalSend để kiểm tra kết nối.\n";
-            } else {
-                cout << "\nThất bại khi thực thi sửa lỗi LocalSend (Cần cấp quyền Administrator).\n";
-            }
-            SystemCore::waitEnter();
-        }
-        else if (choice == 2) {
-            sc.cls();
-            cout << "Đang khởi động lại dịch vụ WinNAT để giải phóng dải cổng bị khóa...\n";
-            std::string batContent = 
-                "@echo off\n"
-                "chcp 65001 >nul\n"
-                "echo Dang dung dich vu WinNAT...\n"
-                "net stop winnat\n"
-                "echo Dang khoi dong lai dich vu WinNAT...\n"
-                "net start winnat\n"
-                "echo Hoan tat giai phong port!\n"
-                "timeout /t 3 >nul\n";
-            if (SystemCore::runBatchAsAdmin(batContent, "Khởi động lại WinNAT")) {
-                cout << "\nĐã khởi động lại dịch vụ WinNAT thành công!\n";
-            } else {
-                cout << "\nThất bại khi khởi động lại WinNAT (Cần cấp quyền Administrator).\n";
-            }
-            SystemCore::waitEnter();
-        }
-        else if (choice == 3) {
-            sc.cls();
-            cout << "Đang cấu hình mở Tường lửa cho LocalSend (Port 53317 TCP & UDP)...\n";
-            std::string batContent = 
-                "@echo off\n"
-                "chcp 65001 >nul\n"
-                "netsh advfirewall firewall delete rule name=\"LocalSend_HTTP_TCP_53317\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"LocalSend_Discovery_UDP_53317\" >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"LocalSend_HTTP_TCP_53317\" dir=in action=allow protocol=TCP localport=53317 >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"LocalSend_HTTP_TCP_53317\" dir=out action=allow protocol=TCP localport=53317 >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"LocalSend_Discovery_UDP_53317\" dir=in action=allow protocol=UDP localport=53317 >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"LocalSend_Discovery_UDP_53317\" dir=out action=allow protocol=UDP localport=53317 >nul 2>&1\n"
-                "echo Da mo thanh cong cong 53317 trong Windows Firewall!\n"
-                "timeout /t 3 >nul\n";
-            if (SystemCore::runBatchAsAdmin(batContent, "Mở Tường lửa LocalSend")) {
-                cout << "\nĐã mở cổng 53317 (TCP/UDP) trong Windows Firewall thành công!\n";
-            } else {
-                cout << "\nThất bại khi cấu hình Tường lửa (Cần cấp quyền Administrator).\n";
-            }
-            SystemCore::waitEnter();
-        }
-        else if (choice == 4) {
-            sc.cls();
-            cout << "Đang chuyển cấu hình mạng sang chế độ Private Network (Mạng riêng tư)...\n";
-            std::string batContent = 
-                "@echo off\n"
-                "chcp 65001 >nul\n"
-                "powershell -Command \"Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Private\"\n"
-                "echo Da dat tat ca card mang hien tai sang che do Private!\n"
-                "timeout /t 3 >nul\n";
-            if (SystemCore::runBatchAsAdmin(batContent, "Chuyển mạng sang Private")) {
-                cout << "\nĐã chuyển tất cả card mạng sang chế độ Private thành công!\n";
-            } else {
-                cout << "\nThất bại khi thay đổi loại mạng (Cần cấp quyền Administrator).\n";
-            }
-            SystemCore::waitEnter();
-        }
-        else if (choice == 5) {
-            checkLocalSendPort();
-        }
-    }
 }

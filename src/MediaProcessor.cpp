@@ -21,7 +21,11 @@ static GpuCodecInfo cachedGpuInfo;
 static bool hasDetectedGpu = false;
 static mutex gpuDetectionMutex;
 
-MediaProcessor::MediaProcessor() {}
+MediaProcessor::MediaProcessor() {
+    std::thread([this]() {
+        this->getGpuEncoder();
+    }).detach();
+}
 MediaProcessor::~MediaProcessor() {}
 
 string MediaProcessor::getFFmpegPath() {
@@ -205,8 +209,6 @@ void MediaProcessor::processMediaAuto() {
     int totalSkippedCount = 0;
     long long totalBytesSaved = 0;
 
-    GpuCodecInfo gpu = getGpuEncoder();
-
     while (true) {
         std::cin.clear();
         FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
@@ -251,6 +253,8 @@ void MediaProcessor::processMediaAuto() {
         int currentSkippedCount = 0;   
         long long currentBytesSaved = 0; 
         
+        GpuCodecInfo gpu = getGpuEncoder();
+
         vector<string> imageExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".heic" };
         vector<string> videoExts = { ".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm" };
 

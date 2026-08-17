@@ -305,7 +305,6 @@ void SystemOptimizer::optimizeSystemPRO() {
     batContent += "dism /online /cleanup-image /startcomponentcleanup\n";
     batContent += "powershell -Command \"Get-DeliveryOptimizationStatus | Remove-DeliveryOptimizationCache -Confirm:$false\"\n";
     batContent += "netsh branchcache flush\n";
-    batContent += "winget uninstall \"Windows Web Experience Pack\" --silent --accept-source-agreements 2>nul\n";
     batContent += "powershell -Command \"Stop-Service -Name FontCache -Force; del /f /s /q $env:windir\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\* ; Start-Service -Name FontCache\"\n";
     batContent += "dism /online /cleanup-image /startcomponentcleanup /resetbase\n";
     batContent += "powershell -Command \"Get-EventLog -LogName * | ForEach { Clear-EventLog $_.Log }\"\n";

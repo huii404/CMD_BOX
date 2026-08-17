@@ -4,12 +4,6 @@
 #include "SystemCore.h"
 #include <string>
 
-struct AppInfo {
-    std::string name;
-    std::string url;
-    std::string fileName;
-};
-
 class UtilityTools {
 private:
     SystemCore &sc;
@@ -20,8 +14,6 @@ public:
     void spamText();
     void autoPasteData();
     void downloadManager();
-    void processDownload(const AppInfo& app);
-    void showDownloadHistory();
     void uninstallBloatware();
 };
 
