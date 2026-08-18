@@ -251,167 +251,237 @@ void UtilityTools::autoPasteData() {
     }
 }
 
-// Trình tải & Cài đặt phần mềm tự động (Nhúng script .bat tự sinh)
+struct AppItem {
+    string name;
+    string url;
+    string fileName;
+};
+
+static string trimStr(const string &s) {
+    auto start = s.find_first_not_of(" \t\r\n");
+    if (start == string::npos) return "";
+    auto end = s.find_last_not_of(" \t\r\n");
+    return s.substr(start, end - start + 1);
+}
+
+static vector<AppItem> loadAppsFromTxt(const string &filePath) {
+    vector<AppItem> list;
+    if (!fs::exists(filePath)) {
+        ofstream out(filePath);
+        if (out.is_open()) {
+            out << "# DANH SÁCH ỨNG DỤNG TẢI TỰ ĐỘNG CHO CMD BOX\n"
+                << "# Định dạng: Tên ứng dụng | Link tải trực tiếp | Tên file lưu\n\n"
+                << "Google Chrome | https://dl.google.com/tag/s/appname%3DGoogle%2520Chrome/update2/installers/ChromeSetup.exe | ChromeSetup.exe\n"
+                << "Cốc Cốc | https://files.coccoc.com/browser/coccoc_vi.exe | CocCocSetup.exe\n"
+                << "Brave Browser | https://laptop-updates.brave.com/latest/winx64 | BraveSetup.exe\n"
+                << "Mozilla Firefox | https://download.mozilla.org/?product=firefox-latest-ssl&os=win64&lang=vi | FirefoxSetup.exe\n"
+                << "EVKey | https://github.com/lamquangminh/EVKey/releases/download/v5.0.4/EVKey.zip | EVKey.zip\n"
+                << "OpenKey | https://github.com/tphan/openkey/releases/latest/download/OpenKey-Windows-x64.zip | OpenKey.zip\n"
+                << "UniKey | https://www.unikey.org/assets/release/unikey43RC5-200929-win64.zip | UniKey.zip\n"
+                << "Zalo PC | https://zalo.me/download/zalo-pc | ZaloSetup.exe\n"
+                << "Discord | https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64 | DiscordSetup.exe\n"
+                << "Telegram | https://telegram.org/dl/desktop/win64 | TelegramSetup.exe\n"
+                << "Zoom | https://zoom.us/client/latest/ZoomInstaller.exe | ZoomInstaller.exe\n"
+                << "7-Zip | https://www.7-zip.org/a/7z2408-x64.exe | 7zipSetup.exe\n"
+                << "WinRAR | https://www.rarlab.com/rar/winrar-x64-701.exe | WinRARSetup.exe\n"
+                << "WARP 1.1.1.1 | https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-x64.msi | CloudflareWARP.msi\n"
+                << "LocalSend | https://github.com/localsend/localsend/releases/latest/download/LocalSend-1.16.1-windows-x86-64.exe | LocalSendSetup.exe\n"
+                << "Everything Search | https://www.voidtools.com/Everything-1.4.1.1026.x64-Setup.exe | EverythingSetup.exe\n"
+                << "CPU-Z | https://download.cpuid.com/cpu-z/cpu-z_2.11-en.exe | CPUZSetup.exe\n"
+                << "Rufus | https://github.com/pbatard/rufus/releases/download/v4.5/rufus-4.5.exe | Rufus.exe\n"
+                << "VLC Media Player | https://get.videolan.org/vlc/last/win64/vlc-3.0.21-win64.exe | VLCSetup.exe\n"
+                << "OBS Studio | https://cdn-fastly.obsproject.com/downloads/OBS-Studio-30.2.2-Windows-Installer.exe | OBSStudioSetup.exe\n"
+                << "VS Code | https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user | VSCodeSetup.exe\n"
+                << "Notepad++ | https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.6.7/npp.8.6.7.Installer.x64.exe | NotepadPlusPlusSetup.exe\n"
+                << "Git for Windows | https://github.com/git-for-windows/git/releases/download/v2.45.1.windows.1/Git-2.45.1-64-bit.exe | GitSetup.exe\n"
+                << "Node.js LTS | https://nodejs.org/dist/v20.16.0/node-v20.16.0-x64.msi | NodejsSetup.msi\n"
+                << "Python | https://www.python.org/ftp/python/3.12.5/python-3.12.5-amd64.exe | PythonSetup.exe\n";
+            out.close();
+        }
+    }
+
+    ifstream file(filePath);
+    if (!file.is_open()) return list;
+
+    string line;
+    while (getline(file, line)) {
+        string t = trimStr(line);
+        if (t.empty() || t[0] == '#') continue;
+
+        stringstream ss(t);
+        string name, url, fname;
+        if (getline(ss, name, '|') && getline(ss, url, '|') && getline(ss, fname)) {
+            name = trimStr(name);
+            url = trimStr(url);
+            fname = trimStr(fname);
+            if (!name.empty() && !url.empty() && !fname.empty()) {
+                list.push_back({name, url, fname});
+            }
+        }
+    }
+    return list;
+}
+
+// Trình tải & Cài đặt phần mềm tự động (Đọc từ file apps.txt)
 void UtilityTools::downloadManager() {
     char* userProf = getenv("USERPROFILE");
     string downloadDir = userProf ? (string(userProf) + "\\Downloads") : "C:\\Downloads";
-    string tempDir = getenv("TEMP") ? string(getenv("TEMP")) : downloadDir;
-    string batPath = tempDir + "\\CMD_AppDownloader_" + to_string(GetCurrentProcessId()) + ".bat";
-
-    ofstream bat(batPath);
-    if (!bat.is_open()) {
-        cout << "Không thể khởi tạo trình tải phần mềm!\n";
-        return;
+    if (!fs::exists(downloadDir)) {
+        try { fs::create_directories(downloadDir); } catch (...) {}
     }
 
-    bat << R"BAT(@echo off
-setlocal enabledelayedexpansion
-chcp 65001 >nul
-title TAI VA CAI DAT PHAN MEM
+    string configPath = "apps.txt";
+    vector<AppItem> apps = loadAppsFromTxt(configPath);
 
-set "DEST=%USERPROFILE%\Downloads"
-if not exist "!DEST!" mkdir "!DEST!" >nul 2>&1
+    while (true) {
+        sc.cls();
+        cout << "======================================================================\n"
+             << "               TRÌNH TẢI & CÀI ĐẶT PHẦN MỀM TỰ ĐỘNG\n"
+             << "======================================================================\n"
+             << "Thư mục lưu : " << downloadDir << "\n"
+             << "File dữ liệu: " << configPath << " (" << apps.size() << " ứng dụng)\n"
+             << "----------------------------------------------------------------------\n\n";
 
-:MENU
-cls
-echo.
-echo  [1]  Google Chrome           [10] Telegram Desktop       [19] VLC Media Player
-echo  [2]  Cốc Cốc                 [11] Zoom Meeting           [20] OBS Studio
-echo  [3]  Brave Browser           [12] 7-Zip (Giải nén)       [21] Visual Studio Code
-echo  [4]  Mozilla Firefox         [13] WinRAR (Giải nén)      [22] Notepad++
-echo  [5]  EVKey (Bộ gõ TV)        [14] WARP 1.1.1.1           [23] Git for Windows
-echo  [6]  OpenKey (Bộ gõ TV)      [15] LocalSend (Chia sẻ LAN)[24] Node.js (LTS)
-echo  [7]  UniKey (Bộ gõ TV)       [16] Everything (Tìm file)  [25] Python
-echo  [8]  Zalo PC                 [17] CPU-Z (Kiểm tra phần cứng)
-echo  [9]  Discord                 [18] Rufus (Tạo USB Boot)
-echo.
-echo  [A]  Tải tất cả              [H]  Lịch sử tải            [0] Quay lại
-echo.
-set /p "CHOICE= [Chọn]: "
-
-if "%CHOICE%"=="0" goto EXIT_SCRIPT
-if /i "%CHOICE%"=="H" goto SHOW_HISTORY
-if /i "%CHOICE%"=="A" goto DOWNLOAD_ALL
-
-if "%CHOICE%"=="1" (set "NAME=Google Chrome" & set "URL=https://dl.google.com/tag/s/appname%%3DGoogle%%2520Chrome/update2/installers/ChromeSetup.exe" & set "FILE=ChromeSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="2" (set "NAME=Cốc Cốc" & set "URL=https://files.coccoc.com/browser/coccoc_vi.exe" & set "FILE=CocCocSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="3" (set "NAME=Brave Browser" & set "URL=https://laptop-updates.brave.com/latest/winx64" & set "FILE=BraveSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="4" (set "NAME=Mozilla Firefox" & set "URL=https://download.mozilla.org/?product=firefox-latest-ssl&os=win64&lang=vi" & set "FILE=FirefoxSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="5" (set "NAME=EVKey" & set "URL=https://github.com/lamquangminh/EVKey/releases/download/v5.0.4/EVKey.zip" & set "FILE=EVKey.zip" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="6" (set "NAME=OpenKey" & set "URL=https://github.com/tphan/openkey/releases/latest/download/OpenKey-Windows-x64.zip" & set "FILE=OpenKey.zip" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="7" (set "NAME=UniKey" & set "URL=https://www.unikey.org/assets/release/unikey43RC5-200929-win64.zip" & set "FILE=UniKey.zip" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="8" (set "NAME=Zalo PC" & set "URL=https://zalo.me/download/zalo-pc" & set "FILE=ZaloSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="9" (set "NAME=Discord" & set "URL=https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64" & set "FILE=DiscordSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="10" (set "NAME=Telegram" & set "URL=https://telegram.org/dl/desktop/win64" & set "FILE=TelegramSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="11" (set "NAME=Zoom" & set "URL=https://zoom.us/client/latest/ZoomInstaller.exe" & set "FILE=ZoomInstaller.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="12" (set "NAME=7-Zip" & set "URL=https://www.7-zip.org/a/7z2408-x64.exe" & set "FILE=7zipSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="13" (set "NAME=WinRAR" & set "URL=https://www.rarlab.com/rar/winrar-x64-701.exe" & set "FILE=WinRARSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="14" (set "NAME=Cloudflare WARP" & set "URL=https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-x64.msi" & set "FILE=CloudflareWARP.msi" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="15" (set "NAME=LocalSend" & set "URL=https://github.com/localsend/localsend/releases/latest/download/LocalSend-1.16.1-windows-x86-64.exe" & set "FILE=LocalSendSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="16" (set "NAME=Everything Search" & set "URL=https://www.voidtools.com/Everything-1.4.1.1026.x64-Setup.exe" & set "FILE=EverythingSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="17" (set "NAME=CPU-Z" & set "URL=https://download.cpuid.com/cpu-z/cpu-z_2.11-en.exe" & set "FILE=CPUZSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="18" (set "NAME=Rufus" & set "URL=https://github.com/pbatard/rufus/releases/download/v4.5/rufus-4.5.exe" & set "FILE=Rufus.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="19" (set "NAME=VLC Media Player" & set "URL=https://get.videolan.org/vlc/last/win64/vlc-3.0.21-win64.exe" & set "FILE=VLCSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="20" (set "NAME=OBS Studio" & set "URL=https://cdn-fastly.obsproject.com/downloads/OBS-Studio-30.2.2-Windows-Installer.exe" & set "FILE=OBSStudioSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="21" (set "NAME=Visual Studio Code" & set "URL=https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user" & set "FILE=VSCodeSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="22" (set "NAME=Notepad++" & set "URL=https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.6.7/npp.8.6.7.Installer.x64.exe" & set "FILE=NotepadPlusPlusSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="23" (set "NAME=Git for Windows" & set "URL=https://github.com/git-for-windows/git/releases/download/v2.45.1.windows.1/Git-2.45.1-64-bit.exe" & set "FILE=GitSetup.exe" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="24" (set "NAME=Node.js LTS" & set "URL=https://nodejs.org/dist/v20.16.0/node-v20.16.0-x64.msi" & set "FILE=NodejsSetup.msi" & goto DO_DOWNLOAD)
-if "%CHOICE%"=="25" (set "NAME=Python" & set "URL=https://www.python.org/ftp/python/3.12.5/python-3.12.5-amd64.exe" & set "FILE=PythonSetup.exe" & goto DO_DOWNLOAD)
-
-echo [!] Lựa chọn không hợp lệ!
-timeout /t 1 >nul
-goto MENU
-
-:DO_DOWNLOAD
-cls
-echo.
-echo Đang tải: !NAME!...
-set "TARGET=!DEST!\!FILE!"
-if exist "!TARGET!" del /f /q "!TARGET!" >nul 2>&1
-curl -# -L "!URL!" -o "!TARGET!"
-if %errorlevel% neq 0 (
-    echo.
-    echo [!] Lỗi tải file! Vui lòng kiểm tra lại kết nối mạng.
-    pause
-    goto MENU
-)
-echo [OK] Đã tải về: !TARGET!
-echo [%date% %time%] Đã tải: !NAME! >> "!DEST!\download_history.txt"
-echo.
-set /p "RUN_APP= Mở file cài đặt ngay? (y/n): "
-if /i "!RUN_APP!"=="y" start "" "!TARGET!"
-goto MENU
-
-:DOWNLOAD_ALL
-cls
-echo.
-echo Đang tải toàn bộ ứng dụng về thư mục: !DEST!
-echo.
-call :DOWNLOAD_ITEM "Google Chrome" "https://dl.google.com/tag/s/appname%%3DGoogle%%2520Chrome/update2/installers/ChromeSetup.exe" "ChromeSetup.exe"
-call :DOWNLOAD_ITEM "Cốc Cốc" "https://files.coccoc.com/browser/coccoc_vi.exe" "CocCocSetup.exe"
-call :DOWNLOAD_ITEM "Brave Browser" "https://laptop-updates.brave.com/latest/winx64" "BraveSetup.exe"
-call :DOWNLOAD_ITEM "Mozilla Firefox" "https://download.mozilla.org/?product=firefox-latest-ssl&os=win64&lang=vi" "FirefoxSetup.exe"
-call :DOWNLOAD_ITEM "EVKey" "https://github.com/lamquangminh/EVKey/releases/download/v5.0.4/EVKey.zip" "EVKey.zip"
-call :DOWNLOAD_ITEM "OpenKey" "https://github.com/tphan/openkey/releases/latest/download/OpenKey-Windows-x64.zip" "OpenKey.zip"
-call :DOWNLOAD_ITEM "UniKey" "https://www.unikey.org/assets/release/unikey43RC5-200929-win64.zip" "UniKey.zip"
-call :DOWNLOAD_ITEM "Zalo PC" "https://zalo.me/download/zalo-pc" "ZaloSetup.exe"
-call :DOWNLOAD_ITEM "Discord" "https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64" "DiscordSetup.exe"
-call :DOWNLOAD_ITEM "Telegram" "https://telegram.org/dl/desktop/win64" "TelegramSetup.exe"
-call :DOWNLOAD_ITEM "Zoom" "https://zoom.us/client/latest/ZoomInstaller.exe" "ZoomInstaller.exe"
-call :DOWNLOAD_ITEM "7-Zip" "https://www.7-zip.org/a/7z2408-x64.exe" "7zipSetup.exe"
-call :DOWNLOAD_ITEM "WinRAR" "https://www.rarlab.com/rar/winrar-x64-701.exe" "WinRARSetup.exe"
-call :DOWNLOAD_ITEM "WARP 1.1.1.1" "https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-x64.msi" "CloudflareWARP.msi"
-call :DOWNLOAD_ITEM "LocalSend" "https://github.com/localsend/localsend/releases/latest/download/LocalSend-1.16.1-windows-x86-64.exe" "LocalSendSetup.exe"
-call :DOWNLOAD_ITEM "Everything Search" "https://www.voidtools.com/Everything-1.4.1.1026.x64-Setup.exe" "EverythingSetup.exe"
-call :DOWNLOAD_ITEM "CPU-Z" "https://download.cpuid.com/cpu-z/cpu-z_2.11-en.exe" "CPUZSetup.exe"
-call :DOWNLOAD_ITEM "Rufus" "https://github.com/pbatard/rufus/releases/download/v4.5/rufus-4.5.exe" "Rufus.exe"
-call :DOWNLOAD_ITEM "VLC Media Player" "https://get.videolan.org/vlc/last/win64/vlc-3.0.21-win64.exe" "VLCSetup.exe"
-call :DOWNLOAD_ITEM "OBS Studio" "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-30.2.2-Windows-Installer.exe" "OBSStudioSetup.exe"
-call :DOWNLOAD_ITEM "VS Code" "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user" "VSCodeSetup.exe"
-call :DOWNLOAD_ITEM "Notepad++" "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.6.7/npp.8.6.7.Installer.x64.exe" "NotepadPlusPlusSetup.exe"
-call :DOWNLOAD_ITEM "Git for Windows" "https://github.com/git-for-windows/git/releases/download/v2.45.1.windows.1/Git-2.45.1-64-bit.exe" "GitSetup.exe"
-call :DOWNLOAD_ITEM "Node.js LTS" "https://nodejs.org/dist/v20.16.0/node-v20.16.0-x64.msi" "NodejsSetup.msi"
-call :DOWNLOAD_ITEM "Python" "https://www.python.org/ftp/python/3.12.5/python-3.12.5-amd64.exe" "PythonSetup.exe"
-echo.
-echo [OK] Đã hoàn tất tải tất cả ứng dụng về: !DEST!
-pause
-goto MENU
-
-:DOWNLOAD_ITEM
-echo [*] Đang tải %~1...
-set "TGT=!DEST!\%~3"
-if exist "!TGT!" del /f /q "!TGT!" >nul 2>&1
-curl -# -L "%~2" -o "!TGT!"
-echo [%date% %time%] Đã tải: %~1 >> "!DEST!\download_history.txt"
-exit /b 0
-
-:SHOW_HISTORY
-cls
-echo.
-echo Lịch sử tải ứng dụng:
-echo.
-if exist "!DEST!\download_history.txt" (
-    type "!DEST!\download_history.txt"
-) else (
-    echo (Chưa có lịch sử tải)
-)
-echo.
-pause
-goto MENU
-
-:EXIT_SCRIPT
-exit /b 0
-)BAT";
-
-    bat.close();
-
-    system(("cmd.exe /c \"" + batPath + "\"").c_str());
-    try {
-        if (fs::exists(batPath)) {
-            fs::remove(batPath);
+        if (apps.empty()) {
+            cout << " [!] Không tìm thấy ứng dụng nào trong file " << configPath << "\n"
+                 << "     Vui lòng kiểm tra lại file cấu hình.\n\n";
+        } else {
+            size_t half = (apps.size() + 1) / 2;
+            for (size_t i = 0; i < half; i++) {
+                cout << "  [" << setw(2) << right << (i + 1) << "] " << setw(28) << left << apps[i].name;
+                size_t j = i + half;
+                if (j < apps.size()) {
+                    cout << "  [" << setw(2) << right << (j + 1) << "] " << setw(28) << left << apps[j].name;
+                }
+                cout << "\n";
+            }
         }
-    } catch (...) {}
+
+        cout << "\n----------------------------------------------------------------------\n"
+             << "  [A] Tải tất cả ứng dụng      [H] Xem lịch sử tải      [R] Nạp lại apps.txt\n"
+             << "  [0] Quay lại menu chính\n"
+             << "======================================================================\n"
+             << "Chọn thao tác: ";
+
+        string choice;
+        cin >> choice;
+
+        if (choice == "0") break;
+
+        if (choice == "R" || choice == "r") {
+            apps = loadAppsFromTxt(configPath);
+            cout << "\nĐã nạp lại file apps.txt (" << apps.size() << " ứng dụng)!\n";
+            Sleep(800);
+            continue;
+        }
+
+        if (choice == "H" || choice == "h") {
+            sc.cls();
+            cout << "======================================================================\n"
+                 << "                       LỊCH SỬ TẢI ỨNG DỤNG\n"
+                 << "======================================================================\n\n";
+            string histPath = downloadDir + "\\download_history.txt";
+            if (fs::exists(histPath)) {
+                ifstream hfile(histPath);
+                string hline;
+                while (getline(hfile, hline)) {
+                    cout << "  " << hline << "\n";
+                }
+            } else {
+                cout << "  (Chưa có lịch sử tải)\n";
+            }
+            cout << "\n======================================================================\n";
+            sc.waitEnter();
+            continue;
+        }
+
+        if (choice == "A" || choice == "a") {
+            if (apps.empty()) continue;
+            sc.cls();
+            cout << "======================================================================\n"
+                 << "                     TẢI TOÀN BỘ ỨNG DỤNG\n"
+                 << "======================================================================\n"
+                 << "Bắt đầu tải " << apps.size() << " ứng dụng về: " << downloadDir << "\n\n";
+
+            int successCount = 0;
+            string histPath = downloadDir + "\\download_history.txt";
+
+            for (size_t i = 0; i < apps.size(); ++i) {
+                cout << "----------------------------------------------------------------------\n"
+                     << "[" << (i + 1) << "/" << apps.size() << "] Đang tải: " << apps[i].name << "...\n";
+
+                string targetPath = downloadDir + "\\" + apps[i].fileName;
+                string cmd = "curl -# -L \"" + apps[i].url + "\" -o \"" + targetPath + "\"";
+                int ret = system(cmd.c_str());
+
+                if (ret == 0 && fs::exists(targetPath)) {
+                    cout << "  [✓] Hoàn tất: " << apps[i].fileName << "\n";
+                    successCount++;
+                    ofstream hist(histPath, ios::app);
+                    if (hist.is_open()) {
+                        time_t now = time(nullptr);
+                        char tbuf[64];
+                        strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S", localtime(&now));
+                        hist << "[" << tbuf << "] Đã tải: " << apps[i].name << " -> " << apps[i].fileName << "\n";
+                    }
+                } else {
+                    cout << "  [!] Thất bại khi tải " << apps[i].name << "!\n";
+                }
+            }
+
+            cout << "\n======================================================================\n"
+                 << "Hoàn tất tải " << successCount << "/" << apps.size() << " ứng dụng!\n";
+            sc.waitEnter();
+            continue;
+        }
+
+        try {
+            int idx = stoi(choice);
+            if (idx >= 1 && idx <= (int)apps.size()) {
+                const auto &app = apps[idx - 1];
+                sc.cls();
+                cout << "======================================================================\n"
+                     << "                         TẢI ỨNG DỤNG\n"
+                     << "======================================================================\n"
+                     << "Ứng dụng: " << app.name << "\n"
+                     << "Lưu tại : " << downloadDir << "\\" << app.fileName << "\n\n"
+                     << "Đang tải xuống, vui lòng chờ...\n\n";
+
+                string targetPath = downloadDir + "\\" + app.fileName;
+                string cmd = "curl -# -L \"" + app.url + "\" -o \"" + targetPath + "\"";
+                int ret = system(cmd.c_str());
+
+                if (ret == 0 && fs::exists(targetPath)) {
+                    cout << "\n[OK] Đã tải về thành công: " << targetPath << "\n";
+
+                    string histPath = downloadDir + "\\download_history.txt";
+                    ofstream hist(histPath, ios::app);
+                    if (hist.is_open()) {
+                        time_t now = time(nullptr);
+                        char tbuf[64];
+                        strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S", localtime(&now));
+                        hist << "[" << tbuf << "] Đã tải: " << app.name << " -> " << app.fileName << "\n";
+                    }
+
+                    cout << "\nBạn có muốn mở file cài đặt ngay? (y/n): ";
+                    string runChoice;
+                    cin >> runChoice;
+                    if (runChoice == "y" || runChoice == "Y") {
+                        ShellExecuteA(NULL, "open", targetPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+                    }
+                } else {
+                    cout << "\n[!] Tải thất bại! Vui lòng kiểm tra lại kết nối mạng hoặc link tải.\n";
+                    sc.waitEnter();
+                }
+            } else {
+                cout << "\n[!] Lựa chọn không hợp lệ!\n";
+                Sleep(500);
+            }
+        } catch (...) {
+            cout << "\n[!] Lựa chọn không hợp lệ!\n";
+            Sleep(500);
+        }
+    }
 }
 
 // Gỡ bỏ ứng dụng rác Bloatware (Sử dụng Vector chính xác tuyệt đối, không dùng Regex mập mờ)
