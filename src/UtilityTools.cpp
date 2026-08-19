@@ -264,41 +264,16 @@ static string trimStr(const string &s) {
     return s.substr(start, end - start + 1);
 }
 
+static string resolveAppConfigPath() {
+    if (fs::exists("src/apps.txt")) return "src/apps.txt";
+    if (fs::exists("../src/apps.txt")) return "../src/apps.txt";
+    if (fs::exists("apps.txt")) return "apps.txt";
+    return "src/apps.txt";
+}
+
 static vector<AppItem> loadAppsFromTxt(const string &filePath) {
     vector<AppItem> list;
-    if (!fs::exists(filePath)) {
-        ofstream out(filePath);
-        if (out.is_open()) {
-            out << "# DANH SÁCH ỨNG DỤNG TẢI TỰ ĐỘNG CHO CMD BOX\n"
-                << "# Định dạng: Tên ứng dụng | Link tải trực tiếp | Tên file lưu\n\n"
-                << "Google Chrome | https://dl.google.com/tag/s/appname%3DGoogle%2520Chrome/update2/installers/ChromeSetup.exe | ChromeSetup.exe\n"
-                << "Cốc Cốc | https://files.coccoc.com/browser/coccoc_vi.exe | CocCocSetup.exe\n"
-                << "Brave Browser | https://laptop-updates.brave.com/latest/winx64 | BraveSetup.exe\n"
-                << "Mozilla Firefox | https://download.mozilla.org/?product=firefox-latest-ssl&os=win64&lang=vi | FirefoxSetup.exe\n"
-                << "EVKey | https://github.com/lamquangminh/EVKey/releases/download/v5.0.4/EVKey.zip | EVKey.zip\n"
-                << "OpenKey | https://github.com/tphan/openkey/releases/latest/download/OpenKey-Windows-x64.zip | OpenKey.zip\n"
-                << "UniKey | https://www.unikey.org/assets/release/unikey43RC5-200929-win64.zip | UniKey.zip\n"
-                << "Zalo PC | https://zalo.me/download/zalo-pc | ZaloSetup.exe\n"
-                << "Discord | https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64 | DiscordSetup.exe\n"
-                << "Telegram | https://telegram.org/dl/desktop/win64 | TelegramSetup.exe\n"
-                << "Zoom | https://zoom.us/client/latest/ZoomInstaller.exe | ZoomInstaller.exe\n"
-                << "7-Zip | https://www.7-zip.org/a/7z2408-x64.exe | 7zipSetup.exe\n"
-                << "WinRAR | https://www.rarlab.com/rar/winrar-x64-701.exe | WinRARSetup.exe\n"
-                << "WARP 1.1.1.1 | https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-x64.msi | CloudflareWARP.msi\n"
-                << "LocalSend | https://github.com/localsend/localsend/releases/latest/download/LocalSend-1.16.1-windows-x86-64.exe | LocalSendSetup.exe\n"
-                << "Everything Search | https://www.voidtools.com/Everything-1.4.1.1026.x64-Setup.exe | EverythingSetup.exe\n"
-                << "CPU-Z | https://download.cpuid.com/cpu-z/cpu-z_2.11-en.exe | CPUZSetup.exe\n"
-                << "Rufus | https://github.com/pbatard/rufus/releases/download/v4.5/rufus-4.5.exe | Rufus.exe\n"
-                << "VLC Media Player | https://get.videolan.org/vlc/last/win64/vlc-3.0.21-win64.exe | VLCSetup.exe\n"
-                << "OBS Studio | https://cdn-fastly.obsproject.com/downloads/OBS-Studio-30.2.2-Windows-Installer.exe | OBSStudioSetup.exe\n"
-                << "VS Code | https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user | VSCodeSetup.exe\n"
-                << "Notepad++ | https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.6.7/npp.8.6.7.Installer.x64.exe | NotepadPlusPlusSetup.exe\n"
-                << "Git for Windows | https://github.com/git-for-windows/git/releases/download/v2.45.1.windows.1/Git-2.45.1-64-bit.exe | GitSetup.exe\n"
-                << "Node.js LTS | https://nodejs.org/dist/v20.16.0/node-v20.16.0-x64.msi | NodejsSetup.msi\n"
-                << "Python | https://www.python.org/ftp/python/3.12.5/python-3.12.5-amd64.exe | PythonSetup.exe\n";
-            out.close();
-        }
-    }
+    if (!fs::exists(filePath)) return list;
 
     ifstream file(filePath);
     if (!file.is_open()) return list;
@@ -322,7 +297,7 @@ static vector<AppItem> loadAppsFromTxt(const string &filePath) {
     return list;
 }
 
-// Trình tải & Cài đặt phần mềm tự động (Đọc từ file apps.txt)
+// Trình tải & Cài đặt phần mềm tự động (Đọc từ file src/apps.txt)
 void UtilityTools::downloadManager() {
     char* userProf = getenv("USERPROFILE");
     string downloadDir = userProf ? (string(userProf) + "\\Downloads") : "C:\\Downloads";
@@ -330,7 +305,7 @@ void UtilityTools::downloadManager() {
         try { fs::create_directories(downloadDir); } catch (...) {}
     }
 
-    string configPath = "apps.txt";
+    string configPath = resolveAppConfigPath();
     vector<AppItem> apps = loadAppsFromTxt(configPath);
 
     while (true) {
@@ -358,7 +333,7 @@ void UtilityTools::downloadManager() {
         }
 
         cout << "\n----------------------------------------------------------------------\n"
-             << "  [A] Tải tất cả ứng dụng      [H] Xem lịch sử tải      [R] Nạp lại apps.txt\n"
+             << "  [A] Tải tất cả ứng dụng          [R] Nạp lại danh sách\n"
              << "  [0] Quay lại menu chính\n"
              << "======================================================================\n"
              << "Chọn thao tác: ";
@@ -369,29 +344,10 @@ void UtilityTools::downloadManager() {
         if (choice == "0") break;
 
         if (choice == "R" || choice == "r") {
+            configPath = resolveAppConfigPath();
             apps = loadAppsFromTxt(configPath);
-            cout << "\nĐã nạp lại file apps.txt (" << apps.size() << " ứng dụng)!\n";
+            cout << "\nĐã nạp lại file " << configPath << " (" << apps.size() << " ứng dụng)!\n";
             Sleep(800);
-            continue;
-        }
-
-        if (choice == "H" || choice == "h") {
-            sc.cls();
-            cout << "======================================================================\n"
-                 << "                       LỊCH SỬ TẢI ỨNG DỤNG\n"
-                 << "======================================================================\n\n";
-            string histPath = downloadDir + "\\download_history.txt";
-            if (fs::exists(histPath)) {
-                ifstream hfile(histPath);
-                string hline;
-                while (getline(hfile, hline)) {
-                    cout << "  " << hline << "\n";
-                }
-            } else {
-                cout << "  (Chưa có lịch sử tải)\n";
-            }
-            cout << "\n======================================================================\n";
-            sc.waitEnter();
             continue;
         }
 
@@ -404,7 +360,6 @@ void UtilityTools::downloadManager() {
                  << "Bắt đầu tải " << apps.size() << " ứng dụng về: " << downloadDir << "\n\n";
 
             int successCount = 0;
-            string histPath = downloadDir + "\\download_history.txt";
 
             for (size_t i = 0; i < apps.size(); ++i) {
                 cout << "----------------------------------------------------------------------\n"
@@ -417,13 +372,6 @@ void UtilityTools::downloadManager() {
                 if (ret == 0 && fs::exists(targetPath)) {
                     cout << "  [✓] Hoàn tất: " << apps[i].fileName << "\n";
                     successCount++;
-                    ofstream hist(histPath, ios::app);
-                    if (hist.is_open()) {
-                        time_t now = time(nullptr);
-                        char tbuf[64];
-                        strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S", localtime(&now));
-                        hist << "[" << tbuf << "] Đã tải: " << apps[i].name << " -> " << apps[i].fileName << "\n";
-                    }
                 } else {
                     cout << "  [!] Thất bại khi tải " << apps[i].name << "!\n";
                 }
@@ -441,11 +389,11 @@ void UtilityTools::downloadManager() {
                 const auto &app = apps[idx - 1];
                 sc.cls();
                 cout << "======================================================================\n"
-                     << "                         TẢI ỨNG DỤNG\n"
-                     << "======================================================================\n"
-                     << "Ứng dụng: " << app.name << "\n"
-                     << "Lưu tại : " << downloadDir << "\\" << app.fileName << "\n\n"
-                     << "Đang tải xuống, vui lòng chờ...\n\n";
+                 << "                         TẢI ỨNG DỤNG\n"
+                 << "======================================================================\n"
+                 << "Ứng dụng: " << app.name << "\n"
+                 << "Lưu tại : " << downloadDir << "\\" << app.fileName << "\n\n"
+                 << "Đang tải xuống, vui lòng chờ...\n\n";
 
                 string targetPath = downloadDir + "\\" + app.fileName;
                 string cmd = "curl -# -L \"" + app.url + "\" -o \"" + targetPath + "\"";
@@ -453,15 +401,6 @@ void UtilityTools::downloadManager() {
 
                 if (ret == 0 && fs::exists(targetPath)) {
                     cout << "\n[OK] Đã tải về thành công: " << targetPath << "\n";
-
-                    string histPath = downloadDir + "\\download_history.txt";
-                    ofstream hist(histPath, ios::app);
-                    if (hist.is_open()) {
-                        time_t now = time(nullptr);
-                        char tbuf[64];
-                        strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S", localtime(&now));
-                        hist << "[" << tbuf << "] Đã tải: " << app.name << " -> " << app.fileName << "\n";
-                    }
 
                     cout << "\nBạn có muốn mở file cài đặt ngay? (y/n): ";
                     string runChoice;
@@ -554,3 +493,243 @@ void UtilityTools::uninstallBloatware() {
     cout << "\n======================================================================\n"
          << "Hoàn tất! Đã gỡ bỏ toàn bộ ứng dụng rác mà không ảnh hưởng tới app hệ thống.\n";
 }
+
+static string getXmlTag(const string &xml, const string &tag) {
+    string openTag = "<" + tag + ">";
+    string closeTag = "</" + tag + ">";
+    size_t start = xml.find(openTag);
+    if (start == string::npos) return "";
+    start += openTag.length();
+    size_t end = xml.find(closeTag, start);
+    if (end == string::npos) return "";
+    return xml.substr(start, end - start);
+}
+
+static string renderBar(double percent, int width = 20) {
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+    int filled = (int)((percent / 100.0) * width);
+    string bar = "[";
+    for (int i = 0; i < filled; ++i) bar += "■";
+    for (int i = filled; i < width; ++i) bar += " ";
+    bar += "]";
+    return bar;
+}
+
+static string formatNumber(long long n) {
+    string s = to_string(n);
+    int insertPosition = (int)s.length() - 3;
+    while (insertPosition > 0) {
+        s.insert(insertPosition, ",");
+        insertPosition -= 3;
+    }
+    return s;
+}
+
+// Soi thông tin & Độ chai Pin Laptop chuyên sâu
+void UtilityTools::batteryHealthDiagnostic() {
+    while (true) {
+        sc.cls();
+        cout << "======================================================================\n"
+             << "               CHẨN ĐOÁN & SOI ĐỘ CHAI PIN LAPTOP\n"
+             << "======================================================================\n"
+             << "Đang đọc dữ liệu vi điều khiển Pin từ Windows ACPI...\n";
+
+        SYSTEM_POWER_STATUS sps;
+        bool hasSps = GetSystemPowerStatus(&sps);
+
+        // Kiểm tra thiết bị có pin không
+        if (hasSps && (sps.BatteryFlag == 128 || sps.BatteryFlag == 255) && sps.BatteryLifePercent == 255) {
+            sc.cls();
+            cout << "======================================================================\n"
+                 << "               CHẨN ĐOÁN & SOI ĐỘ CHAI PIN LAPTOP\n"
+                 << "======================================================================\n\n"
+                 << " [!] THIẾT BỊ KHÔNG CÓ PIN (MÁY BÀN / PC DESKTOP)\n\n"
+                 << "  - Hệ thống nhận diện đây là máy tính bàn hoặc Pin Laptop đã bị tháo rời.\n"
+                 << "  - Nguồn điện hiện tại: Cắm nguồn trực tiếp qua Adapter / Bộ nguồn AC.\n\n"
+                 << "======================================================================\n";
+            sc.waitEnter();
+            return;
+        }
+
+        // Tạo file XML báo cáo pin tạm thời
+        char tempPath[MAX_PATH];
+        GetTempPathA(MAX_PATH, tempPath);
+        string xmlPath = string(tempPath) + "cmd_battery_report.xml";
+        string cmd = "powercfg /batteryreport /xml /output \"" + xmlPath + "\" >nul 2>&1";
+        system(cmd.c_str());
+
+        string manufacturer = "N/A", deviceName = "N/A", serial = "N/A", chemistry = "Li-ion";
+        string sysMfg = "N/A", sysModel = "N/A", biosVer = "N/A";
+        long long designCap = 0, fullCap = 0, cycleCount = 0;
+
+        if (fs::exists(xmlPath)) {
+            ifstream f(xmlPath);
+            if (f.is_open()) {
+                stringstream ss;
+                ss << f.rdbuf();
+                string xml = ss.str();
+                f.close();
+
+                sysMfg = getXmlTag(xml, "SystemManufacturer");
+                sysModel = getXmlTag(xml, "SystemProductName");
+                biosVer = getXmlTag(xml, "BIOSVersion");
+
+                size_t batPos = xml.find("<Batteries>");
+                if (batPos != string::npos) {
+                    string batXml = xml.substr(batPos);
+                    deviceName = getXmlTag(batXml, "Id");
+                    manufacturer = getXmlTag(batXml, "Manufacturer");
+                    serial = getXmlTag(batXml, "SerialNumber");
+                    string chem = getXmlTag(batXml, "Chemistry");
+                    if (!chem.empty()) chemistry = chem;
+
+                    string dcStr = getXmlTag(batXml, "DesignCapacity");
+                    string fcStr = getXmlTag(batXml, "FullChargeCapacity");
+                    string ccStr = getXmlTag(batXml, "CycleCount");
+
+                    if (!dcStr.empty()) try { designCap = stoll(dcStr); } catch (...) {}
+                    if (!fcStr.empty()) try { fullCap = stoll(fcStr); } catch (...) {}
+                    if (!ccStr.empty()) try { cycleCount = stoll(ccStr); } catch (...) {}
+                }
+            }
+            try { fs::remove(xmlPath); } catch (...) {}
+        }
+
+        sc.cls();
+        cout << "======================================================================\n"
+             << "               CHẨN ĐOÁN & SOI ĐỘ CHAI PIN LAPTOP CHUYÊN SÂU\n"
+             << "======================================================================\n";
+
+        if (!sysMfg.empty() && sysMfg != "N/A") {
+            cout << "Thiết bị        : " << sysMfg << " " << sysModel << " (BIOS: " << biosVer << ")\n";
+        }
+        if (!deviceName.empty() && deviceName != "N/A") {
+            cout << "Loại Pin        : " << chemistry << " - " << manufacturer << " [" << deviceName << "]\n";
+            if (!serial.empty() && serial != "N/A" && serial != "") {
+                cout << "Số Seri Pin     : " << serial << "\n";
+            }
+        }
+        cout << "----------------------------------------------------------------------\n";
+
+        if (designCap > 0 && fullCap > 0) {
+            double healthPercent = ((double)fullCap / (double)designCap) * 100.0;
+            if (healthPercent > 100.0) healthPercent = 100.0;
+            double wearPercent = 100.0 - healthPercent;
+            long long lostCap = designCap - fullCap;
+            if (lostCap < 0) lostCap = 0;
+
+            cout << "[THÔNG SỐ DUNG LƯỢNG & ĐỘ CHAI PIN]\n"
+                 << "  + Dung lượng thiết kế (Design)    : " << setw(10) << right << formatNumber(designCap) << " mWh\n"
+                 << "  + Dung lượng khi nạp đầy (Full)   : " << setw(10) << right << formatNumber(fullCap) << " mWh\n"
+                 << "  + Dung lượng bị hao hụt           : " << setw(10) << right << formatNumber(lostCap) << " mWh\n"
+                 << "  + Số chu kỳ sạc (Cycle Count)     : " << setw(10) << right << cycleCount << " lần\n"
+                 << "  + Sức khỏe Pin (Battery Health)   : " << fixed << setprecision(1) << healthPercent << "%  " << renderBar(healthPercent) << "\n"
+                 << "  + Độ chai Pin (Wear Level)        : " << fixed << setprecision(1) << wearPercent << "%  ";
+
+            if (wearPercent < 5.0) {
+                cout << "(Hoàn hảo - Như pin mới 100%)\n";
+            } else if (wearPercent < 15.0) {
+                cout << "(Rất tốt - Hoạt động lý tưởng)\n";
+            } else if (wearPercent < 30.0) {
+                cout << "(Bình thường - Bắt đầu có dấu hiệu lão hóa)\n";
+            } else if (wearPercent < 50.0) {
+                cout << "(Chai đáng kể - Thời lượng dùng giảm rõ rệt)\n";
+            } else {
+                cout << "(Chai nặng / Hư hại - Nên cân nhắc thay thế Pin)\n";
+            }
+        } else {
+            cout << "[THÔNG SỐ DUNG LƯỢNG]\n"
+                 << "  [!] Không thể đọc chỉ số ACPI nâng cao (Có thể do Driver hoặc thiết bị ảo).\n";
+        }
+
+        cout << "----------------------------------------------------------------------\n"
+             << "[TRẠNG THÁI NGUỒN HIỆN TẠI (REALTIME)]\n";
+
+        if (hasSps) {
+            string powerSource = "Không xác định";
+            if (sps.ACLineStatus == 1) powerSource = "Đang cắm sạc (AC Online)";
+            else if (sps.ACLineStatus == 0) powerSource = "Đang dùng nguồn Pin (Battery/DC)";
+
+            int batPct = (int)sps.BatteryLifePercent;
+            cout << "  + Nguồn điện                      : " << powerSource << "\n";
+            if (batPct >= 0 && batPct <= 100) {
+                cout << "  + Mức pin hiện tại                : " << batPct << "%  " << renderBar(batPct) << "\n";
+            }
+
+            string chargeStatus = "Bình thường";
+            if (sps.BatteryFlag & 8) chargeStatus = "Đang sạc pin (Charging...)";
+            else if (sps.ACLineStatus == 1 && batPct >= 95) chargeStatus = "Đã sạc đầy (Fully Charged)";
+            else if (sps.BatteryFlag & 4) chargeStatus = "Pin cực yếu (Critical)";
+            else if (sps.BatteryFlag & 2) chargeStatus = "Pin yếu (Low)";
+            cout << "  + Trạng thái sạc                  : " << chargeStatus << "\n";
+
+            if (sps.BatteryLifeTime != (DWORD)-1 && sps.ACLineStatus == 0) {
+                int hours = sps.BatteryLifeTime / 3600;
+                int mins = (sps.BatteryLifeTime % 3600) / 60;
+                cout << "  + Thời lượng ước tính còn lại     : ~ " << hours << " giờ " << mins << " phút\n";
+            }
+        }
+
+        cout << "----------------------------------------------------------------------\n"
+             << "[LỜI KHUYÊN DÀNH CHO BẠN]\n";
+        if (designCap > 0 && fullCap > 0) {
+            double wear = 100.0 - (((double)fullCap / (double)designCap) * 100.0);
+            if (wear < 15.0) {
+                cout << "  ✓ Pin trong tình trạng xuất sắc. Để giữ pin bền lâu, tránh để máy quá nóng\n"
+                     << "    và duy trì mức sạc từ 20% - 80% khi cắm sạc làm việc liên tục.\n";
+            } else if (wear < 40.0) {
+                cout << "  ! Pin đã có độ chai tự nhiên theo thời gian. Nên bật chế độ Battery Saver\n"
+                     << "    khi làm việc di động và hạn chế vừa chơi game nặng vừa sạc.\n";
+            } else {
+                cout << "  ⚠ Cảnh báo: Pin đã chai trên " << (int)wear << "%. Có thể sập nguồn đột ngột khi tải nặng.\n"
+                     << "    Khuyến nghị kiểm tra và thay thế cell pin mới tại trung tâm bảo hành.\n";
+            }
+        } else {
+            cout << "  ✓ Sử dụng bộ sạc chính hãng kèm máy để đảm bảo dòng điện và bảo vệ mạch sạc.\n";
+        }
+
+        cout << "======================================================================\n"
+             << "  [1] Xuất & mở báo cáo đồ thị Battery Report (HTML) trên Trình duyệt\n"
+             << "  [2] Mở cài đặt Quản lý Pin & Nguồn của Windows (Power & Battery)\n"
+             << "  [R] Làm mới lại dữ liệu chẩn đoán\n"
+             << "  [0] Quay lại menu chính\n"
+             << "======================================================================\n"
+             << "Chọn thao tác: ";
+
+        string opt;
+        cin >> opt;
+
+        if (opt == "0") break;
+
+        if (opt == "1") {
+            cout << "\nĐang xuất báo cáo đồ thị HTML chuẩn của Windows...\n";
+            char tempHtml[MAX_PATH];
+            GetTempPathA(MAX_PATH, tempHtml);
+            string htmlPath = string(tempHtml) + "battery_report.html";
+            string genCmd = "powercfg /batteryreport /output \"" + htmlPath + "\" >nul 2>&1";
+            system(genCmd.c_str());
+
+            if (fs::exists(htmlPath)) {
+                ShellExecuteA(NULL, "open", htmlPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+                cout << "  [✓] Đã mở báo cáo: " << htmlPath << "\n";
+            } else {
+                cout << "  [!] Không thể xuất file báo cáo HTML.\n";
+            }
+            Sleep(1200);
+            continue;
+        }
+
+        if (opt == "2") {
+            ShellExecuteA(NULL, "open", "ms-settings:batterysaver", NULL, NULL, SW_SHOWNORMAL);
+            cout << "\nĐã mở cài đặt Pin của Windows...\n";
+            Sleep(1000);
+            continue;
+        }
+
+        if (opt == "R" || opt == "r") {
+            continue;
+        }
+    }
+}
+

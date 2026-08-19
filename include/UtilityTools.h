@@ -15,6 +15,7 @@ public:
     void autoPasteData();
     void downloadManager();
     void uninstallBloatware();
+    void batteryHealthDiagnostic();
 };
 
 #endif 

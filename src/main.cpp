@@ -106,9 +106,9 @@ public:
     void menuMangBaoMat() {
         cls();
         cout << " [1] Xem thông tin mạng chi tiết\n"
-             << " [2] Sửa lỗi & Khôi phục mạng toàn diện (TCP/IP, Winsock, DNS, WinNAT, LAN/LocalSend)\n"
-             << " [3] Kích hoạt Lá chắn bảo mật toàn diện (Bật/Tắt PRO)\n"
-             << " [4] Kiểm tra trạng thái bảo mật hệ thống & Cảnh báo\n"
+             << " [2] Sửa lỗi & Khôi phục mạng toàn diện\n"
+             << " [3] Kích hoạt Lá chắn bảo mật toàn diện\n"
+             << " [4] Kiểm tra trạng thái bảo mật hệ thống\n"
              << " [5] Xem danh sách mật khẩu Wi-Fi đã lưu\n"
              << " [6] Quét & Bảo vệ tập tin Hosts\n"
              << " [0] Quay lại\n\n"
@@ -118,10 +118,11 @@ public:
     void menuCongCuTienIch() {
         cls();
         cout << " [1] Auto Click chuột\n"
-             << " [2] Spam Text (Tự động gửi văn bản)\n"
+             << " [2] Spam Text\n"
              << " [3] Auto Paste dữ liệu nhiều dòng\n"
              << " [4] Tải & Cài đặt phần mềm tự động\n"
-             << " [5] Gỡ bỏ ứng dụng rác mặc định (Bloatware)\n"
+             << " [5] Gỡ bỏ ứng dụng rác mặc định\n"
+             << " [6] Soi thông tin & độ chai Pin Laptop chuyên sâu\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
     }
@@ -216,12 +217,14 @@ public:
                     else if (sub == 3) getTools().autoPasteData();      
                     else if (sub == 4) getTools().downloadManager();
                     else if (sub == 5) getTools().uninstallBloatware();   
+                    else if (sub == 6) getTools().batteryHealthDiagnostic();
                     else {
                         cout << "\nLựa chọn không hợp lệ!\n";
                         Sleep(300);
                         continue;
                     }
-                    waitEnter();
+                    if (sub != 4 && sub != 6)
+                        waitEnter();
                 }
                 break;
 
