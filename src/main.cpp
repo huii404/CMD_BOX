@@ -94,8 +94,8 @@ public:
     void menuBaoTriToiUu() {
         cls();
         cout << " [1] Dọn rác chuyên sâu PRO\n"
-             << " [2] Quản lý & Tắt ứng dụng khởi động cùng Windows\n"
-             << " [3] Quản lý & Tối ưu dịch vụ Windows\n"
+             << " [2] Tắt ứng dụng khởi động\n"
+             << " [3] Tối ưu dịch vụ Windows\n"
              << " [4] Chỉnh giao diện & Taskbar Win 11\n"
              << " [5] Sửa lỗi Windows Update\n"
              << " [6] Tối ưu hóa tổng thể hệ thống\n"
@@ -122,7 +122,7 @@ public:
              << " [3] Auto Paste dữ liệu nhiều dòng\n"
              << " [4] Tải & Cài đặt phần mềm tự động\n"
              << " [5] Gỡ bỏ ứng dụng rác mặc định\n"
-             << " [6] Soi thông tin & độ chai Pin Laptop chuyên sâu\n"
+             << " [6] Kiểm tra độ chai Pin Laptop\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
     }
