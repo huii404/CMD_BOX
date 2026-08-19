@@ -91,6 +91,7 @@ void SystemOptimizer::cleanDiskPro() {
     }
 
     cout << "\nHoàn tất dọn dẹp hệ thống!\n";
+    sc.waitEnter();
 }
 
 void SystemOptimizer::disableAllStartupApps() {
@@ -159,6 +160,7 @@ void SystemOptimizer::disableAllStartupApps() {
         }
     }
     cout << "\nĐã tắt thành công " << removedCount << " ứng dụng khởi động thừa.\n";
+    sc.waitEnter();
 }
 
 void SystemOptimizer::fixWindowsUpdate() {
@@ -169,6 +171,7 @@ void SystemOptimizer::fixWindowsUpdate() {
     cout << "3/3. Đang khởi động lại dịch vụ...\n";
     sc.runAdmin("net start wuauserv", true); sc.runAdmin("net start cryptSvc", true); sc.runAdmin("net start bits", true); sc.runAdmin("net start msiserver", true);
     cout << "\nĐã khôi phục và reset Windows Update thành công!\n";
+    sc.waitEnter();
 }
 
 void SystemOptimizer::clearBrowserCache() {
@@ -345,6 +348,7 @@ void SystemOptimizer::optimizeSystemPRO() {
     sc.runCMD("del /f /s /q %windir%\\WindowsUpdate.log");
 
     cout << "\nToàn bộ hệ thống đã được tối ưu hóa thành công!\n";
+    sc.waitEnter();
 }
 
 bool SystemOptimizer::ServiceControlAPI(std::string serviceName, DWORD startupType, bool stopService) {
@@ -556,4 +560,5 @@ void SystemOptimizer::optimizeTaskbar() {
     } else {
         cout << "\nKhông có thay đổi nào. Taskbar đã được tối ưu.\n";
     }
+    sc.waitEnter();
 }

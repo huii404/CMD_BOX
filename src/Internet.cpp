@@ -124,6 +124,7 @@ void Internet::showNetworkInfo() {
     cout << "\nCấu hình chi tiết các Card mạng (Network Adapters):\n";
     sc.runCMD("chcp 437 >nul & ipconfig /all | findstr /i \"Description IPv4 Subnet Default DNS Lease DHCP\" & chcp 65001 >nul");
     cout << "\n";
+    sc.waitEnter();
 }
 
 void Internet::repairNetwork() {
@@ -167,7 +168,7 @@ void Internet::repairNetwork() {
         "netsh advfirewall firewall add rule name=\"LocalSend_HTTP_TCP_53317\" dir=in action=allow protocol=TCP localport=53317 >nul 2>&1\n"
         "netsh advfirewall firewall add rule name=\"LocalSend_HTTP_TCP_53317\" dir=out action=allow protocol=TCP localport=53317 >nul 2>&1\n"
         "netsh advfirewall firewall add rule name=\"LocalSend_Discovery_UDP_53317\" dir=in action=allow protocol=UDP localport=53317 >nul 2>&1\n"
-        "netsh advfirewall firewall add rule name=\"LocalSend_Discovery_UDP_53317\" dir=out action=allow protocol=UDP localport=53317 >nul 2>&1\n"
+        "netsh advfirewall firewall add rule name=\"LocalSend_Discovery_UDP_53317\" dir=out action=allow protocol=TCP localport=53317 >nul 2>&1\n"
         "powershell -Command \"Get-ChildItem -Path @($env:LOCALAPPDATA, $env:ProgramFiles, ${env:ProgramFiles(x86)}) -Filter 'localsend*.exe' -Recurse -ErrorAction SilentlyContinue | ForEach-Object { New-NetFirewallRule -DisplayName 'LocalSend_App_Allow' -Direction Inbound -Program $_.FullName -Action Allow -Profile Any -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName 'LocalSend_App_Allow' -Direction Outbound -Program $_.FullName -Action Allow -Profile Any -ErrorAction SilentlyContinue }\" >nul 2>&1\n"
         "echo       -> OK\n"
         "echo 8/8. Dat mang sang che do Private Network (Cho phep truyen file noi bo)...\n"
@@ -185,6 +186,7 @@ void Internet::repairNetwork() {
     } else {
         cout << "\nThất bại khi thực thi sửa lỗi mạng (Cần cấp quyền Administrator).\n";
     }
+    sc.waitEnter();
 }
 
 void Internet::wifiAudit() {
@@ -193,6 +195,7 @@ void Internet::wifiAudit() {
     FILE *pipe = _popen("netsh wlan show profiles", "r");
     if (!pipe) {
         cout << "Không thể truy cập cấu hình Wi-Fi.\n";
+        sc.waitEnter();
         return;
     }
 
@@ -211,6 +214,7 @@ void Internet::wifiAudit() {
 
     if (wifiList.empty()) {
         cout << "Không tìm thấy cấu hình Wi-Fi nào trên máy.\n";
+        sc.waitEnter();
         return;
     }
 
@@ -224,6 +228,7 @@ void Internet::wifiAudit() {
 
     if (choice < 1 || choice > static_cast<int>(wifiList.size())) {
         cout << "Lựa chọn không hợp lệ!\n";
+        sc.waitEnter();
         return;
     }
 
@@ -232,6 +237,7 @@ void Internet::wifiAudit() {
     FILE *p2 = _popen(cmd.c_str(), "r");
     if (!p2) {
         cout << "Thất bại khi truy vấn mật khẩu.\n";
+        sc.waitEnter();
         return;
     }
 
@@ -250,6 +256,7 @@ void Internet::wifiAudit() {
          << " Mật khẩu   : " << pass << "\n"
          << " Bảo mật    : " << auth << "\n"
          << " Mã hóa     : " << cipher << "\n\n";
+    sc.waitEnter();
 }
 
 // Native Win32 Registry & Service Helpers

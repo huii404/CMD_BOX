@@ -174,9 +174,7 @@ public:
                     else {
                         cout << "\nLựa chọn không hợp lệ!\n";
                         Sleep(300);
-                        continue;
                     }
-                    waitEnter();
                 }
                 break;
 
@@ -197,10 +195,7 @@ public:
                     else {
                         cout << "\nLựa chọn không hợp lệ!\n";
                         Sleep(300);
-                        continue;
                     }
-                    if (sub != 3 && sub != 4 && sub != 6)
-                        waitEnter();
                 }
                 break;
 
@@ -221,10 +216,7 @@ public:
                     else {
                         cout << "\nLựa chọn không hợp lệ!\n";
                         Sleep(300);
-                        continue;
                     }
-                    if (sub != 4 && sub != 6)
-                        waitEnter();
                 }
                 break;
 
@@ -247,11 +239,7 @@ public:
                     else {
                         cout << "\nLựa chọn không hợp lệ!\n";
                         Sleep(300);
-                        continue;
                     }
-
-                    if (sub != 1 && sub != 2 && sub != 7 && sub != 8)
-                        waitEnter();
                 }
                 break;
             }

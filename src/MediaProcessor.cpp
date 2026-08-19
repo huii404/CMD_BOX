@@ -401,6 +401,7 @@ void MediaProcessor::processExtractAudioBatch() {
     
     if (inputs.empty()) {
         cout << "Chưa nhập file nào cả!\n";
+        SystemCore::waitEnter();
         return;
     }
 
@@ -430,6 +431,7 @@ void MediaProcessor::processExtractAudioBatch() {
         }
     }
     cout << "\nHoàn thành: Đã trích " << successCount << "/" << inputs.size() << " âm thanh!\n";
+    SystemCore::waitEnter();
 }
 
 void MediaProcessor::processChangeSpeedBatch() {
@@ -440,6 +442,7 @@ void MediaProcessor::processChangeSpeedBatch() {
     
     if (inputs.empty()) {
         cout << "Chưa nhập file nào cả!\n";
+        SystemCore::waitEnter();
         return;
     }
 
@@ -452,6 +455,7 @@ void MediaProcessor::processChangeSpeedBatch() {
 
     if (speed < 0.5f || speed > 2.0f) {
         cout << "Hệ thống hỗ trợ tốc độ từ 0.5x đến 2.0x để tiếng không bị méo!\n";
+        SystemCore::waitEnter();
         return;
     }
 
@@ -482,6 +486,7 @@ void MediaProcessor::processChangeSpeedBatch() {
         }
     }
     cout << "\nHoàn thành: Đã xử lý " << successCount << "/" << inputs.size() << " video!\n";
+    SystemCore::waitEnter();
 }
 
 void MediaProcessor::processMediaEnhancementAuto() {
@@ -820,6 +825,7 @@ void MediaProcessor::normalizeMediaFilenames() {
 
     if (filesToRename.empty()) {
         std::cout << "\nKhông tìm thấy file ảnh/video/audio nào trong thư mục này!\n";
+        SystemCore::waitEnter();
         return;
     }
 
@@ -829,6 +835,7 @@ void MediaProcessor::normalizeMediaFilenames() {
     std::getline(std::cin, confirm);
     if (confirm != "y" && confirm != "Y") {
         std::cout << "Đã hủy.\n";
+        SystemCore::waitEnter();
         return;
     }
 
@@ -873,6 +880,7 @@ void MediaProcessor::normalizeMediaFilenames() {
     }
 
     std::cout << "\nHoàn thành! Đã chuẩn hóa " << successCount << "/" << filesToRename.size() << " file.\n\n";
+    SystemCore::waitEnter();
 }
 
 // Hàm XOR mã hóa/giải mã (dùng key 0xAA)

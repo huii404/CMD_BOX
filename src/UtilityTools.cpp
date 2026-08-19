@@ -86,6 +86,7 @@ void UtilityTools::autoClickPoint() {
     } else {
         cout << "\n\nHoàn thành " << times << " lần click!\n";
     }
+    sc.waitEnter();
 }
 
 // Spam văn bản tự động
@@ -100,12 +101,14 @@ void UtilityTools::spamText() {
     
     if (content.empty()) { 
         cout << "Nội dung trống!\n"; 
+        sc.waitEnter();
         return; 
     }
     
     int times = sc.readInt("Số lần gửi: ");
     if (times <= 0) {
         cout << "Số lần không hợp lệ!\n";
+        sc.waitEnter();
         return;
     }
     
@@ -127,6 +130,7 @@ void UtilityTools::spamText() {
         cout << " " << i << "... "; cout.flush(); 
         if (sleepWithEmergencyCheck(1000)) {
             cout << "\nĐã hủy thao tác.\n";
+            sc.waitEnter();
             return;
         }
     }
@@ -170,6 +174,7 @@ void UtilityTools::spamText() {
     } else {
         cout << "\n\nHoàn thành gửi " << times << " lần!\n";
     }
+    sc.waitEnter();
 }
 
 // Tự động paste danh sách dữ liệu
@@ -180,6 +185,7 @@ void UtilityTools::autoPasteData() {
     int n = sc.readInt("Số dòng dữ liệu: ");
     if (n <= 0) {
         cout << "Số dòng không hợp lệ!\n";
+        sc.waitEnter();
         return;
     }
     
@@ -208,6 +214,7 @@ void UtilityTools::autoPasteData() {
         cout << " " << i << "... "; cout.flush(); 
         if (sleepWithEmergencyCheck(1000)) {
             cout << "\nĐã hủy thao tác.\n";
+            sc.waitEnter();
             return;
         }
     }
@@ -249,6 +256,7 @@ void UtilityTools::autoPasteData() {
     } else {
         cout << "\n\nHoàn thành dán " << n << " dòng!\n";
     }
+    sc.waitEnter();
 }
 
 struct AppItem {
@@ -492,6 +500,7 @@ void UtilityTools::uninstallBloatware() {
 
     cout << "\n======================================================================\n"
          << "Hoàn tất! Đã gỡ bỏ toàn bộ ứng dụng rác mà không ảnh hưởng tới app hệ thống.\n";
+    sc.waitEnter();
 }
 
 static string getXmlTag(const string &xml, const string &tag) {
