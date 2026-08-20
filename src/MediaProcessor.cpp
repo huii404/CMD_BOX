@@ -635,7 +635,11 @@ void MediaProcessor::processConvertFormatBatch() {
                 cout << " [" << i + 1 << "/" << inputs.size() << "] " << inPath.filename().string() << "\n";
 
                 if (!fs::exists(inPath)) {
+<<<<<<< HEAD
                     cout << "    File không tồn tại!\n";
+=======
+                    cout << "File không tồn tại!\n";
+>>>>>>> 809dc31 (update)
                     continue;
                 }
 
@@ -643,7 +647,11 @@ void MediaProcessor::processConvertFormatBatch() {
                 transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
                 if (find(imageExts.begin(), imageExts.end(), ext) == imageExts.end()) {
+<<<<<<< HEAD
                     cout << "    Bỏ qua: Không phải file ảnh!\n";
+=======
+                    cout << "Bỏ qua: Không phải file ảnh!\n";
+>>>>>>> 809dc31 (update)
                     continue;
                 }
 
@@ -664,19 +672,27 @@ void MediaProcessor::processConvertFormatBatch() {
                     cmd = ffmpeg + " -y -i \"" + input + "\" -map_metadata 0 -q:v 90 \"" + outPath.string() + "\"";
                 }
 
+<<<<<<< HEAD
                 cout << "    Đang chuyển đổi...";
+=======
+                cout << "Đang chuyển đổi...";
+>>>>>>> 809dc31 (update)
                 bool success = SystemCore::runRawCommand(cmd);
 
                 if (success && fs::exists(outPath)) {
                     try {
                         fs::remove(inPath);
+<<<<<<< HEAD
                         cout << " OK: " << outPath.filename().string() << "\n";
+=======
+                        cout << outPath.filename().string() << "\n";
+>>>>>>> 809dc31 (update)
                     } catch (...) {
                         cout << " (Lỗi xóa file gốc)\n";
                     }
                 } else {
                     if (fs::exists(outPath)) fs::remove(outPath);
-                    cout << " Chuyển đổi thất bại!\n";
+                    cout << "Chuyển đổi thất bại!\n";
                 }
             }
 
