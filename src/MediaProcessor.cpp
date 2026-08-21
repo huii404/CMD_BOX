@@ -14,9 +14,6 @@ namespace fs = std::filesystem;
 static string cachedFFmpegPath = "";
 static mutex ffmpegMutex;
 
-static string cachedFFprobePath = "";
-static mutex ffprobeMutex;
-
 static GpuCodecInfo cachedGpuInfo;
 static bool hasDetectedGpu = false;
 static mutex gpuDetectionMutex;
@@ -68,41 +65,6 @@ string MediaProcessor::getFFmpegPath() {
         cachedFFmpegPath = "ffmpeg";
     }
     return cachedFFmpegPath;
-}
-
-string MediaProcessor::getFFprobePath() {
-    if (!cachedFFprobePath.empty()) return cachedFFprobePath;
-    lock_guard<mutex> lock(ffprobeMutex);
-    if (!cachedFFprobePath.empty()) return cachedFFprobePath;
-
-    char buffer[MAX_PATH];
-    GetModuleFileNameA(NULL, buffer, MAX_PATH);
-    fs::path exePath(buffer);
-    fs::path binDir = exePath.parent_path();
-    fs::path probePath = binDir / "ffprobe.exe";
-
-    if (fs::exists(probePath)) {
-        cachedFFprobePath = "\"" + probePath.string() + "\"";
-        return cachedFFprobePath;
-    }
-
-    char* pathEnv = getenv("PATH");
-    if (pathEnv) {
-        string pathStr(pathEnv);
-        size_t pos = 0;
-        string token;
-        while ((pos = pathStr.find(';')) != string::npos) {
-            token = pathStr.substr(0, pos);
-            fs::path testPath = fs::path(token) / "ffprobe.exe";
-            if (fs::exists(testPath)) {
-                cachedFFprobePath = "\"" + testPath.string() + "\"";
-                return cachedFFprobePath;
-            }
-            pathStr.erase(0, pos + 1);
-        }
-    }
-    cachedFFprobePath = "ffprobe";
-    return cachedFFprobePath;
 }
 
 GpuCodecInfo MediaProcessor::getGpuEncoder() {
@@ -635,11 +597,7 @@ void MediaProcessor::processConvertFormatBatch() {
                 cout << " [" << i + 1 << "/" << inputs.size() << "] " << inPath.filename().string() << "\n";
 
                 if (!fs::exists(inPath)) {
-<<<<<<< HEAD
                     cout << "    File không tồn tại!\n";
-=======
-                    cout << "File không tồn tại!\n";
->>>>>>> 809dc31 (update)
                     continue;
                 }
 
@@ -647,11 +605,7 @@ void MediaProcessor::processConvertFormatBatch() {
                 transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
                 if (find(imageExts.begin(), imageExts.end(), ext) == imageExts.end()) {
-<<<<<<< HEAD
                     cout << "    Bỏ qua: Không phải file ảnh!\n";
-=======
-                    cout << "Bỏ qua: Không phải file ảnh!\n";
->>>>>>> 809dc31 (update)
                     continue;
                 }
 
@@ -672,21 +626,13 @@ void MediaProcessor::processConvertFormatBatch() {
                     cmd = ffmpeg + " -y -i \"" + input + "\" -map_metadata 0 -q:v 90 \"" + outPath.string() + "\"";
                 }
 
-<<<<<<< HEAD
                 cout << "    Đang chuyển đổi...";
-=======
-                cout << "Đang chuyển đổi...";
->>>>>>> 809dc31 (update)
                 bool success = SystemCore::runRawCommand(cmd);
 
                 if (success && fs::exists(outPath)) {
                     try {
                         fs::remove(inPath);
-<<<<<<< HEAD
                         cout << " OK: " << outPath.filename().string() << "\n";
-=======
-                        cout << outPath.filename().string() << "\n";
->>>>>>> 809dc31 (update)
                     } catch (...) {
                         cout << " (Lỗi xóa file gốc)\n";
                     }
@@ -1185,213 +1131,5 @@ void MediaProcessor::processAnFileTrongFile() {
             Sleep(300);
             break;
         }
-    }
-}
-
-// BỘ PHÂN TÍCH & TRÍCH XUẤT METADATA (CÁCH 2)
-bool MediaProcessor::extractMetadataCore(const std::string& inputPath, std::string& outputReportPath, std::string& summaryInfo, std::string& errorMsg) {
-    if (!fs::exists(inputPath)) {
-        errorMsg = "File không tồn tại: " + inputPath;
-        return false;
-    }
-
-    fs::path inP(inputPath);
-    std::string jsonPath = (inP.parent_path() / (inP.stem().string() + "_metadata.json")).string();
-    std::string txtPath = (inP.parent_path() / (inP.stem().string() + "_metadata.txt")).string();
-
-    string ffprobe = getFFprobePath();
-    string ffmpeg = getFFmpegPath();
-
-    string probeCmd = ffprobe + " -v quiet -print_format json -show_format -show_streams \"" + inputPath + "\" > \"" + jsonPath + "\"";
-    bool probeOk = (SystemCore::runRawCommand("cmd /c " + probeCmd) && fs::exists(jsonPath) && fs::file_size(jsonPath) > 20);
-
-    if (!probeOk) {
-        string metaCmd = ffmpeg + " -y -i \"" + inputPath + "\" -f ffmetadata \"" + txtPath + "\"";
-        SystemCore::runRawCommand(metaCmd);
-    }
-
-    outputReportPath = probeOk ? jsonPath : txtPath;
-
-    std::stringstream ss;
-    uintmax_t fsize = fs::file_size(inputPath);
-    ss << "  Tên tập tin    : " << inP.filename().string() << "\n"
-       << "  Dung lượng     : " << SystemCore::formatSize(fsize) << "\n";
-
-    if (probeOk) {
-        std::ifstream jf(jsonPath);
-        if (jf) {
-            std::string content((std::istreambuf_iterator<char>(jf)), std::istreambuf_iterator<char>());
-            jf.close();
-
-            auto extractValue = [&](const std::string& key) -> std::string {
-                size_t p = content.find("\"" + key + "\"");
-                if (p == std::string::npos) return "";
-                p = content.find(":", p);
-                if (p == std::string::npos) return "";
-                p = content.find_first_not_of(" \t\r\n", p + 1);
-                if (p == std::string::npos) return "";
-                if (content[p] == '"') {
-                    size_t endP = content.find('"', p + 1);
-                    if (endP != std::string::npos) return content.substr(p + 1, endP - p - 1);
-                } else {
-                    size_t endP = content.find_first_of(",}\r\n", p);
-                    if (endP != std::string::npos) return content.substr(p, endP - p);
-                }
-                return "";
-            };
-
-            std::string formatName = extractValue("format_long_name");
-            if (formatName.empty()) formatName = extractValue("format_name");
-            std::string duration = extractValue("duration");
-            std::string bitRate = extractValue("bit_rate");
-            std::string title = extractValue("title");
-            std::string artist = extractValue("artist");
-            std::string encoder = extractValue("encoder");
-            std::string creationTime = extractValue("creation_time");
-
-            if (!formatName.empty()) ss << "  Định dạng       : " << formatName << "\n";
-            if (!duration.empty()) {
-                try {
-                    double durSec = std::stod(duration);
-                    int h = (int)durSec / 3600;
-                    int m = ((int)durSec % 3600) / 60;
-                    int s = (int)durSec % 60;
-                    char dBuf[64];
-                    sprintf_s(dBuf, sizeof(dBuf), "%02d:%02d:%02d (%.2f s)", h, m, s, durSec);
-                    ss << "  Thời lượng     : " << dBuf << "\n";
-                } catch (...) {
-                    ss << "  Thời lượng     : " << duration << "s\n";
-                }
-            }
-            if (!bitRate.empty()) {
-                try {
-                    long long br = std::stoll(bitRate);
-                    ss << "  Bitrate tổng   : " << (br / 1000) << " kbps\n";
-                } catch (...) {
-                    ss << "  Bitrate tổng   : " << bitRate << "\n";
-                }
-            }
-
-            // Luồng Video
-            size_t vPos = content.find("\"codec_type\": \"video\"");
-            if (vPos != std::string::npos) {
-                size_t streamStart = content.rfind("{", vPos);
-                size_t streamEnd = content.find("}", vPos);
-                if (streamStart != std::string::npos && streamEnd != std::string::npos) {
-                    std::string streamBlock = content.substr(streamStart, streamEnd - streamStart);
-                    auto extractStreamVal = [&](const std::string& k) -> std::string {
-                        size_t kp = streamBlock.find("\"" + k + "\"");
-                        if (kp == std::string::npos) return "";
-                        kp = streamBlock.find(":", kp);
-                        if (kp == std::string::npos) return "";
-                        kp = streamBlock.find_first_not_of(" \t\r\n", kp + 1);
-                        if (kp == std::string::npos) return "";
-                        if (streamBlock[kp] == '"') {
-                            size_t ep = streamBlock.find('"', kp + 1);
-                            if (ep != std::string::npos) return streamBlock.substr(kp + 1, ep - kp - 1);
-                        } else {
-                            size_t ep = streamBlock.find_first_of(",}\r\n", kp);
-                            if (ep != std::string::npos) return streamBlock.substr(kp, ep - kp);
-                        }
-                        return "";
-                    };
-                    std::string vCodec = extractStreamVal("codec_name");
-                    std::string w = extractStreamVal("width");
-                    std::string h = extractStreamVal("height");
-                    std::string fps = extractStreamVal("r_frame_rate");
-                    ss << "  Luồng Video    : " << vCodec << " (" << w << "x" << h << ")";
-                    if (!fps.empty() && fps != "0/0") ss << " @ " << fps << " fps";
-                    ss << "\n";
-                }
-            }
-
-            // Luồng Audio
-            size_t aPos = content.find("\"codec_type\": \"audio\"");
-            if (aPos != std::string::npos) {
-                size_t streamStart = content.rfind("{", aPos);
-                size_t streamEnd = content.find("}", aPos);
-                if (streamStart != std::string::npos && streamEnd != std::string::npos) {
-                    std::string streamBlock = content.substr(streamStart, streamEnd - streamStart);
-                    auto extractStreamVal = [&](const std::string& k) -> std::string {
-                        size_t kp = streamBlock.find("\"" + k + "\"");
-                        if (kp == std::string::npos) return "";
-                        kp = streamBlock.find(":", kp);
-                        if (kp == std::string::npos) return "";
-                        kp = streamBlock.find_first_not_of(" \t\r\n", kp + 1);
-                        if (kp == std::string::npos) return "";
-                        if (streamBlock[kp] == '"') {
-                            size_t ep = streamBlock.find('"', kp + 1);
-                            if (ep != std::string::npos) return streamBlock.substr(kp + 1, ep - kp - 1);
-                        } else {
-                            size_t ep = streamBlock.find_first_of(",}\r\n", kp);
-                            if (ep != std::string::npos) return streamBlock.substr(kp, ep - kp);
-                        }
-                        return "";
-                    };
-                    std::string aCodec = extractStreamVal("codec_name");
-                    std::string sRate = extractStreamVal("sample_rate");
-                    std::string ch = extractStreamVal("channels");
-                    ss << "  Luồng Audio    : " << aCodec << " (" << ch << " channels, " << sRate << " Hz)\n";
-                }
-            }
-
-            // Thẻ Tag
-            if (!title.empty()) ss << "   Tiêu đề        : " << title << "\n";
-            if (!artist.empty()) ss << "   Nghệ sĩ        : " << artist << "\n";
-            if (!creationTime.empty()) ss << "   Ngày tạo       : " << creationTime << "\n";
-            if (!encoder.empty()) ss << "   Trình mã hóa   : " << encoder << "\n";
-        }
-    } else {
-        std::ifstream tf(txtPath);
-        if (tf) {
-            std::string line;
-            while (std::getline(tf, line)) {
-                line = SystemCore::trim(line);
-                if (!line.empty() && line[0] != ';') {
-                    ss << "   " << line << "\n";
-                }
-            }
-            tf.close();
-        }
-    }
-
-    summaryInfo = ss.str();
-    return true;
-}
-
-void MediaProcessor::processExtractMetadata() {
-    while (true) {
-        std::cout << std::flush;
-        system("cls");
-
-        std::cout << "BỘ PHÂN TÍCH & TRÍCH XUẤT METADATA MEDIA (PRO)\n\n"
-                  << "Kéo thả file Ảnh/Video/Audio (0 để thoát): ";
-        std::string rawInput;
-        std::getline(std::cin, rawInput);
-        std::vector<std::string> inputs = SystemCore::parsePaths(rawInput);
-
-        if (inputs.empty()) {
-            std::cout << "\nQuay lại menu chính.\n";
-            return;
-        }
-
-        std::cout << "\nĐang phân tích " << inputs.size() << " file...\n";
-        for (size_t i = 0; i < inputs.size(); ++i) {
-            std::cout << "\n------------------------------------------------------------\n"
-                      << " [" << i + 1 << "/" << inputs.size() << "] KẾT QUẢ PHÂN TÍCH METADATA:\n"
-                      << "------------------------------------------------------------\n";
-
-            std::string outPath, summary, errorMsg;
-            if (extractMetadataCore(inputs[i], outPath, summary, errorMsg)) {
-                std::cout << summary
-                          << "\nĐã xuất Metadata ra file:\n"
-                          << "   " << outPath << "\n";
-            } else {
-                std::cout << "Lỗi: " << errorMsg << "\n";
-            }
-        }
-
-        std::cout << "\n";
-        SystemCore::waitEnter();
     }
 }

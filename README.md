@@ -52,6 +52,12 @@ Chương trình được chia thành **4 phân hệ chính**:
 * **Chuẩn hóa tên file:** Tự động định dạng lại tên file trong thư mục.
 * **Ẩn & Dò tìm file bí mật:** Kỹ thuật Steganography giấu file dữ liệu vào trong Ảnh hoặc Video.
 
+### 5. 🤖 Trợ lý ảo AI (`Virtual Assistant` - Python)
+* **Nhận diện ý định & Chẩn đoán thông minh:** Nhập trực tiếp các tình trạng máy tính đang gặp phải (ví dụ: *"rác nhiều"*, *"mạng lag"*, *"quên pass wifi"*, *"nén video"*...).
+* **Điều hướng chính xác:** Chỉ dẫn trực tiếp đến menu và tính năng tương ứng trong CMD BOX.
+* **Lối tắt nhanh Windows:** Hỗ trợ mở tức thì Thùng rác (Recycle Bin), Task Manager, Network Connections, Windows Update, v.v.
+* **Sẵn sàng tích hợp LLM:** Cấu trúc module mở rộng cho phép cắm API hoặc Local LLM (Ollama, Gemini, OpenAI) trong tương lai.
+
 ---
 
 ## III. Cấu trúc Thư mục
@@ -71,8 +77,10 @@ CMD_BOX/
 │   ├── UtilityTools.cpp
 │   ├── MediaProcessor.cpp
 │   └── main.cpp             # Entry point & Menu điều hướng
+├── scripts/                 # Kịch bản mở rộng
+│   └── assistant.py         # Module Trợ lý ảo AI (Python)
 └── bin/                     # Thư mục chứa file sau khi build
-    ├── cmd_box.exe          # File thực thi chính
+    ├── main.exe             # File thực thi chính
     └── ffmpeg.exe           # Bộ xử lý media (tùy chọn)
 ```
 

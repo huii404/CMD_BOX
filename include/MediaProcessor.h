@@ -37,9 +37,6 @@ private:
     bool hideFileInImageCore(const std::string& imagePath, const std::string& hiddenFilePath, const std::string& outputPath, std::string& errorMsg);
     bool hideFileInVideoCore(const std::string& videoPath, const std::string& hiddenFilePath, const std::string& outputPath, std::string& errorMsg);
     bool extractHiddenFromMediaCore(const std::string& containerPath, const std::string& outputPath, std::string& errorMsg);
-    // Metadata
-    std::string getFFprobePath();
-    bool extractMetadataCore(const std::string& inputPath, std::string& outputReportPath, std::string& summaryInfo, std::string& errorMsg);
 
 public:
     MediaProcessor();
@@ -51,7 +48,6 @@ public:
     void processMediaEnhancementAuto();
     void processConvertFormatBatch();
     void normalizeMediaFilenames();
-    void processExtractMetadata();
     
     // Hàm mẹ: Ẩn file trong file (Menu lồng)
     void processAnFileTrongFile();

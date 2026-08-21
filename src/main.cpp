@@ -87,8 +87,59 @@ public:
              << " [2] Mạng & Bảo mật\n"
              << " [3] Công cụ tự động & Tiện ích\n"
              << " [4] Xử lý Media\n"
+             << " [5] Trợ lý ảo AI (Virtual Assistant)\n"
              << " [0] Thoát\n\n"
              << " [Chọn]: ";
+    }
+
+    void launchAssistant() {
+        char buffer[MAX_PATH];
+        GetModuleFileNameA(NULL, buffer, MAX_PATH);
+        fs::path exePath(buffer);
+        fs::path binDir = exePath.parent_path();
+        fs::path rootDir = binDir.parent_path();
+        
+        fs::path scriptPath = rootDir / "scripts" / "assistant.py";
+        if (!fs::exists(scriptPath)) {
+            scriptPath = fs::current_path() / "scripts" / "assistant.py";
+        }
+        if (!fs::exists(scriptPath)) {
+            if (fs::exists("scripts/assistant.py")) {
+                scriptPath = "scripts/assistant.py";
+            }
+        }
+
+        if (!fs::exists(scriptPath)) {
+            cls();
+            cout << "\n[LỖI] Không tìm thấy tập tin scripts/assistant.py!\n";
+            Sleep(1500);
+            return;
+        }
+
+        string pyExe = "";
+        if (SystemCore::runRawCommand("where python >nul 2>nul")) {
+            pyExe = "python";
+        } else if (SystemCore::runRawCommand("where py >nul 2>nul")) {
+            pyExe = "py";
+        } else {
+            cls();
+             
+             cout<< " Trợ lý ảo AI yêu cầu Python (3.8+) để hoạt động.\n"
+                 << " Bạn có thể cài đặt Python từ:\n"
+                 << "  - Microsoft Store: Gõ 'python' trong Command Prompt\n"
+                 << "  - Tải tự động trong CMD BOX: [3] Công cụ tiện ích -> [4] Tải phần mềm\n"
+                 << "  - Hoặc tải trực tiếp tại: https://www.python.org\n\n";
+            SystemCore::waitEnter();
+            return;
+        }
+
+        // Mở cửa sổ Console riêng biệt (song song với CMD BOX)
+        string cmd = "start \"CMD BOX - Tro Ly Ao AI\" " + pyExe + " \"" + scriptPath.string() + "\"";
+        system(cmd.c_str());
+
+          cout<< " Cửa sổ Trợ lý ảo AI đã được mở riêng biệt.\n"
+             << " Bạn có thể vừa tra hỏi vừa thao tác song song.\n\n";
+        Sleep(1000);
     }
 
     void menuBaoTriToiUu() {
@@ -136,7 +187,6 @@ public:
              << " [5] Đổi đuôi định dạng Media\n"
              << " [6] Chuẩn hóa tên file trong thư mục\n"
              << " [7] Ẩn file trong file\n"
-             << " [8] Xem & Trích xuất Metadata (JSON/Tag Info)\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
     }
@@ -152,7 +202,7 @@ public:
             int mainChoice = readInt("");
             
             if (mainChoice == 0) break;      
-            if (mainChoice < 1 || mainChoice > 4) continue;
+            if (mainChoice < 1 || mainChoice > 5) continue;
 
             int sub;
             switch (mainChoice) {
@@ -235,12 +285,16 @@ public:
                     else if (sub == 5) getMedia().processConvertFormatBatch();
                     else if (sub == 6) getMedia().normalizeMediaFilenames();
                     else if (sub == 7) getMedia().processAnFileTrongFile();
-                    else if (sub == 8) getMedia().processExtractMetadata();
                     else {
                         cout << "\nLựa chọn không hợp lệ!\n";
                         Sleep(300);
                     }
                 }
+                break;
+
+            // Trợ lý ảo AI
+            case 5:
+                launchAssistant();
                 break;
             }
         }
