@@ -268,9 +268,9 @@ std::string SystemCore::getDeviceStatus() {
             int percent = static_cast<int>(sps.BatteryLifePercent);
             std::string status = "Laptop (Pin: " + std::to_string(percent) + "%";
             if (sps.ACLineStatus == 1) {
-                status += " - Đang sạc)";
+                status += "⚡)";
             } else if (sps.ACLineStatus == 0) {
-                status += " - Đang dùng)";
+                status += "🔌)";
             } else {
                 status += ")";
             }
@@ -386,3 +386,4 @@ void SystemCore::pressEnter() {
     keybd_event(VK_RETURN, 0, 0, 0);
     keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0);
 }
+

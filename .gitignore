@@ -2,3 +2,4 @@
 bin/*
 scripts/__pycache__/*       
 scripts/*.pyc*
+scripts/config.json
