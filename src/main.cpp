@@ -127,12 +127,13 @@ public:
 
     void menuBaoTriToiUu() {
         cls();
-        cout << " [1] Dọn rác chuyên sâu PRO\n"
-             << " [2] Tắt ứng dụng khởi động\n"
-             << " [3] Tối ưu dịch vụ Windows\n"
-             << " [4] Chỉnh giao diện & Taskbar Win 11\n"
-             << " [5] Sửa lỗi Windows Update\n"
-             << " [6] Tối ưu hóa tổng thể hệ thống\n"
+        cout << " [1] Dọn rác nhanh \n"
+             << " [2] Dọn rác chuyên sâu \n"
+             << " [3] Tắt ứng dụng khởi động\n"
+             << " [4] Tối ưu dịch vụ Windows\n"
+             << " [5] Chỉnh giao diện & Taskbar Win 11\n"
+             << " [6] Sửa lỗi Windows Update\n"
+             << " [7] Tối ưu hóa tổng thể hệ thống\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
     }
@@ -198,12 +199,13 @@ public:
                     sub = readInt("");
                     if (sub == 0) break;
                     
-                    if (sub == 1)      getOptimizer().cleanDiskPro();
-                    else if (sub == 2) getOptimizer().disableAllStartupApps();
-                    else if (sub == 3) getOptimizer().turnOffServicesMenu();
-                    else if (sub == 4) getOptimizer().optimizeTaskbar();
-                    else if (sub == 5) getOptimizer().fixWindowsUpdate();
-                    else if (sub == 6) getOptimizer().optimizeSystemPRO();
+                    if (sub == 1)      getOptimizer().cleanDiskQuick();
+                    else if (sub == 2) getOptimizer().cleanDiskPro();
+                    else if (sub == 3) getOptimizer().disableAllStartupApps();
+                    else if (sub == 4) getOptimizer().turnOffServicesMenu();
+                    else if (sub == 5) getOptimizer().optimizeTaskbar();
+                    else if (sub == 6) getOptimizer().fixWindowsUpdate();
+                    else if (sub == 7) getOptimizer().optimizeSystemPRO();
                     else {
                         cout << "\nLựa chọn không hợp lệ!\n";
                         Sleep(300);

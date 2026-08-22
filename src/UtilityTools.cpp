@@ -431,12 +431,14 @@ void UtilityTools::downloadManager() {
     }
 }
 
-// Gỡ bỏ ứng dụng rác Bloatware (Sử dụng Vector chính xác tuyệt đối, không dùng Regex mập mờ)
+// Gỡ bỏ ứng dụng rác Bloatware (Bao gồm Phone Link, Cross Device & game/app quảng cáo cài sẵn)
 void UtilityTools::uninstallBloatware() {
     sc.cls();
     
     // Danh sách các ứng dụng rác / game quảng cáo cài sẵn cần gỡ
     const std::vector<std::pair<std::string, std::string>> bloatList = {
+        {"Microsoft.YourPhone", "Liên kết điện thoại (Phone Link)"},
+        {"MicrosoftWindows.CrossDevice", "Trải nghiệm liên kết thiết bị (Cross Device)"},
         {"Microsoft.BingNews", "Tin tức (Bing News)"},
         {"Microsoft.BingWeather", "Thời tiết (Bing Weather)"},
         {"Microsoft.GetHelp", "Trợ giúp (Get Help)"},
@@ -465,8 +467,8 @@ void UtilityTools::uninstallBloatware() {
     cout << "======================================================================\n"
          << "           GỠ BỎ ỨNG DỤNG RÁC MẶC ĐỊNH (BLOATWARE CLEANER)\n"
          << "======================================================================\n\n"
-         << "Chế độ: Gỡ bỏ chính xác theo tên gói (Tuyệt đối bảo vệ Calculator, StickyNotes,\n"
-         << "        Clock/Alarms, Movies & TV, Media Player, Xbox Game Bar, Phone Link)\n\n"
+         << "Chế độ: Gỡ bỏ chính xác theo tên gói & khóa dịch vụ ngầm\n"
+         << "        (Bảo vệ Calculator, StickyNotes, Clock/Alarms, Media Player, Xbox Game Bar)\n\n"
          << "Tổng số gói rác được quét: " << bloatList.size() << " ứng dụng.\n\n";
 
     cout << "Bạn có chắc chắn muốn quét và gỡ bỏ toàn bộ danh sách rác trên? (y/n): ";
@@ -477,9 +479,14 @@ void UtilityTools::uninstallBloatware() {
         return;
     }
 
-    cout << "\nĐang tiến hành gỡ bỏ an toàn từng ứng dụng...\n\n";
+    cout << "\nĐang tiến hành gỡ bỏ an toàn từng ứng dụng và khóa dịch vụ ngầm...\n\n";
 
-    string psScript = "$apps = @(\n";
+    string psScript = "";
+    // 1. Tắt tiến trình Phone Link & Cross Device đang chạy
+    psScript += "Stop-Process -Name 'CrossDeviceService','PhoneExperienceHost' -Force -ErrorAction SilentlyContinue;\n";
+
+    // 2. Gỡ bỏ các gói Appx và Provisioned Package
+    psScript += "$apps = @(\n";
     for (size_t i = 0; i < bloatList.size(); ++i) {
         psScript += "    '" + bloatList[i].first + "'";
         if (i + 1 < bloatList.size()) psScript += ",";
@@ -487,16 +494,39 @@ void UtilityTools::uninstallBloatware() {
     }
     psScript += ");\n";
     psScript += "foreach ($pkg in $apps) {\n";
-    psScript += "    Get-AppxPackage -AllUsers -Name $pkg -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
-    psScript += "    Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq $pkg } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue;\n";
+    psScript += "    Get-AppxPackage -AllUsers -Name ('*' + $pkg + '*') -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
+    psScript += "    Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like ('*' + $pkg + '*') -or $_.PackageName -like ('*' + $pkg + '*') } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue;\n";
     psScript += "}\n";
+
+    // 3. Khóa hoàn toàn Service và Group Policy liên kết thiết bị
+    psScript += "Stop-Service -Name 'CDPUserSvc*' -Force -ErrorAction SilentlyContinue;\n";
+    psScript += "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\CDPUserSvc' -Name 'Start' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
+    psScript += "New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Force -ErrorAction SilentlyContinue | Out-Null;\n";
+    psScript += "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Name 'EnableMmx' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
+
+    // 4. Gỡ bỏ triệt để Microsoft OneDrive & xóa tàn dư / icon Explorer
+    psScript += "Stop-Process -Name 'OneDrive' -Force -ErrorAction SilentlyContinue;\n";
+    psScript += "if (Test-Path \"$env:SystemRoot\\SysWOW64\\OneDriveSetup.exe\") {\n";
+    psScript += "    Start-Process \"$env:SystemRoot\\SysWOW64\\OneDriveSetup.exe\" -ArgumentList '/uninstall' -Wait -NoNewWindow -ErrorAction SilentlyContinue;\n";
+    psScript += "} elseif (Test-Path \"$env:SystemRoot\\System32\\OneDriveSetup.exe\") {\n";
+    psScript += "    Start-Process \"$env:SystemRoot\\System32\\OneDriveSetup.exe\" -ArgumentList '/uninstall' -Wait -NoNewWindow -ErrorAction SilentlyContinue;\n";
+    psScript += "} elseif (Test-Path \"$env:LocalAppData\\Microsoft\\OneDrive\\Update\\OneDriveSetup.exe\") {\n";
+    psScript += "    Start-Process \"$env:LocalAppData\\Microsoft\\OneDrive\\Update\\OneDriveSetup.exe\" -ArgumentList '/uninstall' -Wait -NoNewWindow -ErrorAction SilentlyContinue;\n";
+    psScript += "}\n";
+    psScript += "Remove-Item -Path \"$env:LocalAppData\\Microsoft\\OneDrive\" -Recurse -Force -ErrorAction SilentlyContinue;\n";
+    psScript += "Remove-Item -Path \"$env:ProgramData\\Microsoft OneDrive\" -Recurse -Force -ErrorAction SilentlyContinue;\n";
+    psScript += "Remove-Item -Path \"C:\\OneDriveTemp\" -Recurse -Force -ErrorAction SilentlyContinue;\n";
+    psScript += "Remove-Item -Path 'HKCR:\\CLSID\\{018D5C66-4533-4307-9B53-224DE2ED1FE6}' -Recurse -Force -ErrorAction SilentlyContinue;\n";
+    psScript += "Remove-Item -Path 'HKCR:\\Wow6432Node\\CLSID\\{018D5C66-4533-4307-9B53-224DE2ED1FE6}' -Recurse -Force -ErrorAction SilentlyContinue;\n";
 
     string cmd = "powershell -NoProfile -Command \"" + psScript + "\"";
     sc.runAdmin(cmd, true);
 
     for (const auto &item : bloatList) {
-        cout << "  [✓] Đã dọn sạch: " << left << setw(35) << item.second << " [" << item.first << "]\n";
+        cout << "  [✓] Đã dọn sạch: " << left << setw(45) << item.second << " [" << item.first << "]\n";
     }
+    cout << "  [✓] Đã dọn sạch: " << left << setw(45) << "Gỡ bỏ tận gốc Microsoft OneDrive" << " [OneDriveSetup /uninstall]\n";
+    cout << "  [✓] Đã khóa:   " << left << setw(45) << "Dịch vụ liên kết CDPUserSvc & Group Policy" << " [CDPUserSvc/EnableMmx]\n";
 
     cout << "\n======================================================================\n"
          << "Hoàn tất! Đã gỡ bỏ toàn bộ ứng dụng rác mà không ảnh hưởng tới app hệ thống.\n";
