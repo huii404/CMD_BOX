@@ -87,7 +87,7 @@ public:
              << " [2] Mạng & Bảo mật\n"
              << " [3] Công cụ tự động & Tiện ích\n"
              << " [4] Xử lý Media\n"
-             << " [5] Trợ lý ảo AI (Virtual Assistant)\n"
+             << " [5] Trợ lý ảo AI\n"
              << " [0] Thoát\n\n"
              << " [Chọn]: ";
     }
@@ -125,6 +125,7 @@ public:
         Sleep(1000);
     }
 
+
     void menuBaoTriToiUu() {
         cls();
         cout << " [1] Dọn rác nhanh \n"
@@ -156,19 +157,19 @@ public:
              << " [2] Spam Text\n"
              << " [3] Auto Paste dữ liệu nhiều dòng\n"
              << " [4] Tải & Cài đặt phần mềm tự động\n"
-             << " [5] Gỡ bỏ ứng dụng rác mặc định\n"
-             << " [6] Kiểm tra độ chai Pin Laptop\n"
+             << " [5] Gỡ bỏ ứng dụng rác windows\n"
+             << " [6] Kiểm tra chai Pin Laptop\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
     }
 
     void menuMedia() {
         cls();
-        cout << " [1] Nén dung lượng Video / Ảnh\n"
-             << " [2] Làm nét Video / Ảnh\n"
+        cout << " [1] Nén dung lượng Video/Ảnh\n"
+             << " [2] Làm nét Video /Ảnh\n"
              << " [3] Mp4 -> Mp3\n"
-             << " [4] Thay đổi tốc độ Video\n"
-             << " [5] Đổi đuôi định dạng Media\n"
+             << " [4] Tốc độ Video\n"
+             << " [5] Đổi định dạng Media\n"
              << " [6] Chuẩn hóa tên file trong thư mục\n"
              << " [7] Ẩn file trong file\n"
              << " [0] Quay lại\n\n"
@@ -206,10 +207,7 @@ public:
                     else if (sub == 5) getOptimizer().optimizeTaskbar();
                     else if (sub == 6) getOptimizer().fixWindowsUpdate();
                     else if (sub == 7) getOptimizer().optimizeSystemPRO();
-                    else {
-                        cout << "\nLựa chọn không hợp lệ!\n";
-                        Sleep(300);
-                    }
+                    else Sleep(300);
                 }
                 break;
 
@@ -227,10 +225,7 @@ public:
                     else if (sub == 4) getInternet().checkSecurityStatus();
                     else if (sub == 5) getInternet().wifiAudit();
                     else if (sub == 6) getInternet().checkHostsFileSecurity();
-                    else {
-                        cout << "\nLựa chọn không hợp lệ!\n";
-                        Sleep(300);
-                    }
+                    else Sleep(300);
                 }
                 break;
 
@@ -248,10 +243,7 @@ public:
                     else if (sub == 4) getTools().downloadManager();
                     else if (sub == 5) getTools().uninstallBloatware();   
                     else if (sub == 6) getTools().batteryHealthDiagnostic();
-                    else {
-                        cout << "\nLựa chọn không hợp lệ!\n";
-                        Sleep(300);
-                    }
+                    else Sleep(300);
                 }
                 break;
 
@@ -270,10 +262,7 @@ public:
                     else if (sub == 5) getMedia().processConvertFormatBatch();
                     else if (sub == 6) getMedia().normalizeMediaFilenames();
                     else if (sub == 7) getMedia().processAnFileTrongFile();
-                    else {
-                        cout << "\nLựa chọn không hợp lệ!\n";
-                        Sleep(300);
-                    }
+                    else Sleep(300);
                 }
                 break;
 
