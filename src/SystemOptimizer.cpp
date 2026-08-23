@@ -44,7 +44,6 @@ static void wipeFolderContents(const fs::path &dirPath) {
  *   + Thùng rác (Recycle Bin)
  *   + Bộ đệm phân giải tên miền (Flush DNS)
  *   + Bộ đệm DirectX (D3DSCache), CryptnetUrlCache, Báo cáo sự cố tạm thời (WER Temp)
- * - Tuyệt đối không chạy DISM / cleanmgr / deep dev scan để đạt tốc độ tức thì.
  */
 void SystemOptimizer::cleanDiskQuick() {
     sc.cls();
@@ -118,8 +117,6 @@ void SystemOptimizer::cleanDiskPro() {
         bytesBefore = space.available;
     } catch (...) {}
 
-    cout << "Đang dọn rác toàn diện...\n\n";
-
     // --- [ĐOẠN 1: DỌN CACHE NGƯỜI DÙNG BẰNG ĐA LUỒNG] ---
     // (Có thể thêm đường dẫn cache mới của các ứng dụng khác vào danh sách luồng này)
     vector<thread> userThreads;
@@ -133,15 +130,13 @@ void SystemOptimizer::cleanDiskPro() {
     userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\Local\\Microsoft\\Windows\\WER\\*\" 2>nul"); });
     
     // Đợi tất cả luồng dọn rác người dùng hoàn tất
-    for (auto& t : userThreads) t.join();
-    cout << "Đã dọn cache người dùng.\n";
+    for (auto& t : userThreads) t.join();;
 
     // --- [DỌN TRÌNH DUYỆT, RÁC DEV, THÙNG RÁC, FLUSH DNS] ---
     clearBrowserCache();
     cleanDevCaches();
     sc.runCMD("powershell -NoProfile -Command \"Clear-RecycleBin -Force -ErrorAction SilentlyContinue\"");
     sc.runCMD("ipconfig /flushdns");
-    cout << "Đã dọn Browser, Dev Caches, Thùng rác, DNS.\n";
 
     // --- [ĐOẠN 2: DỌN RÁC HỆ THỐNG YÊU CẦU QUYỀN ADMINISTRATOR] ---
     // (Thêm các lệnh xóa rác hệ thống sâu bằng Batch script tại đây)
@@ -482,7 +477,6 @@ void SystemOptimizer::cleanDevCaches() {
     for (const auto &path : devCachePaths) {
         wipeFolderContents(path);
     }
-    cout << "Đã dọn sạch cache lập trình (Node, Pip, Yarn, NuGet, Gradle, Rust, VS Code).\n";
 }
 
 /**
@@ -539,10 +533,13 @@ void SystemOptimizer::optimizeSystemPRO() {
     batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager\" /v \"SubscribedContent-338389Enabled\" /t REG_DWORD /d 0 /f\n";
     batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager\" /v \"SystemPaneSuggestionsEnabled\" /t REG_DWORD /d 0 /f\n";
     batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v \"ShowSyncProviderNotifications\" /t REG_DWORD /d 0 /f\n";
+    
     // Tắt hiệu ứng trong suốt (Transparency Effects) để tiết kiệm GPU/RAM và pin
     batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\" /v \"EnableTransparency\" /t REG_DWORD /d 0 /f\n";
+    
     // Tắt Telemetry chẩn đoán ngầm
     batContent += "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection\" /v AllowTelemetry /t REG_DWORD /d 0 /f\n";
+    
     // Tắt file Hibernate hiberfil.sys (giải phóng dung lượng bằng đúng dung lượng RAM)
     batContent += "powercfg -h off\n";
 
@@ -566,7 +563,6 @@ void SystemOptimizer::optimizeSystemPRO() {
     batContent += "cleanmgr /sagerun:1\n";
     batContent += "taskkill /f /im explorer.exe & start explorer.exe\n";
 
-    cout << "Đang áp dụng thiết lập tối ưu toàn diện (Admin Batch)...\n";
     SystemCore::runBatchAsAdmin(batContent, "Tối ưu hệ thống PRO");
 
     cout << "\nTối ưu hệ thống hoàn tất!\n";

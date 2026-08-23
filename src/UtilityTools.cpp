@@ -29,7 +29,7 @@ static bool sleepWithEmergencyCheck(int totalMs) {
 // Auto click chuột theo vị trí
 void UtilityTools::autoClickPoint() {
     sc.cls();
-    cout << "Nhấn ESC hoặc F6 bất kỳ lúc nào để dừng khẩn cấp.\n\n";
+    cout << "Nhấn ESC hoặc F6 để dừng khẩn cấp.\n\n";
     
     int times = sc.readInt("Số lần click: ");
     if (times <= 0) {
@@ -274,7 +274,6 @@ static string trimStr(const string &s) {
 
 static string resolveAppConfigPath() {
     if (fs::exists("src/apps.txt")) return "src/apps.txt";
-    if (fs::exists("../src/apps.txt")) return "../src/apps.txt";
     if (fs::exists("apps.txt")) return "apps.txt";
     return "src/apps.txt";
 }
@@ -435,7 +434,7 @@ void UtilityTools::downloadManager() {
 void UtilityTools::uninstallBloatware() {
     sc.cls();
     
-    // Danh sách các ứng dụng rác / game quảng cáo cài sẵn cần gỡ
+    // Danh sách các ứng dụng rác
     const std::vector<std::pair<std::string, std::string>> bloatList = {
         {"Microsoft.YourPhone", "Liên kết điện thoại (Phone Link)"},
         {"MicrosoftWindows.CrossDevice", "Trải nghiệm liên kết thiết bị (Cross Device)"},
@@ -527,9 +526,7 @@ void UtilityTools::uninstallBloatware() {
     }
     cout << "  [✓] Đã dọn sạch: " << left << setw(45) << "Gỡ bỏ tận gốc Microsoft OneDrive" << " [OneDriveSetup /uninstall]\n";
     cout << "  [✓] Đã khóa:   " << left << setw(45) << "Dịch vụ liên kết CDPUserSvc & Group Policy" << " [CDPUserSvc/EnableMmx]\n";
-
-    cout << "\n======================================================================\n"
-         << "Hoàn tất! Đã gỡ bỏ toàn bộ ứng dụng rác mà không ảnh hưởng tới app hệ thống.\n";
+    
     sc.waitEnter();
 }
 
