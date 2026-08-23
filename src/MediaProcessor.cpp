@@ -331,10 +331,8 @@ void MediaProcessor::processMediaAuto() {
         totalBytesSaved += currentBytesSaved; 
         hasPreviousRun = true;
 
-        cout << "\n============\n"
-             << "  Đã xử lý xong " << inputs.size() << " file!\n"
-             << "============\n"
-             << " Tự động quay về menu thống kê sau 2 giây...\n";
+        cout << "\n[✓] Đã xử lý xong " << inputs.size() << " file!\n"
+             << "Quay lại sau 2 giây...\n";
         cout.flush();
         
         FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));

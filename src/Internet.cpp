@@ -521,11 +521,9 @@ void Internet::toggleDNSoverHTTPS(bool enable, int &alreadyCount, int &newlyCoun
 void Internet::fullSecurityShield() {
     while (true) {
         sc.cls();
-        cout << "============\n"
-             << "         LÁ CHẮN BẢO MẬT HỆ THỐNG & MẠNG TOÀN DIỆN\n"
-             << "============\n"
-             << " [1] Kích hoạt toàn diện (Defender, Firewall, Chặn Port, DoH, Chống Ransomware)\n"
-             << " [2] Khôi phục mặc định (Mở lại Port, Tắt DoH, Cho phép chia sẻ LAN)\n"
+        cout << "=== LÁ CHẮN BẢO MẬT HỆ THỐNG & MẠNG ===\n"
+             << " [1] Kích hoạt toàn diện (Defender, Firewall, Chặn Port, DoH)\n"
+             << " [2] Khôi phục mặc định (Mở Port, Tắt DoH, Chia sẻ LAN)\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
 
@@ -534,10 +532,8 @@ void Internet::fullSecurityShield() {
 
         if (choice == 1) {
             sc.cls();
-            cout << "============\n"
-                 << "      ĐANG KÍCH HOẠT LÁ CHẮN BẢO MẬT TOÀN DIỆN\n"
-                 << "============\n\n"
-                 << "Đang tổng hợp toàn bộ quy tắc bảo mật và khởi chạy trong cửa sổ quản trị...\n";
+            cout << "=== ĐANG KÍCH HOẠT LÁ CHẮN BẢO MẬT ===\n\n"
+                 << "Đang tổng hợp quy tắc và khởi chạy trong cửa sổ quản trị...\n";
 
             std::string batContent = 
                 "@echo off\n"
@@ -610,9 +606,7 @@ void Internet::fullSecurityShield() {
         } 
         else if (choice == 2) {
             sc.cls();
-            cout << "============\n"
-                 << "         ĐANG KHÔI PHỤC THIẾT LẬP MẠNG MẶC ĐỊNH\n"
-                 << "============\n\n"
+            cout << "=== ĐANG KHÔI PHỤC THIẾT LẬP MẠNG MẶC ĐỊNH ===\n\n"
                  << "Đang khởi chạy trong cửa sổ quản trị để khôi phục mặc định...\n";
 
             std::string batContent = 
@@ -660,9 +654,7 @@ void Internet::fullSecurityShield() {
 
 void Internet::checkHostsFileSecurity() {
     sc.cls();
-    cout << "============\n"
-         << "     QUÉT & BẢO VỆ TẬP TIN HOSTS (CHỐNG CHUYỂN HƯỚNG WEB)\n"
-         << "============\n\n";
+    cout << "=== QUÉT & BẢO VỆ TẬP TIN HOSTS ===\n\n";
 
     std::string hostsPath = "C:\\Windows\\System32\\drivers\\etc\\hosts";
     if (!fs::exists(hostsPath)) {

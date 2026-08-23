@@ -76,13 +76,15 @@ public:
     void renderStatusBox() {
         bool admin = SystemCore::isElevated();
         std::string devInfo = SystemCore::getDeviceStatus();
-        cout << "Quyền hạn : " << (admin ? "Administrator" : "User") << "\n"
-             << "Thiết bị  : " << devInfo << "\n";
+        cout << " ┌─ [ TRẠNG THÁI ] ─────────────────────────\n"
+             << " │ Quyền hạn : " << (admin ? "Administrator" : "User") << "\n"
+             << " │ Thiết bị  : " << devInfo << "\n"
+             << " └──────────────────────────────────────────\n";
     }
 
     void mainMenu() {
         renderStatusBox();
-        cout << "\n\n\n"
+        cout << "\n"
              << " [1] Bảo trì & Tối ưu hệ thống\n"
              << " [2] Mạng & Bảo mật\n"
              << " [3] Công cụ tự động & Tiện ích\n"
@@ -135,7 +137,7 @@ public:
              << " [5] Chỉnh giao diện & Taskbar Win 11\n"
              << " [6] Sửa lỗi Windows Update\n"
              << " [7] Tối ưu hóa tổng thể hệ thống\n"
-             << " [8] Dọn rác môi trường Dev (Pip, NPM, __pycache__, node_modules...)\n"
+             << " [8] Dọn rác môi trường Dev (Python, Node, Java...)\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
     }

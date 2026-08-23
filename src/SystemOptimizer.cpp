@@ -506,13 +506,10 @@ void SystemOptimizer::cleanDevCaches(bool interactive) {
 
     if (interactive) {
         sc.cls();
-        cout << "====================================================================\n"
-             << "          DỌN DẸP BỘ ĐỆM & RÁC LẬP TRÌNH VIÊN TỰ ĐỘNG (DEV CACHES)   \n"
-             << "====================================================================\n\n"
-             << "[*] Thư mục dự án quét: " << scanRoot.string() << "\n"
-             << "[*] Đang tự động kiểm tra các môi trường lập trình trên máy...\n\n";
+        cout << "--- DỌN RÁC MÔI TRƯỜNG DEV ---\n"
+             << "Mục tiêu quét: " << scanRoot.string() << "\n\n";
     } else {
-        cout << "Đang dọn rác Dev Caches tự động...\n";
+        cout << "Đang dọn rác Dev Caches...\n";
     }
 
     // 1. KIỂM TRA & DỌN DẸP PYTHON
@@ -530,12 +527,8 @@ void SystemOptimizer::cleanDevCaches(bool interactive) {
             pyFreed);
 
         if (interactive) {
-            cout << " [+] Môi trường Python: ĐÃ PHÁT HIỆN\n"
-                 << "     -> Đã dọn Pip cache\n"
-                 << "     -> Đã xóa " << pyDeleted << " mục (__pycache__ / .pyc) | Giải phóng: " << SystemCore::formatSize(pyFreed) << "\n";
+            cout << " [✓] Python : Đã dọn Pip cache, " << pyDeleted << " mục (__pycache__/.pyc) - " << SystemCore::formatSize(pyFreed) << "\n";
         }
-    } else if (interactive) {
-        cout << " [-] Môi trường Python: Không phát hiện\n";
     }
 
     // 2. KIỂM TRA & DỌN DẸP NODE.JS / JAVASCRIPT
@@ -566,12 +559,8 @@ void SystemOptimizer::cleanDevCaches(bool interactive) {
             nodeFreed);
 
         if (interactive) {
-            cout << " [+] Môi trường Node.js: ĐÃ PHÁT HIỆN\n"
-                 << "     -> Đã dọn npm-cache, Yarn, pnpm store, TypeScript\n"
-                 << "     -> Đã xóa " << nodeDeleted << " thư mục node_modules | Giải phóng: " << SystemCore::formatSize(nodeFreed) << "\n";
+            cout << " [✓] Node.js: Đã dọn npm/yarn/pnpm, " << nodeDeleted << " node_modules - " << SystemCore::formatSize(nodeFreed) << "\n";
         }
-    } else if (interactive) {
-        cout << " [-] Môi trường Node.js: Không phát hiện\n";
     }
 
     // 3. KIỂM TRA & DỌN DẸP JAVA / ANDROID
@@ -587,11 +576,8 @@ void SystemOptimizer::cleanDevCaches(bool interactive) {
             wipeFolderContents(baseUser + "\\.m2\\repository");
         }
         if (interactive) {
-            cout << " [+] Môi trường Java / Android: ĐÃ PHÁT HIỆN\n"
-                 << "     -> Đã dọn .gradle caches, daemon, .android cache, .m2 repository\n";
+            cout << " [✓] Java   : Đã dọn .gradle caches, daemon, .m2\n";
         }
-    } else if (interactive) {
-        cout << " [-] Môi trường Java / Android: Không phát hiện\n";
     }
 
     // 4. DỌN DẸP CÁC BỘ ĐỆM DEV KHÁC (VS Code, Cursor, Go, Rust, .NET NuGet)
@@ -616,12 +602,8 @@ void SystemOptimizer::cleanDevCaches(bool interactive) {
     }
 
     if (interactive) {
-        cout << " [+] Bộ đệm IDE & Công cụ khác (VS Code, Cursor, NuGet, Go, Cargo...)\n"
-             << "     -> Đã dọn sạch bộ đệm Code Cache, Workspace Storage, NuGet, Go...\n";
-
-        cout << "\n====================================================================\n"
-             << " [✓] Đã hoàn tất dọn dẹp toàn bộ rác môi trường lập trình!\n"
-             << "====================================================================\n\n";
+        cout << " [✓] Khác   : Đã dọn VS Code, Cursor, NuGet, Go, Cargo...\n"
+             << "\nHoàn tất dọn dẹp!\n";
         sc.waitEnter();
     }
 }

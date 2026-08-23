@@ -317,16 +317,12 @@ void UtilityTools::downloadManager() {
 
     while (true) {
         sc.cls();
-        cout << "======================================================================\n"
-             << "               TRÌNH TẢI & CÀI ĐẶT PHẦN MỀM TỰ ĐỘNG\n"
-             << "======================================================================\n"
-             << "Thư mục lưu : " << downloadDir << "\n"
-             << "File dữ liệu: " << configPath << " (" << apps.size() << " ứng dụng)\n"
+        cout << "=== TẢI & CÀI ĐẶT PHẦN MỀM TỰ ĐỘNG ===\n"
+             << "Lưu: " << downloadDir << " | Nguồn: " << apps.size() << " ứng dụng\n"
              << "----------------------------------------------------------------------\n\n";
 
         if (apps.empty()) {
-            cout << " [!] Không tìm thấy ứng dụng nào trong file " << configPath << "\n"
-                 << "     Vui lòng kiểm tra lại file cấu hình.\n\n";
+            cout << " [!] Không tìm thấy ứng dụng trong " << configPath << "\n\n";
         } else {
             size_t half = (apps.size() + 1) / 2;
             for (size_t i = 0; i < half; i++) {
@@ -340,10 +336,8 @@ void UtilityTools::downloadManager() {
         }
 
         cout << "\n----------------------------------------------------------------------\n"
-             << "  [A] Tải tất cả ứng dụng          [R] Nạp lại danh sách\n"
-             << "  [0] Quay lại menu chính\n"
-             << "======================================================================\n"
-             << "Chọn thao tác: ";
+             << " [A] Tải tất cả | [R] Nạp lại | [0] Quay lại\n"
+             << " Chọn: ";
 
         string choice;
         cin >> choice;
@@ -353,7 +347,7 @@ void UtilityTools::downloadManager() {
         if (choice == "R" || choice == "r") {
             configPath = resolveAppConfigPath();
             apps = loadAppsFromTxt(configPath);
-            cout << "\nĐã nạp lại file " << configPath << " (" << apps.size() << " ứng dụng)!\n";
+            cout << "\nĐã nạp lại (" << apps.size() << " ứng dụng)!\n";
             Sleep(800);
             continue;
         }
@@ -361,31 +355,27 @@ void UtilityTools::downloadManager() {
         if (choice == "A" || choice == "a") {
             if (apps.empty()) continue;
             sc.cls();
-            cout << "======================================================================\n"
-                 << "                     TẢI TOÀN BỘ ỨNG DỤNG\n"
-                 << "======================================================================\n"
+            cout << "=== TẢI TOÀN BỘ ỨNG DỤNG ===\n"
                  << "Bắt đầu tải " << apps.size() << " ứng dụng về: " << downloadDir << "\n\n";
 
             int successCount = 0;
 
             for (size_t i = 0; i < apps.size(); ++i) {
-                cout << "----------------------------------------------------------------------\n"
-                     << "[" << (i + 1) << "/" << apps.size() << "] Đang tải: " << apps[i].name << "...\n";
+                cout << "[" << (i + 1) << "/" << apps.size() << "] Đang tải: " << apps[i].name << "...\n";
 
                 string targetPath = downloadDir + "\\" + apps[i].fileName;
                 string cmd = "curl -# -L \"" + apps[i].url + "\" -o \"" + targetPath + "\"";
                 int ret = system(cmd.c_str());
 
                 if (ret == 0 && fs::exists(targetPath)) {
-                    cout << "  [✓] Hoàn tất: " << apps[i].fileName << "\n";
+                    cout << "  [✓] Xong: " << apps[i].fileName << "\n";
                     successCount++;
                 } else {
-                    cout << "  [!] Thất bại khi tải " << apps[i].name << "!\n";
+                    cout << "  [!] Thất bại: " << apps[i].name << "\n";
                 }
             }
 
-            cout << "\n======================================================================\n"
-                 << "Hoàn tất tải " << successCount << "/" << apps.size() << " ứng dụng!\n";
+            cout << "\n[✓] Hoàn tất " << successCount << "/" << apps.size() << " ứng dụng!\n";
             sc.waitEnter();
             continue;
         }
@@ -395,28 +385,25 @@ void UtilityTools::downloadManager() {
             if (idx >= 1 && idx <= (int)apps.size()) {
                 const auto &app = apps[idx - 1];
                 sc.cls();
-                cout << "======================================================================\n"
-                 << "                         TẢI ỨNG DỤNG\n"
-                 << "======================================================================\n"
-                 << "Ứng dụng: " << app.name << "\n"
-                 << "Lưu tại : " << downloadDir << "\\" << app.fileName << "\n\n"
-                 << "Đang tải xuống, vui lòng chờ...\n\n";
+                cout << "=== TẢI ỨNG DỤNG: " << app.name << " ===\n"
+                     << "Lưu tại: " << downloadDir << "\\" << app.fileName << "\n\n"
+                     << "Đang tải xuống...\n\n";
 
                 string targetPath = downloadDir + "\\" + app.fileName;
                 string cmd = "curl -# -L \"" + app.url + "\" -o \"" + targetPath + "\"";
                 int ret = system(cmd.c_str());
 
                 if (ret == 0 && fs::exists(targetPath)) {
-                    cout << "\n[OK] Đã tải về thành công: " << targetPath << "\n";
+                    cout << "\n[✓] Đã tải về: " << targetPath << "\n";
 
-                    cout << "\nBạn có muốn mở file cài đặt ngay? (y/n): ";
+                    cout << "\nMở file cài đặt ngay? (y/n): ";
                     string runChoice;
                     cin >> runChoice;
                     if (runChoice == "y" || runChoice == "Y") {
                         ShellExecuteA(NULL, "open", targetPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
                     }
                 } else {
-                    cout << "\n[!] Tải thất bại! Vui lòng kiểm tra lại kết nối mạng hoặc link tải.\n";
+                    cout << "\n[!] Tải thất bại! Kiểm tra kết nối mạng.\n";
                     sc.waitEnter();
                 }
             } else {
@@ -436,41 +423,36 @@ void UtilityTools::uninstallBloatware() {
     
     // Danh sách các ứng dụng rác
     const std::vector<std::pair<std::string, std::string>> bloatList = {
-        {"Microsoft.YourPhone", "Liên kết điện thoại (Phone Link)"},
-        {"MicrosoftWindows.CrossDevice", "Trải nghiệm liên kết thiết bị (Cross Device)"},
-        {"Microsoft.BingNews", "Tin tức (Bing News)"},
-        {"Microsoft.BingWeather", "Thời tiết (Bing Weather)"},
-        {"Microsoft.GetHelp", "Trợ giúp (Get Help)"},
-        {"Microsoft.Getstarted", "Mẹo & Bắt đầu (Tips)"},
-        {"Microsoft.MicrosoftOfficeHub", "Quảng cáo Microsoft 365"},
-        {"Microsoft.MicrosoftSolitaireCollection", "Game Solitaire Collection"},
-        {"Microsoft.PowerAutomateDesktop", "Power Automate Desktop"},
+        {"Microsoft.YourPhone", "Phone Link (Liên kết điện thoại)"},
+        {"MicrosoftWindows.CrossDevice", "Cross Device (Liên kết thiết bị)"},
+        {"Microsoft.BingNews", "Bing News"},
+        {"Microsoft.BingWeather", "Bing Weather"},
+        {"Microsoft.GetHelp", "Get Help"},
+        {"Microsoft.Getstarted", "Tips (Mẹo & Bắt đầu)"},
+        {"Microsoft.MicrosoftOfficeHub", "Quảng cáo Office 365"},
+        {"Microsoft.MicrosoftSolitaireCollection", "Game Solitaire"},
+        {"Microsoft.PowerAutomateDesktop", "Power Automate"},
         {"Microsoft.SkypeApp", "Skype mặc định"},
         {"Microsoft.Todos", "Microsoft To-Do"},
-        {"Microsoft.WindowsFeedbackHub", "Trung tâm phản hồi (Feedback Hub)"},
-        {"Microsoft.WindowsMaps", "Bản đồ (Windows Maps)"},
-        {"Microsoft.MixedReality.Portal", "Cổng thực tế hỗn hợp (Mixed Reality)"},
-        {"Microsoft.549981C3F5F10", "Trợ lý ảo Cortana cũ"},
-        {"Clipchamp.Clipchamp", "Clipchamp Video Editor"},
-        {"Disney.37853FC22B2CE", "Disney+ quảng cáo"},
-        {"SpotifyAB.SpotifyMusic", "Spotify cài sẵn"},
-        {"king.com.CandyCrushSaga", "Game Candy Crush Saga"},
-        {"king.com.CandyCrushSodaSaga", "Game Candy Crush Soda"},
-        {"king.com.BubbleWitch3Saga", "Game Bubble Witch 3"},
-        {"Playtika.CaesarsSlotsFreeCasino", "Game Caesars Slots Casino"},
-        {"ShazamEntertainmentLtd.Shazam", "Shazam quảng cáo"},
-        {"ByteDancePte.Ltd.TikTok", "TikTok quảng cáo"},
-        {"Amazon.com.Amazon", "Amazon quảng cáo"}
+        {"Microsoft.WindowsFeedbackHub", "Feedback Hub"},
+        {"Microsoft.WindowsMaps", "Windows Maps"},
+        {"Microsoft.MixedReality.Portal", "Mixed Reality Portal"},
+        {"Microsoft.549981C3F5F10", "Cortana"},
+        {"Clipchamp.Clipchamp", "Clipchamp"},
+        {"Disney.37853FC22B2CE", "Disney+"},
+        {"SpotifyAB.SpotifyMusic", "Spotify"},
+        {"king.com.CandyCrushSaga", "Candy Crush Saga"},
+        {"king.com.CandyCrushSodaSaga", "Candy Crush Soda"},
+        {"king.com.BubbleWitch3Saga", "Bubble Witch 3"},
+        {"Playtika.CaesarsSlotsFreeCasino", "Caesars Slots"},
+        {"ShazamEntertainmentLtd.Shazam", "Shazam"},
+        {"ByteDancePte.Ltd.TikTok", "TikTok"},
+        {"Amazon.com.Amazon", "Amazon"}
     };
 
-    cout << "======================================================================\n"
-         << "           GỠ BỎ ỨNG DỤNG RÁC MẶC ĐỊNH (BLOATWARE CLEANER)\n"
-         << "======================================================================\n\n"
-         << "Chế độ: Gỡ bỏ chính xác theo tên gói & khóa dịch vụ ngầm\n"
-         << "        (Bảo vệ Calculator, StickyNotes, Clock/Alarms, Media Player, Xbox Game Bar)\n\n"
-         << "Tổng số gói rác được quét: " << bloatList.size() << " ứng dụng.\n\n";
-
-    cout << "Bạn có chắc chắn muốn quét và gỡ bỏ toàn bộ danh sách rác trên? (y/n): ";
+    cout << "=== GỠ BỎ ỨNG DỤNG RÁC (BLOATWARE CLEANER) ===\n"
+         << "Tổng số gói quét: " << bloatList.size() << " ứng dụng.\n\n"
+         << "Xác nhận quét & gỡ bỏ toàn bộ? (y/n): ";
     string confirm;
     cin >> confirm;
     if (confirm != "y" && confirm != "Y") {
@@ -478,7 +460,7 @@ void UtilityTools::uninstallBloatware() {
         return;
     }
 
-    cout << "\nĐang tiến hành gỡ bỏ an toàn từng ứng dụng và khóa dịch vụ ngầm...\n\n";
+    cout << "\nĐang tiến hành gỡ bỏ...\n\n";
 
     string psScript = "";
     // 1. Tắt tiến trình Phone Link & Cross Device đang chạy
@@ -566,10 +548,8 @@ static string formatNumber(long long n) {
 void UtilityTools::batteryHealthDiagnostic() {
     while (true) {
         sc.cls();
-        cout << "======================================================================\n"
-             << "               CHẨN ĐOÁN & SOI ĐỘ CHAI PIN LAPTOP\n"
-             << "======================================================================\n"
-             << "Đang đọc dữ liệu vi điều khiển Pin từ Windows ACPI...\n";
+        cout << "--- THÔNG TIN PIN LAPTOP ---\n"
+             << "Đang đọc dữ liệu ACPI...\n";
 
         SYSTEM_POWER_STATUS sps;
         bool hasSps = GetSystemPowerStatus(&sps);
@@ -577,13 +557,9 @@ void UtilityTools::batteryHealthDiagnostic() {
         // Kiểm tra thiết bị có pin không
         if (hasSps && (sps.BatteryFlag == 128 || sps.BatteryFlag == 255) && sps.BatteryLifePercent == 255) {
             sc.cls();
-            cout << "======================================================================\n"
-                 << "               CHẨN ĐOÁN & SOI ĐỘ CHAI PIN LAPTOP\n"
-                 << "======================================================================\n\n"
-                 << " [!] THIẾT BỊ KHÔNG CÓ PIN (MÁY BÀN / PC DESKTOP)\n\n"
-                 << "  - Hệ thống nhận diện đây là máy tính bàn hoặc Pin Laptop đã bị tháo rời.\n"
-                 << "  - Nguồn điện hiện tại: Cắm nguồn trực tiếp qua Adapter / Bộ nguồn AC.\n\n"
-                 << "======================================================================\n";
+            cout << "--- THÔNG TIN PIN LAPTOP ---\n\n"
+                 << " [!] Máy tính bàn (PC) hoặc không có Pin.\n"
+                 << "     Nguồn: Cắm sạc trực tiếp (AC Online).\n\n";
             sc.waitEnter();
             return;
         }
@@ -633,18 +609,13 @@ void UtilityTools::batteryHealthDiagnostic() {
         }
 
         sc.cls();
-        cout << "======================================================================\n"
-             << "               CHẨN ĐOÁN & SOI ĐỘ CHAI PIN LAPTOP CHUYÊN SÂU\n"
-             << "======================================================================\n";
+        cout << "--- THÔNG TIN PIN LAPTOP ---\n";
 
         if (!sysMfg.empty() && sysMfg != "N/A") {
-            cout << "Thiết bị        : " << sysMfg << " " << sysModel << " (BIOS: " << biosVer << ")\n";
+            cout << "Thiết bị       : " << sysMfg << " " << sysModel << " (BIOS: " << biosVer << ")\n";
         }
         if (!deviceName.empty() && deviceName != "N/A") {
-            cout << "Loại Pin        : " << chemistry << " - " << manufacturer << " [" << deviceName << "]\n";
-            if (!serial.empty() && serial != "N/A" && serial != "") {
-                cout << "Số Seri Pin     : " << serial << "\n";
-            }
+            cout << "Pin            : " << chemistry << " - " << manufacturer << " [" << deviceName << "]\n";
         }
         cout << "----------------------------------------------------------------------\n";
 
@@ -655,83 +626,51 @@ void UtilityTools::batteryHealthDiagnostic() {
             long long lostCap = designCap - fullCap;
             if (lostCap < 0) lostCap = 0;
 
-            cout << "[THÔNG SỐ DUNG LƯỢNG & ĐỘ CHAI PIN]\n"
-                 << "  + Dung lượng thiết kế (Design)    : " << setw(10) << right << formatNumber(designCap) << " mWh\n"
-                 << "  + Dung lượng khi nạp đầy (Full)   : " << setw(10) << right << formatNumber(fullCap) << " mWh\n"
-                 << "  + Dung lượng bị hao hụt           : " << setw(10) << right << formatNumber(lostCap) << " mWh\n"
-                 << "  + Số chu kỳ sạc (Cycle Count)     : " << setw(10) << right << cycleCount << " lần\n"
-                 << "  + Sức khỏe Pin (Battery Health)   : " << fixed << setprecision(1) << healthPercent << "%  " << renderBar(healthPercent) << "\n"
-                 << "  + Độ chai Pin (Wear Level)        : " << fixed << setprecision(1) << wearPercent << "%  ";
+            cout << "Dung lượng gốc : " << setw(8) << right << formatNumber(designCap) << " mWh\n"
+                 << "Khi nạp đầy    : " << setw(8) << right << formatNumber(fullCap) << " mWh (Hao hụt: " << formatNumber(lostCap) << " mWh)\n"
+                 << "Chu kỳ sạc     : " << setw(8) << right << cycleCount << " lần\n"
+                 << "Sức khỏe Pin   : " << fixed << setprecision(1) << healthPercent << "%  " << renderBar(healthPercent) << "\n"
+                 << "Độ chai Pin    : " << fixed << setprecision(1) << wearPercent << "%  ";
 
-            if (wearPercent < 5.0) {
-                cout << "(Hoàn hảo - Như pin mới 100%)\n";
-            } else if (wearPercent < 15.0) {
-                cout << "(Rất tốt - Hoạt động lý tưởng)\n";
-            } else if (wearPercent < 30.0) {
-                cout << "(Bình thường - Bắt đầu có dấu hiệu lão hóa)\n";
-            } else if (wearPercent < 50.0) {
-                cout << "(Chai đáng kể - Thời lượng dùng giảm rõ rệt)\n";
-            } else {
-                cout << "(Chai nặng / Hư hại - Nên cân nhắc thay thế Pin)\n";
-            }
+            if (wearPercent < 5.0) cout << "(Như mới 100%)\n";
+            else if (wearPercent < 15.0) cout << "(Rất tốt)\n";
+            else if (wearPercent < 30.0) cout << "(Bình thường)\n";
+            else if (wearPercent < 50.0) cout << "(Chai đáng kể)\n";
+            else cout << "(Chai nặng - Nên thay pin)\n";
         } else {
-            cout << "[THÔNG SỐ DUNG LƯỢNG]\n"
-                 << "  [!] Không thể đọc chỉ số ACPI nâng cao (Có thể do Driver hoặc thiết bị ảo).\n";
+            cout << " [!] Không đọc được ACPI nâng cao.\n";
         }
 
-        cout << "----------------------------------------------------------------------\n"
-             << "[TRẠNG THÁI NGUỒN HIỆN TẠI (REALTIME)]\n";
+        cout << "----------------------------------------------------------------------\n";
 
         if (hasSps) {
-            string powerSource = "Không xác định";
-            if (sps.ACLineStatus == 1) powerSource = "Đang cắm sạc (AC Online)";
-            else if (sps.ACLineStatus == 0) powerSource = "Đang dùng nguồn Pin (Battery/DC)";
-
+            string powerSource = (sps.ACLineStatus == 1) ? "Cắm sạc (AC)" : (sps.ACLineStatus == 0) ? "Dùng Pin (DC)" : "Không rõ";
             int batPct = (int)sps.BatteryLifePercent;
-            cout << "  + Nguồn điện                      : " << powerSource << "\n";
+            cout << "Nguồn điện     : " << powerSource << "\n";
             if (batPct >= 0 && batPct <= 100) {
-                cout << "  + Mức pin hiện tại                : " << batPct << "%  " << renderBar(batPct) << "\n";
+                cout << "Mức pin        : " << batPct << "%  " << renderBar(batPct) << "\n";
             }
 
             string chargeStatus = "Bình thường";
-            if (sps.BatteryFlag & 8) chargeStatus = "Đang sạc pin (Charging...)";
-            else if (sps.ACLineStatus == 1 && batPct >= 95) chargeStatus = "Đã sạc đầy (Fully Charged)";
-            else if (sps.BatteryFlag & 4) chargeStatus = "Pin cực yếu (Critical)";
-            else if (sps.BatteryFlag & 2) chargeStatus = "Pin yếu (Low)";
-            cout << "  + Trạng thái sạc                  : " << chargeStatus << "\n";
+            if (sps.BatteryFlag & 8) chargeStatus = "Đang sạc";
+            else if (sps.ACLineStatus == 1 && batPct >= 95) chargeStatus = "Đã đầy";
+            else if (sps.BatteryFlag & 4) chargeStatus = "Cực yếu";
+            else if (sps.BatteryFlag & 2) chargeStatus = "Yếu";
+            cout << "Trạng thái     : " << chargeStatus << "\n";
 
             if (sps.BatteryLifeTime != (DWORD)-1 && sps.ACLineStatus == 0) {
                 int hours = sps.BatteryLifeTime / 3600;
                 int mins = (sps.BatteryLifeTime % 3600) / 60;
-                cout << "  + Thời lượng ước tính còn lại     : ~ " << hours << " giờ " << mins << " phút\n";
+                cout << "Ước tính còn lại: ~" << hours << " giờ " << mins << " phút\n";
             }
         }
 
         cout << "----------------------------------------------------------------------\n"
-             << "[LỜI KHUYÊN DÀNH CHO BẠN]\n";
-        if (designCap > 0 && fullCap > 0) {
-            double wear = 100.0 - (((double)fullCap / (double)designCap) * 100.0);
-            if (wear < 15.0) {
-                cout << "  ✓ Pin trong tình trạng xuất sắc. Để giữ pin bền lâu, tránh để máy quá nóng\n"
-                     << "    và duy trì mức sạc từ 20% - 80% khi cắm sạc làm việc liên tục.\n";
-            } else if (wear < 40.0) {
-                cout << "  ! Pin đã có độ chai tự nhiên theo thời gian. Nên bật chế độ Battery Saver\n"
-                     << "    khi làm việc di động và hạn chế vừa chơi game nặng vừa sạc.\n";
-            } else {
-                cout << "  ⚠ Cảnh báo: Pin đã chai trên " << (int)wear << "%. Có thể sập nguồn đột ngột khi tải nặng.\n"
-                     << "    Khuyến nghị kiểm tra và thay thế cell pin mới tại trung tâm bảo hành.\n";
-            }
-        } else {
-            cout << "  ✓ Sử dụng bộ sạc chính hãng kèm máy để đảm bảo dòng điện và bảo vệ mạch sạc.\n";
-        }
-
-        cout << "======================================================================\n"
-             << "  [1] Xuất & mở báo cáo đồ thị Battery Report (HTML) trên Trình duyệt\n"
-             << "  [2] Mở cài đặt Quản lý Pin & Nguồn của Windows (Power & Battery)\n"
-             << "  [R] Làm mới lại dữ liệu chẩn đoán\n"
-             << "  [0] Quay lại menu chính\n"
-             << "======================================================================\n"
-             << "Chọn thao tác: ";
+             << " [1] Mở báo cáo HTML (Battery Report)\n"
+             << " [2] Mở cài đặt Pin Windows\n"
+             << " [R] Làm mới | [0] Quay lại\n"
+             << "----------------------------------------------------------------------\n"
+             << " Chọn: ";
 
         string opt;
         cin >> opt;
@@ -739,7 +678,7 @@ void UtilityTools::batteryHealthDiagnostic() {
         if (opt == "0") break;
 
         if (opt == "1") {
-            cout << "\nĐang xuất báo cáo đồ thị HTML chuẩn của Windows...\n";
+            cout << "\nĐang xuất báo cáo HTML...\n";
             char tempHtml[MAX_PATH];
             GetTempPathA(MAX_PATH, tempHtml);
             string htmlPath = string(tempHtml) + "battery_report.html";
@@ -748,18 +687,18 @@ void UtilityTools::batteryHealthDiagnostic() {
 
             if (fs::exists(htmlPath)) {
                 ShellExecuteA(NULL, "open", htmlPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
-                cout << "  [✓] Đã mở báo cáo: " << htmlPath << "\n";
+                cout << "  [✓] Đã mở: " << htmlPath << "\n";
             } else {
-                cout << "  [!] Không thể xuất file báo cáo HTML.\n";
+                cout << "  [!] Không thể xuất file HTML.\n";
             }
-            Sleep(1200);
+            Sleep(1000);
             continue;
         }
 
         if (opt == "2") {
             ShellExecuteA(NULL, "open", "ms-settings:batterysaver", NULL, NULL, SW_SHOWNORMAL);
-            cout << "\nĐã mở cài đặt Pin của Windows...\n";
-            Sleep(1000);
+            cout << "\nĐã mở cài đặt Pin...\n";
+            Sleep(800);
             continue;
         }
 

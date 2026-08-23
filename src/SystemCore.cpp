@@ -266,13 +266,11 @@ std::string SystemCore::getDeviceStatus() {
         bool hasBattery = !(sps.BatteryFlag & 128) && (sps.BatteryLifePercent != 255);
         if (hasBattery) {
             int percent = static_cast<int>(sps.BatteryLifePercent);
-            std::string status = "Laptop (Pin: " + std::to_string(percent) + "%";
+            std::string status = "Laptop "+ std::to_string(percent) + "%";
             if (sps.ACLineStatus == 1) {
-                status += "⚡)";
+                status += "⚡";
             } else if (sps.ACLineStatus == 0) {
-                status += "🔌)";
-            } else {
-                status += ")";
+                status += "🔌";
             }
             return status;
         } else {
