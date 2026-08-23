@@ -32,8 +32,8 @@ public:
     // 4. Dọn dẹp cache của các trình duyệt web Chromium (Chrome, Edge, Brave...) và Firefox
     void clearBrowserCache();
 
-    // 5. Dọn dẹp cache môi trường lập trình (Node/npm/pnpm/yarn, Python pip, VS Code, NuGet, Gradle, Rust...)
-    void cleanDevCaches();
+    // 5. Dọn dẹp cache môi trường lập trình (Pip, NPM, Yarn, Gradle, Cargo, VS Code, __pycache__, node_modules...)
+    void cleanDevCaches(bool interactive = false);
 
     // 6. Tối ưu hóa hệ thống tổng thể (DISM Component Cleanup, Tweak Registry, tắt Telemetry, tăng tốc tắt máy)
     void optimizeSystemPRO();

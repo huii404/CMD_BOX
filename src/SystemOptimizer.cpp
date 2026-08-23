@@ -433,49 +433,196 @@ void SystemOptimizer::clearBrowserCache() {
  * CÁCH BỔ SUNG MÔI TRƯỜNG DEV MỚI:
  * - Thêm đường dẫn thư mục cache vào vector `devCachePaths` theo các biến môi trường tương ứng.
  */
-void SystemOptimizer::cleanDevCaches() {
+static int cleanDirectoryArtifacts(const fs::path &rootPath, const std::vector<std::string> &targetDirNames, const std::vector<std::string> &targetExtensions, long long &freedBytes) {
+    if (!fs::exists(rootPath)) return 0;
+    int deletedCount = 0;
+    try {
+        for (auto it = fs::recursive_directory_iterator(rootPath, fs::directory_options::skip_permission_denied);
+             it != fs::recursive_directory_iterator();) {
+            try {
+                const auto &entry = *it;
+                std::string name = entry.path().filename().string();
+
+                if (entry.is_directory()) {
+                    bool isTarget = false;
+                    for (const auto &td : targetDirNames) {
+                        if (name == td) {
+                            isTarget = true;
+                            break;
+                        }
+                    }
+
+                    if (isTarget) {
+                        try {
+                            for (const auto &sub : fs::recursive_directory_iterator(entry.path(), fs::directory_options::skip_permission_denied)) {
+                                if (sub.is_regular_file()) freedBytes += sub.file_size();
+                            }
+                        } catch (...) {}
+
+                        it.disable_recursion_pending();
+                        fs::path toDel = entry.path();
+                        it++;
+                        fs::remove_all(toDel);
+                        deletedCount++;
+                        continue;
+                    } else if (name == ".git") {
+                        it.disable_recursion_pending();
+                    }
+                } else if (entry.is_regular_file()) {
+                    std::string ext = entry.path().extension().string();
+                    for (const auto &te : targetExtensions) {
+                        if (ext == te) {
+                            freedBytes += entry.file_size();
+                            fs::path toDel = entry.path();
+                            it++;
+                            fs::remove(toDel);
+                            deletedCount++;
+                            goto NEXT_ITERATION;
+                        }
+                    }
+                }
+            } catch (...) {}
+            try { it++; } catch (...) { break; }
+            NEXT_ITERATION:;
+        }
+    } catch (...) {}
+    return deletedCount;
+}
+
+void SystemOptimizer::cleanDevCaches(bool interactive) {
     char *localAppData = std::getenv("LOCALAPPDATA");
     char *appData = std::getenv("APPDATA");
     char *userProfile = std::getenv("USERPROFILE");
 
-    cout << "Đang dọn rác Dev Caches...\n";
+    string baseLocal = localAppData ? string(localAppData) : "";
+    string baseApp   = appData ? string(appData) : "";
+    string baseUser  = userProfile ? string(userProfile) : "";
 
-    vector<fs::path> devCachePaths;
-
-    // Cache trong AppData\Local
-    if (localAppData) {
-        string baseLocal = string(localAppData);
-        devCachePaths.push_back(baseLocal + "\\npm-cache");
-        devCachePaths.push_back(baseLocal + "\\Yarn\\Cache");
-        devCachePaths.push_back(baseLocal + "\\pip\\cache");
-        devCachePaths.push_back(baseLocal + "\\NuGet\\v3-cache");
-        devCachePaths.push_back(baseLocal + "\\go-build");
-        devCachePaths.push_back(baseLocal + "\\pnpm\\store");
+    // Xác định thư mục dự án / workspace để quét
+    fs::path scanRoot = fs::current_path();
+    if (scanRoot.filename() == "bin" && fs::exists(scanRoot.parent_path())) {
+        scanRoot = scanRoot.parent_path();
     }
 
-    // Cache trong AppData\Roaming
-    if (appData) {
-        string baseApp = string(appData);
-        devCachePaths.push_back(baseApp + "\\npm-cache");
-        devCachePaths.push_back(baseApp + "\\Code\\Cache");
-        devCachePaths.push_back(baseApp + "\\Code\\CachedData");
-        devCachePaths.push_back(baseApp + "\\Code\\CachedExtensionVSIXs");
-        devCachePaths.push_back(baseApp + "\\Code\\User\\workspaceStorage");
+    if (interactive) {
+        sc.cls();
+        cout << "====================================================================\n"
+             << "          DỌN DẸP BỘ ĐỆM & RÁC LẬP TRÌNH VIÊN TỰ ĐỘNG (DEV CACHES)   \n"
+             << "====================================================================\n\n"
+             << "[*] Thư mục dự án quét: " << scanRoot.string() << "\n"
+             << "[*] Đang tự động kiểm tra các môi trường lập trình trên máy...\n\n";
+    } else {
+        cout << "Đang dọn rác Dev Caches tự động...\n";
     }
 
-    // Cache trong Thư mục User Home (%USERPROFILE%)
-    if (userProfile) {
-        string baseUser = string(userProfile);
-        devCachePaths.push_back(baseUser + "\\.gradle\\caches");
-        devCachePaths.push_back(baseUser + "\\.gradle\\daemon");
-        devCachePaths.push_back(baseUser + "\\.cargo\\registry\\cache");
-        devCachePaths.push_back(baseUser + "\\.nuget\\packages");
-        devCachePaths.push_back(baseUser + "\\.android\\cache");
+    // 1. KIỂM TRA & DỌN DẸP PYTHON
+    bool hasPython = SystemCore::runRawCommand("where python >nul 2>nul") || 
+                     SystemCore::runRawCommand("where py >nul 2>nul") ||
+                     (!baseLocal.empty() && fs::exists(baseLocal + "\\pip\\cache"));
+
+    if (hasPython) {
+        if (!baseLocal.empty()) wipeFolderContents(baseLocal + "\\pip\\cache");
+
+        long long pyFreed = 0;
+        int pyDeleted = cleanDirectoryArtifacts(scanRoot, 
+            {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}, 
+            {".pyc", ".pyo"}, 
+            pyFreed);
+
+        if (interactive) {
+            cout << " [+] Môi trường Python: ĐÃ PHÁT HIỆN\n"
+                 << "     -> Đã dọn Pip cache\n"
+                 << "     -> Đã xóa " << pyDeleted << " mục (__pycache__ / .pyc) | Giải phóng: " << SystemCore::formatSize(pyFreed) << "\n";
+        }
+    } else if (interactive) {
+        cout << " [-] Môi trường Python: Không phát hiện\n";
     }
 
-    // Xóa sạch nội dung bên trong các thư mục cache lập trình
-    for (const auto &path : devCachePaths) {
-        wipeFolderContents(path);
+    // 2. KIỂM TRA & DỌN DẸP NODE.JS / JAVASCRIPT
+    bool hasNode = SystemCore::runRawCommand("where node >nul 2>nul") ||
+                   SystemCore::runRawCommand("where npm >nul 2>nul") ||
+                   (!baseLocal.empty() && (fs::exists(baseLocal + "\\npm-cache") || fs::exists(baseLocal + "\\pnpm\\store")));
+
+    if (hasNode) {
+        if (!baseLocal.empty()) {
+            wipeFolderContents(baseLocal + "\\npm-cache");
+            wipeFolderContents(baseLocal + "\\Yarn\\Cache");
+            wipeFolderContents(baseLocal + "\\pnpm\\store");
+            wipeFolderContents(baseLocal + "\\electron\\Cache");
+            wipeFolderContents(baseLocal + "\\Microsoft\\TypeScript");
+            wipeFolderContents(baseLocal + "\\deno\\deps");
+        }
+        if (!baseApp.empty()) {
+            wipeFolderContents(baseApp + "\\npm-cache");
+        }
+        if (!baseUser.empty()) {
+            wipeFolderContents(baseUser + "\\.turbo");
+        }
+
+        long long nodeFreed = 0;
+        int nodeDeleted = cleanDirectoryArtifacts(scanRoot, 
+            {"node_modules", ".turbo"}, 
+            {}, 
+            nodeFreed);
+
+        if (interactive) {
+            cout << " [+] Môi trường Node.js: ĐÃ PHÁT HIỆN\n"
+                 << "     -> Đã dọn npm-cache, Yarn, pnpm store, TypeScript\n"
+                 << "     -> Đã xóa " << nodeDeleted << " thư mục node_modules | Giải phóng: " << SystemCore::formatSize(nodeFreed) << "\n";
+        }
+    } else if (interactive) {
+        cout << " [-] Môi trường Node.js: Không phát hiện\n";
+    }
+
+    // 3. KIỂM TRA & DỌN DẸP JAVA / ANDROID
+    bool hasJava = SystemCore::runRawCommand("where java >nul 2>nul") ||
+                   SystemCore::runRawCommand("where javac >nul 2>nul") ||
+                   (!baseUser.empty() && (fs::exists(baseUser + "\\.gradle") || fs::exists(baseUser + "\\.android")));
+
+    if (hasJava) {
+        if (!baseUser.empty()) {
+            wipeFolderContents(baseUser + "\\.gradle\\caches");
+            wipeFolderContents(baseUser + "\\.gradle\\daemon");
+            wipeFolderContents(baseUser + "\\.android\\cache");
+            wipeFolderContents(baseUser + "\\.m2\\repository");
+        }
+        if (interactive) {
+            cout << " [+] Môi trường Java / Android: ĐÃ PHÁT HIỆN\n"
+                 << "     -> Đã dọn .gradle caches, daemon, .android cache, .m2 repository\n";
+        }
+    } else if (interactive) {
+        cout << " [-] Môi trường Java / Android: Không phát hiện\n";
+    }
+
+    // 4. DỌN DẸP CÁC BỘ ĐỆM DEV KHÁC (VS Code, Cursor, Go, Rust, .NET NuGet)
+    if (!baseApp.empty()) {
+        wipeFolderContents(baseApp + "\\Code\\Cache");
+        wipeFolderContents(baseApp + "\\Code\\CachedData");
+        wipeFolderContents(baseApp + "\\Code\\CachedExtensionVSIXs");
+        wipeFolderContents(baseApp + "\\Code\\User\\workspaceStorage");
+        wipeFolderContents(baseApp + "\\Cursor\\Cache");
+        wipeFolderContents(baseApp + "\\Cursor\\CachedData");
+        wipeFolderContents(baseApp + "\\Cursor\\User\\workspaceStorage");
+    }
+    if (!baseLocal.empty()) {
+        wipeFolderContents(baseLocal + "\\NuGet\\v3-cache");
+        wipeFolderContents(baseLocal + "\\go-build");
+    }
+    if (!baseUser.empty()) {
+        wipeFolderContents(baseUser + "\\.cargo\\registry\\cache");
+        wipeFolderContents(baseUser + "\\.cargo\\registry\\src");
+        wipeFolderContents(baseUser + "\\.nuget\\packages");
+        wipeFolderContents(baseUser + "\\.rustup\\downloads");
+    }
+
+    if (interactive) {
+        cout << " [+] Bộ đệm IDE & Công cụ khác (VS Code, Cursor, NuGet, Go, Cargo...)\n"
+             << "     -> Đã dọn sạch bộ đệm Code Cache, Workspace Storage, NuGet, Go...\n";
+
+        cout << "\n====================================================================\n"
+             << " [✓] Đã hoàn tất dọn dẹp toàn bộ rác môi trường lập trình!\n"
+             << "====================================================================\n\n";
+        sc.waitEnter();
     }
 }
 

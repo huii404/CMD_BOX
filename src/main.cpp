@@ -135,6 +135,7 @@ public:
              << " [5] Chỉnh giao diện & Taskbar Win 11\n"
              << " [6] Sửa lỗi Windows Update\n"
              << " [7] Tối ưu hóa tổng thể hệ thống\n"
+             << " [8] Dọn rác môi trường Dev (Pip, NPM, __pycache__, node_modules...)\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
     }
@@ -207,6 +208,7 @@ public:
                     else if (sub == 5) getOptimizer().optimizeTaskbar();
                     else if (sub == 6) getOptimizer().fixWindowsUpdate();
                     else if (sub == 7) getOptimizer().optimizeSystemPRO();
+                    else if (sub == 8) getOptimizer().cleanDevCaches(true);
                     else Sleep(300);
                 }
                 break;

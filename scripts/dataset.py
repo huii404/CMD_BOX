@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-CMD BOX - Knowledge Base & Training Dataset
-Chứa toàn bộ bộ từ khóa nhận diện, hướng dẫn sử dụng và dữ liệu giao tiếp vui nhộn.
-"""
 
 from typing import Dict, Any, List
 
