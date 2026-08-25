@@ -181,8 +181,8 @@ void MediaProcessor::processMediaAuto() {
             cout << "\n\n";
             cout << "  Số file đầu vào   : " << totalTotalFiles << "\n"
                  << "  Đã giải phóng     : " << SystemCore::formatSize(totalBytesSaved) << "\n"
-                 << "  Số file tối ưu    : " << totalOptimizedCount << "\n"
-                 << "  Số file giữ nguyên: " << totalSkippedCount << "\n\n";
+                 << "  Số file tối ưu    : " << totalOptimizedCount <<" | "<< "  Số file giữ nguyên: " << totalSkippedCount << "\n\n";
+                 
         }
         cout << "\nKéo thả các file (0 để thoát): ";
         string rawInput;
@@ -465,9 +465,8 @@ void MediaProcessor::processMediaEnhancementAuto() {
             return;
         }
 
-        std::cout << "[1] Nét nhẹ & Mịn da\n"
-                  << "[2] Phục hồi chi tiết\n"
-                  << "[3] Siêu nét \n";
+        std::cout << "[1] Nét nhẹ & Mịn da\n[2] Phục hồi chi tiết\n[3] Siêu nét \n\n";
+
         int level = SystemCore::readInt("Chọn cấp độ: ");
         if (level < 1 || level > 3) level = 2;
 
@@ -537,8 +536,6 @@ void MediaProcessor::processConvertFormatBatch() {
     while (true) {
         std::cout << std::flush;
         system("cls");
-        
-        cout << "BỘ CHUYỂN ĐỔI ĐỊNH DẠNG (GIỮ NGUYÊN CHẤT LƯỢNG)\n\n";
 
         cout<< "Kéo thả các file ảnh/video (0 để thoát): ";
         string rawInput;
@@ -1091,8 +1088,7 @@ void MediaProcessor::extractHiddenFromMedia() {
     if (extractHiddenFromMediaCore(in, outputPath, errorMsg)) {
         std::cout << "\nĐã trích xuất thành công!\n"
                   << "File lưu tại : " << outputPath << "\n"
-                  << "Dung lượng   : " << SystemCore::formatSize(fs::file_size(outputPath)) << "\n"
-                  << "(Gợi ý: Bạn có thể đổi đuôi .bin thành .zip / .txt / .png / .exe tương ứng với định dạng gốc)\n";
+                  << "Dung lượng   : " << SystemCore::formatSize(fs::file_size(outputPath)) << "\n\n";
     } else {
         std::cout << "\nLỗi: " << errorMsg << "\n";
     }

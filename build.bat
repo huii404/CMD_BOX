@@ -2,13 +2,7 @@
 setlocal
 chcp 65001 >nul
 
-:: Chuyen den thu muc goc chua file bat
 cd /d "%~dp0"
-
-echo ======================================================
-echo           CMD BOX - HE THONG BIEN DICH C++
-echo ======================================================
-echo.
 
 :: 1. Kiem tra trinh bien dich g++
 set "GXX="
@@ -22,9 +16,7 @@ if %errorlevel% equ 0 (
 )
 
 if "%GXX%"=="" (
-    echo [LOI] Khong tim thay trinh bien dich g++.exe!
-    echo Vui long kiem tra duong dan MSYS2 / MinGW-w64 hoac them g++ vao bien moi truong PATH.
-    echo.
+    echo [!] Khong tim thay g++!
     pause
     exit /b 1
 )
@@ -32,40 +24,23 @@ if "%GXX%"=="" (
 :: 2. Tao thu muc bin neu chua ton tai
 if not exist "bin" mkdir "bin"
 
-echo [*] Trinh bien dich : %GXX%
-echo [*] Dang bien dich cac tep trong src\*.cpp...
-echo [*] Che do         : Release (Toi uu -O2, rut gon -s)
-echo.
-
 :: 3. Chay lenh bien dich
+echo [*] Dang bien dich src\*.cpp...
 "%GXX%" -std=c++17 -O2 -Iinclude src\*.cpp -o bin\main.exe -lws2_32 -liphlpapi -static-libgcc -static-libstdc++ -static -s
 
-if %errorlevel% neq 0 goto :BUILD_FAIL
+if %errorlevel% neq 0 (
+    echo.
+    echo [x] Bien dich that bai!
+    pause
+    exit /b 1
+)
 
-echo.
-echo ======================================================
-echo [THANH CONG] Da bien dich xong: bin\main.exe
-echo ======================================================
-echo.
-
-set /p RUN_CHOICE="Ban co muon chay ung dung ngay khong? (y/n): "
-if /i "%RUN_CHOICE%"=="y" goto :RUN_APP
-goto :DONE
-
-:RUN_APP
-echo [*] Dang khoi chay chuong trinh...
-echo ------------------------------------------------------
-"bin\main.exe"
-goto :END
-
-:BUILD_FAIL
-echo.
-echo ======================================================
-echo [THAT BAI] Qua trinh bien dich bi loi!
-echo ======================================================
+echo [v] Thanh cong: bin\main.exe
 echo.
 
-:DONE
-pause
+set /p RUN_CHOICE="Chay ung dung ngay? (y/n): "
+if /i "%RUN_CHOICE%"=="y" (
+    cls
+    "bin\main.exe"
+)
 
-:END

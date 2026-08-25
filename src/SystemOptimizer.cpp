@@ -47,7 +47,6 @@ static void wipeFolderContents(const fs::path &dirPath) {
  */
 void SystemOptimizer::cleanDiskQuick() {
     sc.cls();
-    cout << "⚡ Đang dọn rác nhanh (Quick Clean Plus)...\n\n";
 
     long long bytesBefore = 0;
     try {
