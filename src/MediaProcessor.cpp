@@ -1,5 +1,6 @@
 #include "../include/MediaProcessor.h"
 #include "../include/SystemCore.h"
+#include "../include/ImageEnhancer.h"
 #include <iostream>
 #include <random>
 #include <filesystem>
@@ -444,90 +445,96 @@ void MediaProcessor::processChangeSpeedBatch() {
 }
 
 void MediaProcessor::processMediaEnhancementAuto() {
-    std::vector<std::string> imageExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".heic" };
-    std::vector<std::string> videoExts = { ".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm", ".m4v" };
+    std::vector<std::string> imageExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".heic", ".tif", ".tiff" };
     std::string ffmpeg = getFFmpegPath();
-    GpuCodecInfo gpu = getGpuEncoder();
 
     while (true) {
         std::cout << std::flush;
         system("cls");
 
-        std::cout << "BỘ TỰ ĐỘNG PHỤC CHẾ & LÀM NÉT (AI AUTO)\n"
-                  << "Phần cứng: " << gpu.displayName << "\n\n"
-                  << "Kéo thả file Ảnh/Video để làm nét (0 để thoát): ";
+        std::cout << "--- LÀM NÉT ẢNH CHUYÊN SÂU ---\n\n"
+                  << "Kéo thả file ảnh (0 để thoát): ";
         string rawInput;
         getline(cin, rawInput);
         std::vector<std::string> inputs = SystemCore::parsePaths(rawInput);
         
-        if (inputs.empty()) {
-            std::cout << "\nQuay lại menu chính.\n";
-            return;
-        }
+        if (inputs.empty()) return;
 
-        std::cout << "[1] Nét nhẹ & Mịn da\n[2] Phục hồi chi tiết\n[3] Siêu nét \n\n";
-
-        int level = SystemCore::readInt("Chọn cấp độ: ");
-        if (level < 1 || level > 3) level = 2;
-
-        std::string imgFilter, vidFilter, vidCodec;
-        if (level == 1) {
-            imgFilter = "nlmeans=s=1.8:p=7:r=3,eq=saturation=1.12:contrast=1.06,unsharp=5:5:0.8:5:5:0.0";
-            vidFilter = "nlmeans=s=1.2:p=7:r=3,eq=saturation=1.1:contrast=1.05,unsharp=5:5:0.8:5:5:0.0";
-            vidCodec  = gpu.enhanceParamsLevel1; 
-        } 
-        else if (level == 2) {
-            imgFilter = "nlmeans=s=2.0:p=7:r=3,eq=saturation=1.15:contrast=1.1,unsharp=5:5:1.2:5:5:0.0,cas=strength=0.5";
-            vidFilter = "nlmeans=s=1.5:p=7:r=3,eq=saturation=1.15:contrast=1.1,unsharp=5:5:1.0:5:5:0.0";
-            vidCodec  = gpu.enhanceParamsLevel2;
-        } 
-        else {
-            imgFilter = "nlmeans=s=2.4:p=7:r=5,eq=saturation=1.2:contrast=1.12:brightness=0.01,unsharp=7:7:1.5:7:7:0.0,cas=strength=0.7";
-            vidFilter = "nlmeans=s=1.8:p=7:r=3,eq=saturation=1.2:contrast=1.12,unsharp=7:7:1.3:7:7:0.0";
-            vidCodec  = gpu.enhanceParamsLevel3;
-        }
-
-        std::cout << "\nĐang phân tích và xử lý " << inputs.size() << " file...\n\n";
+        std::cout << "\nĐang phân tích & xử lý tự động " << inputs.size() << " ảnh...\n\n";
+        int level = 0; // 100% Auto Adaptive - Tự động chấm điểm & cân bằng điểm ảnh
 
         for (size_t i = 0; i < inputs.size(); ++i) {
             fs::path inPath(inputs[i]);
-            std::cout << " [" << i + 1 << "/" << inputs.size() << "] Đang tối ưu: " << inPath.filename().string() << "\n";
-
             if (!fs::exists(inPath)) {
-                std::cout << "    File không tồn tại!\n\n";
+                std::cout << " [" << i + 1 << "] Không tìm thấy: " << inPath.filename().string() << "\n";
                 continue;
             }
 
             std::string ext = inPath.extension().string();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
             fs::path outPath = inPath.parent_path() / (inPath.stem().string() + "_enhanced" + ext);
-            
-            std::string cmd = "";
-            bool isSupported = false;
 
             if (std::find(imageExts.begin(), imageExts.end(), ext) != imageExts.end()) {
-                cmd = ffmpeg + " -y -i \"" + inputs[i] + "\" -map_metadata 0 -vf \"" + imgFilter + "\" -q:v 2 \"" + outPath.string() + "\"";
-                std::cout << " \x1b[35m[AI-Image]\x1b[0m Đang tái cấu trúc pixel & khử nhiễu...";
-                isSupported = true;
-            }
-            else if (std::find(videoExts.begin(), videoExts.end(), ext) != videoExts.end()) {
-                cmd = ffmpeg + " -y -i \"" + inputs[i] + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 -vf \"" + vidFilter + "\" " + vidCodec + " -c:a copy \"" + outPath.string() + "\"";
-                std::cout << " \x1b[35m[AI-Video]\x1b[0m Đang nội suy khung hình & tăng tương phản...";
-                isSupported = true;
-            }
-            else {
-                std::cout << "Bỏ qua: Định dạng " << ext << " không hỗ trợ!\n\n";
-                continue;
-            }
+                uintmax_t oldSize = fs::file_size(inPath);
+                bool ok = false;
+                ImageScore score;
 
-            if (isSupported) {
-                if (SystemCore::runRawCommand(cmd) && fs::exists(outPath)) {
-                    std::cout << "\n    Thành công: " << outPath.filename().string() << "\n\n";
+                std::cout << " [" << i + 1 << "] " << inPath.filename().string() << ": Đang xử lý...";
+
+                if (ext == ".webp") {
+                    std::string tempPng = (fs::temp_directory_path() / ("cmdbox_enhance_" + to_string(rand()) + ".png")).string();
+                    ok = ImageEnhancer::enhanceImage(inputs[i], tempPng, level, &score);
+                    if (ok && fs::exists(tempPng)) {
+                        std::string cmd = ffmpeg + " -y -threads 0 -i \"" + tempPng + "\" -c:v libwebp -quality 95 \"" + outPath.string() + "\"";
+                        SystemCore::runRawCommand(cmd);
+                        try { fs::remove(tempPng); } catch (...) {}
+                        ok = fs::exists(outPath);
+                    }
                 } else {
-                    std::cout << "\n    Xử lý thất bại!\n\n";
+                    ok = ImageEnhancer::enhanceImage(inputs[i], outPath.string(), level, &score);
+
+                    // Nếu là ảnh chân dung: lọc nhẹ FFmpeg chống gai ảnh (giữ nguyên màu)
+                    bool applyPolish = (level == 1) || (level == 0 && score.skinPercent >= 8.0f);
+                    if (ok && applyPolish && !ffmpeg.empty() && fs::exists(outPath)) {
+                        std::string polishedOut = (inPath.parent_path() / (inPath.stem().string() + "_polished" + ext)).string();
+                        std::string polishFilter = "hqdn3d=1.2:0.0:1.5:0.0,unsharp=3:3:0.25:3:3:0.0";
+                        std::string polishCmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + outPath.string() + "\" -map_metadata 0 -vf \"" + polishFilter + "\" -q:v 2 \"" + polishedOut + "\"";
+                        if (SystemCore::runRawCommand(polishCmd) && fs::exists(polishedOut) && fs::file_size(polishedOut) > 0) {
+                            try {
+                                fs::remove(outPath);
+                                fs::rename(polishedOut, outPath);
+                            } catch (...) {}
+                        } else {
+                            try { if (fs::exists(polishedOut)) fs::remove(polishedOut); } catch(...) {}
+                        }
+                    }
+
+                    if (!ok) {
+                        std::string imgFilter = "hqdn3d=2.0:1.5:3.0:2.5,unsharp=5:5:1.0:5:5:0.0,eq=saturation=1.05:contrast=1.04";
+                        std::string cmd = ffmpeg + " -y -i \"" + inputs[i] + "\" -map_metadata 0 -vf \"" + imgFilter + "\" -q:v 2 \"" + outPath.string() + "\"";
+                        if (SystemCore::runRawCommand(cmd) && fs::exists(outPath)) {
+                            ok = true;
+                        }
+                    }
+                }
+
+                if (ok && fs::exists(outPath)) {
+                    uintmax_t newSize = fs::file_size(outPath);
+                    std::cout << "\r [" << i + 1 << "] " << outPath.filename().string() 
+                              << " \x1b[32m[Xong]\x1b[0m (" << score.origW << "x" << score.origH << " -> " << score.procW << "x" << score.procH
+                              << " [+" << (score.scalePercent - 100) << "% px] | " << score.detectedType 
+                              << " | Điểm nét: " << (int)score.clarityScore << "/100 | " 
+                              << SystemCore::formatSize(oldSize) << " -> " << SystemCore::formatSize(newSize) << ")          \n";
+                } else {
+                    std::cout << "\r [" << i + 1 << "] " << inPath.filename().string() << " \x1b[31m[Lỗi]\x1b[0m          \n";
                 }
             }
+            else {
+                std::cout << " [" << i + 1 << "] " << inPath.filename().string() << " [Bỏ qua - không phải ảnh]\n";
+                continue;
+            }
         }
+        SystemCore::waitEnter();
     }
 }
 

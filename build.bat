@@ -26,7 +26,7 @@ if not exist "bin" mkdir "bin"
 
 :: 3. Chay lenh bien dich
 echo [*] Dang bien dich src\*.cpp...
-"%GXX%" -std=c++17 -O2 -Iinclude src\*.cpp -o bin\main.exe -lws2_32 -liphlpapi -static-libgcc -static-libstdc++ -static -s
+"%GXX%" -std=c++17 -O3 -fopenmp -Iinclude src\*.cpp -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -static-libgcc -static-libstdc++ -static -s
 
 if %errorlevel% neq 0 (
     echo.

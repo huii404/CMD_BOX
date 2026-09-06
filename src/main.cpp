@@ -81,11 +81,9 @@ public:
              << " [2] Mạng & Bảo mật\n"
              << " [3] Công cụ tự động & Tiện ích\n"
              << " [4] Xử lý Media\n"
-             << " [5] Trợ lý ảo AI\n"
              << " [0] Thoát\n\n"
              << " [Chọn]: ";
     }
-
 
 
     void run() {
@@ -194,7 +192,7 @@ public:
                 while (true) {
                     cls(); 
                     cout << " [1] Nén dung lượng Video/Ảnh\n"
-                         << " [2] Làm nét Video /Ảnh\n"
+                         << " [2] Làm nét Ảnh\n"
                          << " [3] Mp4 -> Mp3\n"
                          << " [4] Tốc độ Video\n"
                          << " [5] Đổi định dạng Media\n"
@@ -218,38 +216,7 @@ public:
                 }
                 break;
 
-            // Trợ lý ảo AI
-            case 5: {
-                fs::path scriptPath;
-                for (const auto& p : {
-                    fs::current_path() / "scripts" / "assistant.py",
-                    fs::current_path().parent_path() / "scripts" / "assistant.py",
-                    fs::path("scripts/assistant.py")
-                }) {
-                    if (fs::exists(p)) { scriptPath = p; break; }
-                }
-
-                if (scriptPath.empty()) {
-                    cls();
-                    cout << "\n [!] Không tìm thấy tập tin scripts/assistant.py!\n";
-                    Sleep(1500);
-                    break;
-                }
-
-                string pyExe = SystemCore::runRawCommand("where python >nul 2>nul") ? "python" :
-                               SystemCore::runRawCommand("where py >nul 2>nul") ? "py" : "";
-
-                if (pyExe.empty()) {
-                    cls();
-                    cout << " [!] Trợ lý ảo AI yêu cầu Python (3.11+) để hoạt động.\n\n";
-                    SystemCore::waitEnter();
-                    break;
-                }
-
-                system(("start \"CMD BOX - Tro Ly Ao AI\" " + pyExe + " \"" + scriptPath.string() + "\"").c_str());
-                Sleep(1000);
-                break;
-            }
+            
             }
         }
     }

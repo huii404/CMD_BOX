@@ -138,7 +138,6 @@ void SystemOptimizer::cleanDiskPro() {
     sc.runCMD("ipconfig /flushdns");
 
     // --- [ĐOẠN 2: DỌN RÁC HỆ THỐNG YÊU CẦU QUYỀN ADMINISTRATOR] ---
-    // (Thêm các lệnh xóa rác hệ thống sâu bằng Batch script tại đây)
     string batContent = "";
     batContent += "mkdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
     // Thủ thuật Robocopy /MIR xóa hàng vạn file temp & prefetch cực nhanh
