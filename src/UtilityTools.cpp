@@ -273,8 +273,23 @@ static string trimStr(const string &s) {
 }
 
 static string resolveAppConfigPath() {
+    // 1. Tìm theo đường dẫn thực tế của file thực thi .exe
+    char buffer[MAX_PATH];
+    if (GetModuleFileNameA(NULL, buffer, MAX_PATH) > 0) {
+        fs::path exePath(buffer);
+        fs::path exeDir = exePath.parent_path();
+
+        if (fs::exists(exeDir / "apps.txt")) return (exeDir / "apps.txt").string();
+        if (fs::exists(exeDir / "src" / "apps.txt")) return (exeDir / "src" / "apps.txt").string();
+        if (fs::exists(exeDir.parent_path() / "src" / "apps.txt")) return (exeDir.parent_path() / "src" / "apps.txt").string();
+        if (fs::exists(exeDir.parent_path() / "apps.txt")) return (exeDir.parent_path() / "apps.txt").string();
+    }
+
+    // 2. Tìm theo thư mục làm việc hiện tại (CWD)
     if (fs::exists("src/apps.txt")) return "src/apps.txt";
     if (fs::exists("apps.txt")) return "apps.txt";
+    if (fs::exists("../src/apps.txt")) return "../src/apps.txt";
+
     return "src/apps.txt";
 }
 

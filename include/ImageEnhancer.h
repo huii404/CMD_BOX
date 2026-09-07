@@ -35,7 +35,6 @@ class ImageEnhancer {
 public:
     static EnhanceOptions getPreset(int level);
     static bool isSupportedImage(const std::string& filePath);
-    static bool isWebP(const std::string& filePath);
     static bool enhanceImage(
         const std::string& inputPath, 
         const std::string& outputPath, 
@@ -48,11 +47,11 @@ public:
         uintmax_t fileSize);
 
 private:
-    static std::vector<uint8_t> bicubicResample(
+    static std::vector<uint8_t> lanczos3Resample(
         const std::vector<uint8_t>& src, int srcW, int srcH, int srcStride,
         int dstW, int dstH, int dstStride);
     
-    static float cubicKernel(float x);
+    static float lanczos3Kernel(float x);
     static float applySmoothSCurve(float val, float contrast);
     static std::vector<float> fastBoxFilter(const std::vector<float>& src, int width, int height, int radius);
     static std::vector<float> fastBlurLuma(const std::vector<float>& src, int width, int height, int radius);

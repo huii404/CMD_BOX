@@ -35,6 +35,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+if exist "src\apps.txt" copy /y "src\apps.txt" "bin\apps.txt" >nul
 echo [v] Thanh cong: bin\main.exe
 echo.
 

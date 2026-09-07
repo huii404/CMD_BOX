@@ -3,9 +3,7 @@
 #include <wincodec.h>
 #include <cmath>
 #include <algorithm>
-#include <iostream>
 #include <filesystem>
-#include <memory>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -16,46 +14,46 @@ namespace fs = std::filesystem;
 EnhanceOptions ImageEnhancer::getPreset(int level) {
     EnhanceOptions opt;
     switch (level) {
-        case 1: // Nét Chân dung / Người & Da (Portrait - Mịn da, chống gai ảnh)
-            opt.amount = 1.05f;
+        case 1: // Nét Chân dung / Người & Da (Portrait - Mịn da, mắt tóc sắc nét, không bệt)
+            opt.amount = 1.10f;
             opt.radius = 2;
-            opt.threshold = 3.0f;
-            opt.edgeSensitivity = 1.10f;
+            opt.threshold = 2.6f;
+            opt.edgeSensitivity = 1.15f;
             opt.contrast = 1.03f;
-            opt.vibrance = 0.04f;
-            opt.scalePercent = 135;
+            opt.vibrance = 0.05f;
+            opt.scalePercent = 125;
             opt.casStrength = 0.75f;
             opt.isPortrait = true;
             opt.skinSmooth = 0.45f;
-            opt.claheBlend = 0.20f;
-            opt.detailBoost = 1.30f;
+            opt.claheBlend = 0.15f;
+            opt.detailBoost = 1.35f;
             break;
-        case 3: // Siêu phục hồi cực đại (Ultra Max 2x Detail)
-            opt.amount = 2.10f;
+        case 3: // Siêu phục hồi cực đại (Ultra Max Detail)
+            opt.amount = 1.95f;
             opt.radius = 2;
             opt.threshold = 1.4f;
-            opt.edgeSensitivity = 1.65f;
-            opt.contrast = 1.09f;
+            opt.edgeSensitivity = 1.55f;
+            opt.contrast = 1.08f;
             opt.vibrance = 0.10f;
-            opt.scalePercent = 200;
-            opt.casStrength = 1.45f;
+            opt.scalePercent = 150;
+            opt.casStrength = 1.35f;
             opt.isPortrait = false;
-            opt.claheBlend = 0.45f;
-            opt.detailBoost = 1.65f;
+            opt.claheBlend = 0.35f;
+            opt.detailBoost = 1.70f;
             break;
-        case 2: // Nét Phong cảnh & Chi tiết cao (Landscape - Tăng nét vi mô, nổi khối)
+        case 2: // Nét Phong cảnh & Chi tiết cao (Landscape - Tách chi tiết gân lá, sâu màu)
         default:
-            opt.amount = 1.55f;
+            opt.amount = 1.50f;
             opt.radius = 2;
             opt.threshold = 1.8f;
             opt.edgeSensitivity = 1.35f;
             opt.contrast = 1.06f;
             opt.vibrance = 0.08f;
-            opt.scalePercent = 150;
+            opt.scalePercent = 135;
             opt.casStrength = 1.15f;
             opt.isPortrait = false;
-            opt.claheBlend = 0.35f;
-            opt.detailBoost = 1.50f;
+            opt.claheBlend = 0.25f;
+            opt.detailBoost = 1.55f;
             break;
     }
     return opt;
@@ -67,19 +65,15 @@ bool ImageEnhancer::isSupportedImage(const std::string& filePath) {
     return (ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp" || ext == ".tif" || ext == ".tiff" || ext == ".webp" || ext == ".heic" || ext == ".dng");
 }
 
-bool ImageEnhancer::isWebP(const std::string& filePath) {
-    std::string ext = fs::path(filePath).extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    return (ext == ".webp");
-}
-
-float ImageEnhancer::cubicKernel(float x) {
+// Hạt nhân nội suy Lanczos-3: Chuẩn chất lượng cao nhất trong xử lý đồ họa tín hiệu số
+// Hàm L(x) = sinc(x) * sinc(x/3) bảo toàn dải tần số cao Nyquist tốt nhất, không làm nhòe pixel
+float ImageEnhancer::lanczos3Kernel(float x) {
     x = std::abs(x);
-    if (x <= 1.0f)
-        return 1.5f * x * x * x - 2.5f * x * x + 1.0f;
-    if (x < 2.0f)
-        return -0.5f * x * x * x + 2.5f * x * x - 4.0f * x + 2.0f;
-    return 0.0f;
+    if (x < 1e-6f) return 1.0f;
+    if (x >= 3.0f) return 0.0f;
+    const float PI = 3.14159265358979323846f;
+    float pix = PI * x;
+    return (std::sin(pix) / pix) * (std::sin(pix / 3.0f) / (pix / 3.0f));
 }
 
 float ImageEnhancer::applySmoothSCurve(float val, float contrast) {
@@ -89,7 +83,9 @@ float ImageEnhancer::applySmoothSCurve(float val, float contrast) {
     return std::clamp(s * 255.0f, 0.0f, 255.0f);
 }
 
-std::vector<uint8_t> ImageEnhancer::bicubicResample(
+// Thuật toán phóng đại hình ảnh Super-Sampling bằng cửa sổ Lanczos-3 (bán kính 3 pixel, cửa sổ 6x6)
+// Tách bạch từng hạt pixel, triệt tiêu hoàn toàn hiện tượng dính chùm điểm ảnh (1 1 1 -> 111 111 111) của Bicubic
+std::vector<uint8_t> ImageEnhancer::lanczos3Resample(
     const std::vector<uint8_t>& src, int srcW, int srcH, int srcStride,
     int dstW, int dstH, int dstStride) 
 {
@@ -110,21 +106,31 @@ std::vector<uint8_t> ImageEnhancer::bicubicResample(
             float dx = srcX - x0;
 
             float sumB = 0.0f, sumG = 0.0f, sumR = 0.0f, sumA = 0.0f;
+            float totalWeight = 0.0f;
 
-            for (int m = -1; m <= 2; ++m) {
+            for (int m = -2; m <= 3; ++m) {
                 int py = std::clamp(y0 + m, 0, srcH - 1);
                 int rowOffset = py * srcStride;
-                float wy = cubicKernel(m - dy);
+                float wy = lanczos3Kernel(m - dy);
 
-                for (int n = -1; n <= 2; ++n) {
+                for (int n = -2; n <= 3; ++n) {
                     int px = std::clamp(x0 + n, 0, srcW - 1) * 4;
-                    float w = wy * cubicKernel(n - dx);
+                    float w = wy * lanczos3Kernel(n - dx);
 
                     sumB += src[rowOffset + px] * w;
                     sumG += src[rowOffset + px + 1] * w;
                     sumR += src[rowOffset + px + 2] * w;
                     sumA += src[rowOffset + px + 3] * w;
+                    totalWeight += w;
                 }
+            }
+
+            if (std::abs(totalWeight) > 1e-5f) {
+                float invW = 1.0f / totalWeight;
+                sumB *= invW;
+                sumG *= invW;
+                sumR *= invW;
+                sumA *= invW;
             }
 
             int outPx = dstRowOffset + (x * 4);
@@ -384,12 +390,18 @@ void ImageEnhancer::processSharpenYCbCr(
     int width, int height, int stride, const EnhanceOptions& opts)
 {
     int totalPixels = width * height;
+    std::vector<float> origR(totalPixels);
+    std::vector<float> origG(totalPixels);
+    std::vector<float> origB(totalPixels);
     std::vector<float> luma(totalPixels);
     std::vector<float> chromaCb(totalPixels);
     std::vector<float> chromaCr(totalPixels);
     std::vector<uint8_t> alpha(totalPixels);
 
-    // 1. Chuyển BGRA sang YCbCr (Chuẩn ITU-R BT.601)
+    // =========================================================================
+    // BƯỚC 1: CHUYỂN ĐỔI KHÔNG GIAN MÀU BGRA -> YCbCr (CHUẨN ITU-R BT.601)
+    // Lưu trữ độc lập các giá trị RGB gốc để phục vụ tái tạo tỷ lệ sắc độ
+    // =========================================================================
     #pragma omp parallel for schedule(static)
     for (int y = 0; y < height; ++y) {
         int rowOffset = y * stride;
@@ -403,24 +415,37 @@ void ImageEnhancer::processSharpenYCbCr(
             float r = src[px + 2];
             alpha[idx] = src[px + 3];
 
+            origR[idx] = r;
+            origG[idx] = g;
+            origB[idx] = b;
+
             luma[idx]     = 0.299f * r + 0.587f * g + 0.114f * b;
             chromaCb[idx] = -0.168736f * r - 0.331264f * g + 0.5f * b + 128.0f;
             chromaCr[idx] = 0.5f * r - 0.418688f * g - 0.081312f * b + 128.0f;
         }
     }
 
-    // 2. Cân bằng tương phản thích ứng cục bộ CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    // =========================================================================
+    // BƯỚC 2: CÂN BẰNG TƯƠNG PHẢN CỤC BỘ THÍCH ỨNG CLAHE (CHỐNG CHÁY / TỐI HÓA)
+    // =========================================================================
     if (opts.claheBlend > 0.001f) {
         applyCLAHE(luma, width, height, 2.5f, opts.claheBlend);
     }
 
-    // 3. Tách lớp vi chi tiết (Fine Detail Layer) bằng Guided Filter (Kaiming He)
-    std::vector<float> baseLuma;
+    // =========================================================================
+    // BƯỚC 3: PHÂN RÃ ĐA TẦNG 2-SCALE GUIDED FILTER (KAIMING HE)
+    // Tầng vi mô (r=1) tách chính xác từng sợi tóc, gân lá 1-pixel riêng lẻ,
+    // ngăn chặn các hạt pixel liền kề dính chùm vào nhau (chống bệt 1 1 1 -> 111).
+    // Tầng cấu trúc (r=3) tạo độ nổi khối và chiều sâu tổng thể cho tán cây/khối mặt.
+    // =========================================================================
+    std::vector<float> baseLumaMicro;
+    std::vector<float> baseLumaMacro;
     if (opts.detailBoost > 1.001f) {
-        baseLuma = applyGuidedFilter(luma, luma, width, height, 3, 600.0f);
+        baseLumaMicro = applyGuidedFilter(luma, luma, width, height, 1, 300.0f);
+        baseLumaMacro = applyGuidedFilter(luma, luma, width, height, 3, 1200.0f);
     }
 
-    // 4. Làm mờ kênh Luminance Y để lấy mặt nạ viền CAS
+    // Mặt nạ mờ Gaussian 3-pass phục vụ Contrast Adaptive Sharpening
     std::vector<float> blurredLuma = fastBlurLuma(luma, width, height, opts.radius);
 
     float amount = opts.amount;
@@ -430,7 +455,9 @@ void ImageEnhancer::processSharpenYCbCr(
     float edgeSens = opts.edgeSensitivity;
     float casWeight = opts.casStrength;
 
-    // 5. Contrast Adaptive Sharpening (CAS) + Guided Detail Boost + Anti-Halo
+    // =========================================================================
+    // BƯỚC 4: PIPELINE LÀM NÉT CHUYÊN SÂU & TÁI TẠO BẢO TOÀN ĐỘ BÃO HÒA MÀU SẮC
+    // =========================================================================
     #pragma omp parallel for schedule(static)
     for (int y = 0; y < height; ++y) {
         int rowOffset = y * stride;
@@ -452,86 +479,97 @@ void ImageEnhancer::processSharpenYCbCr(
             float yTop = luma[prevRow + x];
             float yBottom = luma[nextRow + x];
 
-            float minY = std::min(yCenter, std::min(std::min(yLeft, yRight), std::min(yTop, yBottom)));
-            float maxY = std::max(yCenter, std::max(std::max(yLeft, yRight), std::max(yTop, yBottom)));
+            float minY = std::min({yCenter, yLeft, yRight, yTop, yBottom});
+            float maxY = std::max({yCenter, yLeft, yRight, yTop, yBottom});
 
-            // Gradient biên độ xác định viền thật vs vùng mịn
+            // Gradient biên độ đo độ biến thiên cục bộ
             float grad = std::abs(yRight - yLeft) + std::abs(yBottom - yTop);
 
-            // Khử ranh giới khối vuông JPEG (De-blocking deadband):
-            // Vùng nền mờ/phẳng có ranh giới khối 8x8 (grad <= 3.2f) -> triệt tiêu về 0 để không bị nổi ô vuông
-            float edgeWeight = 0.0f;
-            if (grad > 3.2f) {
-                edgeWeight = std::clamp(((grad - 3.2f) / 14.0f) * edgeSens, 0.0f, 1.40f);
-            }
+            // -----------------------------------------------------------------
+            // THUẬT TOÁN CAUCHY CONTINUOUS CORING (KHỬ HOÀN TOÀN BỆT ẢNH):
+            // Thay vì cắt cụt về 0 (làm phẳng lì gân lá bên trong tán cây),
+            // hàm liên tục Cauchy giữ lại các gợn vi sai tinh tế bên trong tán lá,
+            // đồng thời khuếch đại mượt mà ở các đường biên rõ nét.
+            // -----------------------------------------------------------------
+            float edgeWeight = (grad * grad) / (grad * grad + 12.0f) * edgeSens;
 
             float diffY = yCenter - yBlur;
-            if (std::abs(diffY) < 1.6f) {
-                diffY = 0.0f; // Triệt tiêu vi sai siêu nhỏ của vết ghép khối vuông nén
-            }
-
-            // Soft-coring: Bỏ qua hạt nhiễu nhỏ, chỉ làm nét cấu trúc
             float wY = (diffY * diffY) / (diffY * diffY + thresholdSq);
 
-            // CAS Dynamic Peak: Hạn chế biến dạng cục bộ
+            // CAS Dynamic Peak: Giới hạn độ méo cục bộ
             float range = std::max(maxY - minY, 0.001f);
             float peak = std::min(yCenter - minY, maxY - yCenter) / range;
             float casFactor = 0.5f + 0.5f * peak * casWeight;
 
-            // Bổ sung vi chi tiết từ Guided Filter (tóc, gân lá cây, sợi vải)
+            // -----------------------------------------------------------------
+            // TĂNG CƯỜNG ĐA TẦNG (2-SCALE GUIDED DETAIL BOOST):
+            // microDetail: Từng sợi gân lá, sợi tóc siêu mảnh 1-pixel
+            // macroDetail: Khối nổi tán cây
+            // -----------------------------------------------------------------
             float diffGuided = 0.0f;
-            if (!baseLuma.empty()) {
-                float detail = yCenter - baseLuma[idx];
-                diffGuided = detail * (opts.detailBoost - 1.0f);
+            if (!baseLumaMicro.empty() && !baseLumaMacro.empty()) {
+                float microDetail = yCenter - baseLumaMicro[idx];
+                float macroDetail = baseLumaMicro[idx] - baseLumaMacro[idx];
+                diffGuided = (microDetail * 1.35f + macroDetail * 0.65f) * (opts.detailBoost - 1.0f);
             }
 
             float sharpY = yCenter + (diffY * amount * wY * casFactor + diffGuided) * edgeWeight;
 
-            // Anti-Halo: Chống quầng sáng/tối giả tạo quanh viền
-            float overshoot = (maxY - minY) * 0.15f + 1.5f;
+            // Anti-Halo: Chống quầng sáng giả tạo quanh viền
+            float overshoot = (maxY - minY) * 0.16f + 1.5f;
             sharpY = std::clamp(sharpY, minY - overshoot, maxY + overshoot);
 
-            // Đường cong tương phản vi mô Micro-Contrast S-Curve
+            // Đường cong tương phản vi mô S-Curve
             sharpY = applySmoothSCurve(sharpY, contrast);
 
-            // Bảo vệ và làm mịn vùng da người (Chống gai ảnh, khử hạt sạn trên da mặt)
-            if (opts.isPortrait) {
-                float cbRaw = chromaCb[idx];
-                float crRaw = chromaCr[idx];
-                // Vùng nhận diện màu da người chuẩn ITU-R BT.601 YCbCr
-                if (cbRaw >= 77.0f && cbRaw <= 128.0f && crRaw >= 133.0f && crRaw <= 175.0f) {
-                    if (grad < 14.0f) {
-                        float smoothFactor = opts.skinSmooth * (1.0f - grad / 14.0f);
-                        sharpY = sharpY * (1.0f - smoothFactor) + (yCenter * 0.75f + yBlur * 0.25f) * smoothFactor;
-                    }
+            // -----------------------------------------------------------------
+            // BẢO VỆ VÙNG DA NGƯỜI (PORTRAIT SMART DUAL-ZONE):
+            // Nhận diện chuẩn màu da ITU-R BT.601:
+            // Chỉ làm mịn các vùng da phẳng (má, trán, cổ) để khử gai ảnh/hạt cát,
+            // nhưng giữ 100% độ nét cho mắt, lông mi, chân mày, sợi tóc và bờ môi!
+            // -----------------------------------------------------------------
+            float cbRaw = chromaCb[idx];
+            float crRaw = chromaCr[idx];
+            bool isSkin = (cbRaw >= 77.0f && cbRaw <= 128.0f && crRaw >= 133.0f && crRaw <= 175.0f);
+
+            if (opts.isPortrait && isSkin) {
+                if (grad < 14.0f) {
+                    float smoothFactor = opts.skinSmooth * (1.0f - grad / 14.0f);
+                    sharpY = sharpY * (1.0f - smoothFactor) + (yCenter * 0.75f + yBlur * 0.25f) * smoothFactor;
                 }
             }
 
-            // 4. Tái tạo màu RGB từ (sharpY, Cb, Cr)
-            float cb = chromaCb[idx] - 128.0f;
-            float cr = chromaCr[idx] - 128.0f;
+            // =================================================================
+            // THUẬT TOÁN BÙ MÀU CONSTANT-SATURATION CHROMA TRACKING
+            // TRIỆT TIÊU HIỆN TƯỢNG BẠC MÀU / VIỀN XANH TRẮNG TRÊN LÁ CÂY:
+            // Khi độ sáng tăng ở gân lá cây, khoảng cách màu gốc (RGB - Yorig)
+            // được mở rộng theo tỉ lệ đồng dạng (ratio^1.25).
+            // Lá cây giữ nguyên 100% sắc xanh thẫm tươi rói, không bao giờ bị bạc trắng!
+            // =================================================================
+            float rOrig = origR[idx];
+            float gOrig = origG[idx];
+            float bOrig = origB[idx];
 
-            // Bù độ bão hòa màu cơ bản (+12%) để bù đắp sự pha loãng màu do nội suy pixel Super-Sampling gây ra
-            cb *= 1.12f;
-            cr *= 1.12f;
-
-            // Đồng bộ Chroma theo Luma để màu sắc không bị bạc trắng khi độ sáng tăng
-            if (yCenter > 1.0f) {
+            float r, g, b;
+            if (yCenter > 0.5f) {
                 float lumaRatio = sharpY / yCenter;
-                float chromaScale = std::clamp(std::pow(lumaRatio, 1.10f), 0.85f, 1.60f);
-                cb *= chromaScale;
-                cr *= chromaScale;
-            }
+                float chromaExpansion = std::clamp(std::pow(lumaRatio, 1.25f), 0.85f, 1.75f);
 
-            // Chuyển đổi YCbCr về RGB (BT.601)
-            float r = sharpY + 1.402f * cr;
-            float g = sharpY - 0.344136f * cb - 0.714136f * cr;
-            float b = sharpY + 1.772f * cb;
+                r = sharpY + (rOrig - yCenter) * chromaExpansion;
+                g = sharpY + (gOrig - yCenter) * chromaExpansion;
+                b = sharpY + (bOrig - yCenter) * chromaExpansion;
+            } else {
+                float cb = cbRaw - 128.0f;
+                float cr = crRaw - 128.0f;
+                r = sharpY + 1.402f * cr;
+                g = sharpY - 0.344136f * cb - 0.714136f * cr;
+                b = sharpY + 1.772f * cb;
+            }
 
             // Tăng độ tươi thông minh (Smart Vibrance)
             if (vibrance > 0.001f) {
-                float maxVal = std::max(r, std::max(g, b));
-                float minVal = std::min(r, std::min(g, b));
+                float maxVal = std::max({r, g, b});
+                float minVal = std::min({r, g, b});
                 float sat = (maxVal - minVal) / (maxVal + 0.001f);
                 float boost = (1.0f - sat * 0.5f) * vibrance;
 
@@ -540,11 +578,12 @@ void ImageEnhancer::processSharpenYCbCr(
                 b += (b - sharpY) * boost;
             }
 
-            // CHỐNG CHÁY SÁNG & CHỐNG LỆCH MÀU (Soft Gamut Roll-off):
-            // Nếu 1 kênh màu vượt quá 255 (ví dụ màu xanh lá cây cực đại), 
-            // ta co tỷ lệ cả 3 kênh RGB xuống thay vì cắt bẹp (clamp) riêng kênh đó.
-            // Điều này giữ nguyên 100% tỷ lệ màu, triệt tiêu hoàn toàn hiện tượng "xanh trắng", "cháy điểm"!
-            float maxComponent = std::max(r, std::max(g, b));
+            // -----------------------------------------------------------------
+            // CHỐNG CHÁY SÁNG & CHỐNG LỆCH MÀU (SOFT GAMUT ROLL-OFF):
+            // Nếu 1 kênh màu (như Green) vượt trần 255, co tỉ lệ đồng đều cả 3 kênh
+            // thay vì cắt bẹp riêng kênh đó, giữ nguyên vẹn 100% sắc độ và độ tươi!
+            // -----------------------------------------------------------------
+            float maxComponent = std::max({r, g, b});
             if (maxComponent > 255.0f) {
                 float compression = 255.0f / maxComponent;
                 r *= compression;
@@ -711,51 +750,51 @@ bool ImageEnhancer::enhanceImage(
 
     if (level <= 0) {
         // --- CHẾ ĐỘ TỰ ĐỘNG THÔNG MINH (AUTO ADAPTIVE) ---
-        // 1. Tự động bù điểm ảnh để cân bằng mật độ XY
+        // 1. Tự động bù điểm ảnh thích ứng bằng Lanczos-3 (bảo toàn độ sắc nét, không phóng đại quá đà làm loãng pixel)
         if (score.megaPixels < 0.6f) {
-            opts.scalePercent = 180; // Ảnh nhỏ: bù mạnh điểm ảnh
+            opts.scalePercent = 150; // Ảnh nhỏ: bù tối đa 150%
         } else if (score.megaPixels < 1.8f) {
-            opts.scalePercent = 145; // Ảnh vừa (720p-1080p): bù chuẩn 145%
+            opts.scalePercent = 130; // Ảnh vừa: bù 130%
         } else if (score.megaPixels < 4.0f) {
-            opts.scalePercent = 120; // Ảnh lớn (2K-3K): bù nhẹ 120%
+            opts.scalePercent = 115; // Ảnh lớn: bù nhẹ 115%
         } else {
             opts.scalePercent = 100; // Ảnh 4K+: giữ nguyên độ phân giải
         }
 
-        // 2. Tự động điều chỉnh độ nét thích ứng theo điểm số nét
+        // 2. Tự động điều chỉnh độ nét thích ứng theo điểm số nét (clarityScore)
         if (score.clarityScore < 40.0f) {
-            opts.amount = 1.65f;
+            opts.amount = 1.60f;
             opts.threshold = 1.8f;
             opts.edgeSensitivity = 1.35f;
-            opts.casStrength = 1.20f;
-            opts.contrast = 1.07f;
+            opts.casStrength = 1.15f;
+            opts.contrast = 1.06f;
             opts.vibrance = 0.07f;
         } else if (score.clarityScore < 70.0f) {
             opts.amount = 1.25f;
             opts.threshold = 2.4f;
             opts.edgeSensitivity = 1.20f;
             opts.casStrength = 0.90f;
-            opts.contrast = 1.05f;
+            opts.contrast = 1.04f;
             opts.vibrance = 0.05f;
         } else {
-            opts.amount = 0.85f;
+            opts.amount = 0.90f;
             opts.threshold = 3.0f;
             opts.edgeSensitivity = 1.00f;
-            opts.casStrength = 0.65f;
+            opts.casStrength = 0.70f;
             opts.contrast = 1.02f;
             opts.vibrance = 0.03f;
         }
 
-        // 3. Tự động nhận diện Chân dung / Da người và cấu hình CLAHE + Guided Filter
+        // 3. Tự động phân loại Chân dung (Portrait) vs Phong cảnh (Landscape)
         if (score.skinPercent >= 8.0f) {
             opts.isPortrait = true;
             opts.skinSmooth = 0.45f;
-            opts.claheBlend = 0.20f;  // Vừa phải để giữ da tự nhiên
-            opts.detailBoost = 1.30f; // Tăng nét sợi tóc, ánh mắt
+            opts.claheBlend = 0.15f;  // Dịu nhẹ để da không loang lổ
+            opts.detailBoost = 1.35f; // Tách sợi tóc, lông mi, ánh mắt
         } else {
             opts.isPortrait = false;
-            opts.claheBlend = 0.35f;  // Tương phản thích ứng CLAHE cho phong cảnh/cây cỏ
-            opts.detailBoost = 1.50f; // Đẩy mạnh vi chi tiết gân lá, kiến trúc
+            opts.claheBlend = 0.25f;  // Cân bằng tương phản cho tán cây, mây trời
+            opts.detailBoost = 1.55f; // Đẩy mạnh vi chi tiết gân lá, kiến trúc
         }
     } else {
         opts = getPreset(level);
@@ -766,12 +805,12 @@ bool ImageEnhancer::enhanceImage(
     UINT procStride = origStride;
     std::vector<uint8_t> scaledPixels;
 
-    // 1. Phóng to nội suy Super-Sampling Catmull-Rom Bicubic
+    // 1. Phóng to nội suy Super-Sampling bằng Lanczos-3 (bảo toàn tần số cao Nyquist tốt nhất)
     if (opts.scalePercent > 100) {
         procW = (UINT)std::round(origW * (opts.scalePercent / 100.0));
         procH = (UINT)std::round(origH * (opts.scalePercent / 100.0));
         procStride = procW * 4;
-        scaledPixels = bicubicResample(srcPixels, origW, origH, origStride, procW, procH, procStride);
+        scaledPixels = lanczos3Resample(srcPixels, origW, origH, origStride, procW, procH, procStride);
     } else {
         scaledPixels = std::move(srcPixels);
     }
