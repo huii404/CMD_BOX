@@ -27,6 +27,8 @@ EnhanceOptions ImageEnhancer::getPreset(int level) {
             opt.casStrength = 0.75f;
             opt.isPortrait = true;
             opt.skinSmooth = 0.45f;
+            opt.claheBlend = 0.20f;
+            opt.detailBoost = 1.30f;
             break;
         case 3: // Siêu phục hồi cực đại (Ultra Max 2x Detail)
             opt.amount = 2.10f;
@@ -38,6 +40,8 @@ EnhanceOptions ImageEnhancer::getPreset(int level) {
             opt.scalePercent = 200;
             opt.casStrength = 1.45f;
             opt.isPortrait = false;
+            opt.claheBlend = 0.45f;
+            opt.detailBoost = 1.65f;
             break;
         case 2: // Nét Phong cảnh & Chi tiết cao (Landscape - Tăng nét vi mô, nổi khối)
         default:
@@ -50,6 +54,8 @@ EnhanceOptions ImageEnhancer::getPreset(int level) {
             opt.scalePercent = 150;
             opt.casStrength = 1.15f;
             opt.isPortrait = false;
+            opt.claheBlend = 0.35f;
+            opt.detailBoost = 1.50f;
             break;
     }
     return opt;
@@ -58,7 +64,7 @@ EnhanceOptions ImageEnhancer::getPreset(int level) {
 bool ImageEnhancer::isSupportedImage(const std::string& filePath) {
     std::string ext = fs::path(filePath).extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    return (ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp" || ext == ".tif" || ext == ".tiff" || ext == ".webp");
+    return (ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp" || ext == ".tif" || ext == ".tiff" || ext == ".webp" || ext == ".heic" || ext == ".dng");
 }
 
 bool ImageEnhancer::isWebP(const std::string& filePath) {
@@ -131,6 +137,49 @@ std::vector<uint8_t> ImageEnhancer::bicubicResample(
     return dst;
 }
 
+std::vector<float> ImageEnhancer::fastBoxFilter(const std::vector<float>& src, int width, int height, int radius) {
+    if (radius < 1) return src;
+    std::vector<float> temp(width * height);
+    std::vector<float> dst(width * height);
+
+    // Lượt quét ngang O(N) với sliding window
+    #pragma omp parallel for schedule(static)
+    for (int y = 0; y < height; ++y) {
+        int rowOffset = y * width;
+        float sum = 0.0f;
+        for (int i = -radius; i <= radius; ++i) {
+            int cx = std::clamp(i, 0, width - 1);
+            sum += src[rowOffset + cx];
+        }
+        for (int x = 0; x < width; ++x) {
+            temp[rowOffset + x] = sum;
+            int leftX = std::clamp(x - radius, 0, width - 1);
+            int rightX = std::clamp(x + radius + 1, 0, width - 1);
+            sum += src[rowOffset + rightX] - src[rowOffset + leftX];
+        }
+    }
+
+    // Lượt quét dọc O(N) với sliding window và chuẩn hóa
+    float invArea = 1.0f / ((2 * radius + 1) * (2 * radius + 1));
+
+    #pragma omp parallel for schedule(static)
+    for (int x = 0; x < width; ++x) {
+        float sum = 0.0f;
+        for (int i = -radius; i <= radius; ++i) {
+            int cy = std::clamp(i, 0, height - 1);
+            sum += temp[cy * width + x];
+        }
+        for (int y = 0; y < height; ++y) {
+            dst[y * width + x] = sum * invArea;
+            int topY = std::clamp(y - radius, 0, height - 1);
+            int botY = std::clamp(y + radius + 1, 0, height - 1);
+            sum += temp[botY * width + x] - temp[topY * width + x];
+        }
+    }
+
+    return dst;
+}
+
 std::vector<float> ImageEnhancer::fastBlurLuma(const std::vector<float>& src, int width, int height, int radius) {
     if (radius < 1) radius = 1;
     std::vector<float> buffer1 = src;
@@ -180,6 +229,156 @@ std::vector<float> ImageEnhancer::fastBlurLuma(const std::vector<float>& src, in
     return buffer1;
 }
 
+std::vector<float> ImageEnhancer::applyGuidedFilter(
+    const std::vector<float>& p, const std::vector<float>& I,
+    int width, int height, int radius, float eps)
+{
+    int total = width * height;
+    std::vector<float> mean_I = fastBoxFilter(I, width, height, radius);
+    std::vector<float> mean_p = fastBoxFilter(p, width, height, radius);
+
+    std::vector<float> Ip(total);
+    std::vector<float> II(total);
+
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < total; ++i) {
+        Ip[i] = I[i] * p[i];
+        II[i] = I[i] * I[i];
+    }
+
+    std::vector<float> mean_Ip = fastBoxFilter(Ip, width, height, radius);
+    std::vector<float> mean_II = fastBoxFilter(II, width, height, radius);
+
+    std::vector<float> a(total);
+    std::vector<float> b(total);
+
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < total; ++i) {
+        float var_I = mean_II[i] - mean_I[i] * mean_I[i];
+        float cov_Ip = mean_Ip[i] - mean_I[i] * mean_p[i];
+        a[i] = cov_Ip / (var_I + eps);
+        b[i] = mean_p[i] - a[i] * mean_I[i];
+    }
+
+    std::vector<float> mean_a = fastBoxFilter(a, width, height, radius);
+    std::vector<float> mean_b = fastBoxFilter(b, width, height, radius);
+
+    std::vector<float> q(total);
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < total; ++i) {
+        q[i] = mean_a[i] * I[i] + mean_b[i];
+    }
+
+    return q;
+}
+
+void ImageEnhancer::applyCLAHE(
+    std::vector<float>& luma, int width, int height,
+    float clipLimit, float blendFactor)
+{
+    if (blendFactor <= 0.001f || width < 16 || height < 16) return;
+
+    const int GRID_X = 8;
+    const int GRID_Y = 8;
+
+    int tileW = (width + GRID_X - 1) / GRID_X;
+    int tileH = (height + GRID_Y - 1) / GRID_Y;
+
+    // 1. Tính histogram và ánh xạ CDF cho từng ô (tile)
+    std::vector<std::vector<std::vector<float>>> mappings(
+        GRID_Y, std::vector<std::vector<float>>(GRID_X, std::vector<float>(256, 0.0f))
+    );
+
+    for (int ty = 0; ty < GRID_Y; ++ty) {
+        int yStart = ty * tileH;
+        int yEnd = std::min(yStart + tileH, height);
+        int currentTileH = yEnd - yStart;
+
+        for (int tx = 0; tx < GRID_X; ++tx) {
+            int xStart = tx * tileW;
+            int xEnd = std::min(xStart + tileW, width);
+            int currentTileW = xEnd - xStart;
+            int tileArea = currentTileW * currentTileH;
+            if (tileArea <= 0) continue;
+
+            // Đếm tần suất mức xám
+            std::vector<int> hist(256, 0);
+            for (int y = yStart; y < yEnd; ++y) {
+                int row = y * width;
+                for (int x = xStart; x < xEnd; ++x) {
+                    int bin = std::clamp((int)std::round(luma[row + x]), 0, 255);
+                    hist[bin]++;
+                }
+            }
+
+            // Cắt ngưỡng histogram (Clip Limit) để chống khuếch đại nhiễu
+            int clipVal = (int)std::max(1.0f, (clipLimit * tileArea) / 256.0f);
+            int excess = 0;
+            for (int i = 0; i < 256; ++i) {
+                if (hist[i] > clipVal) {
+                    excess += hist[i] - clipVal;
+                    hist[i] = clipVal;
+                }
+            }
+
+            // Tái phân bổ đồng đều lượng pixel vượt ngưỡng
+            int bonus = excess / 256;
+            int remainder = excess % 256;
+            for (int i = 0; i < 256; ++i) {
+                hist[i] += bonus;
+                if (i < remainder) hist[i]++;
+            }
+
+            // Tích lũy CDF và chuẩn hóa về dải [0, 255]
+            int cdf = 0;
+            for (int i = 0; i < 256; ++i) {
+                cdf += hist[i];
+                mappings[ty][tx][i] = ((float)cdf / (float)tileArea) * 255.0f;
+            }
+        }
+    }
+
+    // 2. Nội suy song tuyến tính (Bilinear Interpolation) giữa 4 tile lân cận
+    std::vector<float> claheOut = luma;
+
+    #pragma omp parallel for schedule(static)
+    for (int y = 0; y < height; ++y) {
+        float gy = (y - tileH * 0.5f) / (float)tileH;
+        int ty0 = (int)std::floor(gy);
+        int ty1 = ty0 + 1;
+        float dy = gy - ty0;
+
+        int ty0_c = std::clamp(ty0, 0, GRID_Y - 1);
+        int ty1_c = std::clamp(ty1, 0, GRID_Y - 1);
+
+        int row = y * width;
+        for (int x = 0; x < width; ++x) {
+            float gx = (x - tileW * 0.5f) / (float)tileW;
+            int tx0 = (int)std::floor(gx);
+            int tx1 = tx0 + 1;
+            float dx = gx - tx0;
+
+            int tx0_c = std::clamp(tx0, 0, GRID_X - 1);
+            int tx1_c = std::clamp(tx1, 0, GRID_X - 1);
+
+            int val = std::clamp((int)std::round(luma[row + x]), 0, 255);
+
+            float v00 = mappings[ty0_c][tx0_c][val];
+            float v10 = mappings[ty0_c][tx1_c][val];
+            float v01 = mappings[ty1_c][tx0_c][val];
+            float v11 = mappings[ty1_c][tx1_c][val];
+
+            float top = v00 * (1.0f - dx) + v10 * dx;
+            float bot = v01 * (1.0f - dx) + v11 * dx;
+            float eqVal = top * (1.0f - dy) + bot * dy;
+
+            claheOut[row + x] = (1.0f - blendFactor) * luma[row + x] + blendFactor * eqVal;
+        }
+    }
+
+    luma = std::move(claheOut);
+}
+
 void ImageEnhancer::processSharpenYCbCr(
     const std::vector<uint8_t>& src, std::vector<uint8_t>& dst,
     int width, int height, int stride, const EnhanceOptions& opts)
@@ -210,7 +409,18 @@ void ImageEnhancer::processSharpenYCbCr(
         }
     }
 
-    // 2. Làm mờ kênh Luminance Y để lấy mặt nạ viền
+    // 2. Cân bằng tương phản thích ứng cục bộ CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    if (opts.claheBlend > 0.001f) {
+        applyCLAHE(luma, width, height, 2.5f, opts.claheBlend);
+    }
+
+    // 3. Tách lớp vi chi tiết (Fine Detail Layer) bằng Guided Filter (Kaiming He)
+    std::vector<float> baseLuma;
+    if (opts.detailBoost > 1.001f) {
+        baseLuma = applyGuidedFilter(luma, luma, width, height, 3, 600.0f);
+    }
+
+    // 4. Làm mờ kênh Luminance Y để lấy mặt nạ viền CAS
     std::vector<float> blurredLuma = fastBlurLuma(luma, width, height, opts.radius);
 
     float amount = opts.amount;
@@ -220,7 +430,7 @@ void ImageEnhancer::processSharpenYCbCr(
     float edgeSens = opts.edgeSensitivity;
     float casWeight = opts.casStrength;
 
-    // 3. Contrast Adaptive Sharpening (CAS) + Anti-Halo trên kênh Y
+    // 5. Contrast Adaptive Sharpening (CAS) + Guided Detail Boost + Anti-Halo
     #pragma omp parallel for schedule(static)
     for (int y = 0; y < height; ++y) {
         int rowOffset = y * stride;
@@ -268,7 +478,14 @@ void ImageEnhancer::processSharpenYCbCr(
             float peak = std::min(yCenter - minY, maxY - yCenter) / range;
             float casFactor = 0.5f + 0.5f * peak * casWeight;
 
-            float sharpY = yCenter + diffY * amount * wY * edgeWeight * casFactor;
+            // Bổ sung vi chi tiết từ Guided Filter (tóc, gân lá cây, sợi vải)
+            float diffGuided = 0.0f;
+            if (!baseLuma.empty()) {
+                float detail = yCenter - baseLuma[idx];
+                diffGuided = detail * (opts.detailBoost - 1.0f);
+            }
+
+            float sharpY = yCenter + (diffY * amount * wY * casFactor + diffGuided) * edgeWeight;
 
             // Anti-Halo: Chống quầng sáng/tối giả tạo quanh viền
             float overshoot = (maxY - minY) * 0.15f + 1.5f;
@@ -294,16 +511,19 @@ void ImageEnhancer::processSharpenYCbCr(
             float cb = chromaCb[idx] - 128.0f;
             float cr = chromaCr[idx] - 128.0f;
 
+            // Bù độ bão hòa màu cơ bản (+12%) để bù đắp sự pha loãng màu do nội suy pixel Super-Sampling gây ra
+            cb *= 1.12f;
+            cr *= 1.12f;
+
+            // Đồng bộ Chroma theo Luma để màu sắc không bị bạc trắng khi độ sáng tăng
             if (yCenter > 1.0f) {
-                float lumaRatio = std::clamp(sharpY / yCenter, 0.90f, 1.20f);
-                float chromaScale = 1.05f + (lumaRatio - 1.0f) * 0.45f;
+                float lumaRatio = sharpY / yCenter;
+                float chromaScale = std::clamp(std::pow(lumaRatio, 1.10f), 0.85f, 1.60f);
                 cb *= chromaScale;
                 cr *= chromaScale;
-            } else {
-                cb *= 1.05f;
-                cr *= 1.05f;
             }
 
+            // Chuyển đổi YCbCr về RGB (BT.601)
             float r = sharpY + 1.402f * cr;
             float g = sharpY - 0.344136f * cb - 0.714136f * cr;
             float b = sharpY + 1.772f * cb;
@@ -313,13 +533,28 @@ void ImageEnhancer::processSharpenYCbCr(
                 float maxVal = std::max(r, std::max(g, b));
                 float minVal = std::min(r, std::min(g, b));
                 float sat = (maxVal - minVal) / (maxVal + 0.001f);
-                float boost = (1.0f - sat) * vibrance;
+                float boost = (1.0f - sat * 0.5f) * vibrance;
 
-                float gray = sharpY;
-                r += (r - gray) * boost;
-                g += (g - gray) * boost;
-                b += (b - gray) * boost;
+                r += (r - sharpY) * boost;
+                g += (g - sharpY) * boost;
+                b += (b - sharpY) * boost;
             }
+
+            // CHỐNG CHÁY SÁNG & CHỐNG LỆCH MÀU (Soft Gamut Roll-off):
+            // Nếu 1 kênh màu vượt quá 255 (ví dụ màu xanh lá cây cực đại), 
+            // ta co tỷ lệ cả 3 kênh RGB xuống thay vì cắt bẹp (clamp) riêng kênh đó.
+            // Điều này giữ nguyên 100% tỷ lệ màu, triệt tiêu hoàn toàn hiện tượng "xanh trắng", "cháy điểm"!
+            float maxComponent = std::max(r, std::max(g, b));
+            if (maxComponent > 255.0f) {
+                float compression = 255.0f / maxComponent;
+                r *= compression;
+                g *= compression;
+                b *= compression;
+            }
+
+            r = std::max(0.0f, r);
+            g = std::max(0.0f, g);
+            b = std::max(0.0f, b);
 
             int px = rowOffset + (x * 4);
             dst[px]     = (uint8_t)std::clamp((int)std::round(b), 0, 255);
@@ -511,12 +746,16 @@ bool ImageEnhancer::enhanceImage(
             opts.vibrance = 0.03f;
         }
 
-        // 3. Tự động nhận diện Chân dung / Da người
+        // 3. Tự động nhận diện Chân dung / Da người và cấu hình CLAHE + Guided Filter
         if (score.skinPercent >= 8.0f) {
             opts.isPortrait = true;
             opts.skinSmooth = 0.45f;
+            opts.claheBlend = 0.20f;  // Vừa phải để giữ da tự nhiên
+            opts.detailBoost = 1.30f; // Tăng nét sợi tóc, ánh mắt
         } else {
             opts.isPortrait = false;
+            opts.claheBlend = 0.35f;  // Tương phản thích ứng CLAHE cho phong cảnh/cây cỏ
+            opts.detailBoost = 1.50f; // Đẩy mạnh vi chi tiết gân lá, kiến trúc
         }
     } else {
         opts = getPreset(level);

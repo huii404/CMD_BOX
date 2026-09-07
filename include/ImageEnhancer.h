@@ -27,6 +27,8 @@ struct EnhanceOptions {
     float casStrength = 0.70f;
     bool isPortrait = false;
     float skinSmooth = 0.40f;
+    float claheBlend = 0.35f;  // Tương phản thích ứng CLAHE (0.0 - 0.6)
+    float detailBoost = 1.45f; // Tăng cường vi chi tiết Guided Filter (1.0 - 2.0)
 };
 
 class ImageEnhancer {
@@ -52,7 +54,14 @@ private:
     
     static float cubicKernel(float x);
     static float applySmoothSCurve(float val, float contrast);
+    static std::vector<float> fastBoxFilter(const std::vector<float>& src, int width, int height, int radius);
     static std::vector<float> fastBlurLuma(const std::vector<float>& src, int width, int height, int radius);
+    static std::vector<float> applyGuidedFilter(
+        const std::vector<float>& p, const std::vector<float>& I,
+        int width, int height, int radius, float eps);
+    static void applyCLAHE(
+        std::vector<float>& luma, int width, int height,
+        float clipLimit, float blendFactor);
     static void processSharpenYCbCr(
         const std::vector<uint8_t>& src, std::vector<uint8_t>& dst,
         int width, int height, int stride, const EnhanceOptions& opts);

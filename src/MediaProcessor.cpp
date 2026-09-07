@@ -445,7 +445,7 @@ void MediaProcessor::processChangeSpeedBatch() {
 }
 
 void MediaProcessor::processMediaEnhancementAuto() {
-    std::vector<std::string> imageExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".heic", ".tif", ".tiff" };
+    std::vector<std::string> imageExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".heic", ".tif", ".tiff", ".dng" };
     std::string ffmpeg = getFFmpegPath();
 
     while (true) {
@@ -472,7 +472,12 @@ void MediaProcessor::processMediaEnhancementAuto() {
 
             std::string ext = inPath.extension().string();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-            fs::path outPath = inPath.parent_path() / (inPath.stem().string() + "_enhanced" + ext);
+            fs::path outPath;
+            if (ext == ".heic" || ext == ".dng") {
+                outPath = inPath.parent_path() / (inPath.stem().string() + "_enhanced.jpg");
+            } else {
+                outPath = inPath.parent_path() / (inPath.stem().string() + "_enhanced" + ext);
+            }
 
             if (std::find(imageExts.begin(), imageExts.end(), ext) != imageExts.end()) {
                 uintmax_t oldSize = fs::file_size(inPath);
@@ -492,6 +497,16 @@ void MediaProcessor::processMediaEnhancementAuto() {
                     }
                 } else {
                     ok = ImageEnhancer::enhanceImage(inputs[i], outPath.string(), level, &score);
+
+                    // Fallback cho định dạng HEIC / DNG RAW nếu WIC hệ thống thiếu codec
+                    if (!ok && (ext == ".heic" || ext == ".dng") && !ffmpeg.empty()) {
+                        std::string tempDecoded = (fs::temp_directory_path() / ("cmdbox_raw_" + to_string(rand()) + ".png")).string();
+                        std::string decCmd = ffmpeg + " -y -i \"" + inputs[i] + "\" -pix_fmt rgb24 \"" + tempDecoded + "\"";
+                        if (SystemCore::runRawCommand(decCmd) && fs::exists(tempDecoded)) {
+                            ok = ImageEnhancer::enhanceImage(tempDecoded, outPath.string(), level, &score);
+                            try { fs::remove(tempDecoded); } catch (...) {}
+                        }
+                    }
 
                     // Nếu là ảnh chân dung: lọc nhẹ FFmpeg chống gai ảnh (giữ nguyên màu)
                     bool applyPolish = (level == 1) || (level == 0 && score.skinPercent >= 8.0f);
@@ -556,7 +571,7 @@ void MediaProcessor::processConvertFormatBatch() {
 
         cout << "\nPhát hiện " << inputs.size() << " file...\n\n";
 
-        vector<string> imageExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".heic" };
+        vector<string> imageExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif", ".heic", ".dng" };
         vector<string> videoExts = { ".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm" };
 
         bool hasImage = false;
@@ -621,9 +636,9 @@ void MediaProcessor::processConvertFormatBatch() {
                 }
 
                 if (targetExt == ".jpg" || targetExt == ".jpeg") {
-                    cmd = ffmpeg + " -y -i \"" + input + "\" -map_metadata 0 -q:v 2 \"" + outPath.string() + "\"";
+                    cmd = ffmpeg + " -y -i \"" + input + "\" -map_metadata 0 -pix_fmt yuvj420p -q:v 2 \"" + outPath.string() + "\"";
                 } else if (targetExt == ".png") {
-                    cmd = ffmpeg + " -y -i \"" + input + "\" -map_metadata 0 -lossless 0 -compression_level 6 \"" + outPath.string() + "\"";
+                    cmd = ffmpeg + " -y -i \"" + input + "\" -map_metadata 0 -pix_fmt rgb24 \"" + outPath.string() + "\"";
                 } else { // .webp
                     cmd = ffmpeg + " -y -i \"" + input + "\" -map_metadata 0 -q:v 90 \"" + outPath.string() + "\"";
                 }
