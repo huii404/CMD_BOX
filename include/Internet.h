@@ -31,6 +31,7 @@ public:
     void checkSecurityStatus();
     void fullSecurityShield();
     void checkHostsFileSecurity();
+    void scanConnectedDevices();
 
     // Các hàm Toggle bảo mật có kiểm tra trạng thái trước & sau
     void toggleDefender(bool enable, int &alreadyCount, int &newlyCount, int &failedCount);

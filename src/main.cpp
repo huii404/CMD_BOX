@@ -9,6 +9,7 @@
 #include "../include/SystemOptimizer.h"
 #include "../include/UtilityTools.h"
 #include "../include/MediaProcessor.h"
+#include "../include/UpdateManager.h"
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -59,6 +60,7 @@ private:
 
 public:
     AppUI() {
+        UpdateManager::checkUpdateAsync();
         std::thread([this]() {
             getMedia();
         }).detach();
@@ -68,7 +70,9 @@ public:
     void renderStatusBox() {
         bool admin = SystemCore::isElevated();
         std::string devInfo = SystemCore::getDeviceStatus();
+        std::string verStatus = UpdateManager::getVersionStatusText();
         cout << " ┌─ [ TRẠNG THÁI ] ─────────────────────────\n"
+             << " │ Phiên bản : " << verStatus << "\n"
              << " │ Quyền hạn : " << (admin ? "Administrator" : "User") << "\n"
              << " │ Thiết bị  : " << devInfo << "\n"
              << " └──────────────────────────────────────────\n";
@@ -81,6 +85,7 @@ public:
              << " [2] Mạng & Bảo mật\n"
              << " [3] Công cụ tự động & Tiện ích\n"
              << " [4] Xử lý Media\n"
+             << " [5] Kiểm tra cập nhật phần mềm (Update)\n"
              << " [0] Thoát\n\n"
              << " [Chọn]: ";
     }
@@ -143,6 +148,7 @@ public:
                          << " [4] Kiểm tra trạng thái bảo mật hệ thống\n"
                          << " [5] Xem danh sách mật khẩu Wi-Fi đã lưu\n"
                          << " [6] Quét & Bảo vệ tập tin Hosts\n"
+                         << " [7] Quét thiết bị đang kết nối Wi-Fi / LAN\n"
                          << " [0] Quay lại\n\n"
                          << " [Chọn]: ";
                     sub = readInt("");
@@ -155,6 +161,7 @@ public:
                     case 4:  getInternet().checkSecurityStatus(); break;
                     case 5:  getInternet().wifiAudit(); break;
                     case 6:  getInternet().checkHostsFileSecurity(); break;
+                    case 7:  getInternet().scanConnectedDevices(); break;
                     default: Sleep(300); break;
                     }
                 }
@@ -214,6 +221,11 @@ public:
                     default: Sleep(300); break;
                     }
                 }
+                break;
+
+            // Kiểm tra cập nhật
+            case 5:
+                UpdateManager::showUpdateMenu();
                 break;
 
             

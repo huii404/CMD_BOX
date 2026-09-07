@@ -1,5 +1,6 @@
 .vscode/tasks.json
-bin/*
+bin/ffmpeg.exe
+bin/main.exe
 scripts/__pycache__/*       
 scripts/*.pyc*
 scripts/config.json
