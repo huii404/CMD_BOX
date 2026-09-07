@@ -85,7 +85,7 @@ public:
              << " [2] Mạng & Bảo mật\n"
              << " [3] Công cụ tự động & Tiện ích\n"
              << " [4] Xử lý Media\n"
-             << " [5] Kiểm tra cập nhật phần mềm (Update)\n"
+             << " [5] Cập nhật phần mềm\n"
              << " [0] Thoát\n\n"
              << " [Chọn]: ";
     }

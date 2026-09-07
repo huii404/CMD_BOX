@@ -164,53 +164,31 @@ string UpdateManager::getVersionStatusText() {
 void UpdateManager::showUpdateMenu() {
     while (true) {
         system("cls");
-        cout << "\n=========================================================================================\n"
-             << "                           KIỂM TRA CẬP NHẬT TỪ GITHUB RELEASES                          \n"
-             << "=========================================================================================\n\n";
-
-        cout << "  - Phiên bản hiện tại : \x1b[36mv" << CURRENT_VERSION << "\x1b[0m\n"
-             << "  - Kho lưu trữ GitHub : https://github.com/" << GITHUB_REPO << "\n"
-             << "  - API Releases       : " << API_RELEASES_URL << "\n\n";
-
-        cout << "  - Đang truy vấn GitHub API... ";
-        cout.flush();
+        cout << "\n";
 
         ReleaseInfo rel = fetchLatestRelease();
         if (!rel.valid) {
-            cout << "\x1b[31m(Không thể kết nối tới GitHub Releases API)\x1b[0m\n\n";
-            cout << " [!] Hãy kiểm tra kết nối mạng của bạn.\n\n";
+            cout << "  Phiên bản hiện tại : \x1b[36mv" << CURRENT_VERSION << "\x1b[0m\n"
+                 << "  Trạng thái         : \x1b[31mKhông thể kết nối Internet\x1b[0m\n\n";
         } else {
             lock_guard<mutex> lock(g_versionMutex);
             g_remoteVersion = rel.version;
             if (!rel.htmlUrl.empty()) g_releaseUrl = rel.htmlUrl;
 
-            cout << "\x1b[32m[✓] Thành công!\x1b[0m\n\n";
-            cout << "  + Bản phát hành mới  : \x1b[36m" << rel.releaseName << "\x1b[0m\n"
-                 << "  + Phiên bản nhận diện: \x1b[32mv" << rel.version << "\x1b[0m\n";
-            if (!rel.publishedAt.empty()) {
-                cout << "  + Thời gian phát hành: " << rel.publishedAt << "\n";
-            }
-            if (!rel.htmlUrl.empty()) {
-                cout << "  + Trang tải trực tiếp: " << rel.htmlUrl << "\n";
-            }
-            cout << "\n";
-
             if (isNewer(CURRENT_VERSION, rel.version)) {
                 g_hasNewVersion = true;
-                cout << "  ┌────────────────────────────────────────────────────────────────────────┐\n"
-                     << "  │ \x1b[33m[!] PHÁT HIỆN PHIÊN BẢN MỚI: v" << rel.version << " (Bản hiện tại của bạn: v" << CURRENT_VERSION << ")\x1b[0m       │\n"
-                     << "  │ Bạn nên cập nhật để có thêm các tính năng và bản vá lỗi mới nhất.      │\n"
-                     << "  └────────────────────────────────────────────────────────────────────────┘\n\n";
+                cout << "  Phiên bản hiện tại : \x1b[36mv" << CURRENT_VERSION << "\x1b[0m\n"
+                     << "  Phiên bản mới nhất : \x1b[33mv" << rel.version << " (Có bản cập nhật mới!)\x1b[0m\n\n";
             } else {
                 g_hasNewVersion = false;
-                cout << "  [✓] \x1b[32mBạn đang sử dụng phiên bản mới nhất! (v" << CURRENT_VERSION << ")\x1b[0m\n\n";
+                cout << "  Phiên bản hiện tại : \x1b[32mv" << CURRENT_VERSION << " (Đang là mới nhất)\x1b[0m\n\n";
             }
         }
 
-        cout << " [1] Mở trang GitHub Release trên trình duyệt\n"
-             << " [2] Cập nhật mã nguồn tự động qua Git (git pull)\n"
+        cout << " [1] Tải bản mới (Mở GitHub)\n"
+             << " [2] Cập nhật tự động (Git pull)\n"
              << " [3] Kiểm tra lại\n"
-             << " [0] Quay lại menu chính\n\n"
+             << " [0] Quay lại\n\n"
              << " [Chọn]: ";
 
         int choice = SystemCore::readInt("");
@@ -218,24 +196,21 @@ void UpdateManager::showUpdateMenu() {
 
         if (choice == 1) {
             string openUrl = g_releaseUrl;
-            cout << "\n[*] Đang mở trang: " << openUrl << " trên trình duyệt...\n";
             ShellExecuteA(NULL, "open", openUrl.c_str(), NULL, NULL, SW_SHOWNORMAL);
-            Sleep(1500);
+            Sleep(800);
         } else if (choice == 2) {
-            cout << "\n[*] Đang kiểm tra Git repository...\n";
+            cout << "\n[*] Đang kéo mã nguồn mới nhất từ GitHub...\n\n";
             if (SystemCore::runRawCommand("git rev-parse --is-inside-work-tree >nul 2>&1")) {
-                cout << "[*] Đang kéo mã nguồn mới nhất từ GitHub (git pull)...\n\n";
                 SystemCore::runRawCommand("git pull origin main");
-                cout << "\n[✓] Kéo mã nguồn hoàn tất!\n"
-                     << "[?] Bạn có muốn chạy build lại ngay bây giờ? (y/n): ";
+                cout << "\n[✓] Hoàn tất! Bạn có muốn biên dịch lại ứng dụng ngay? (y/n): ";
                 string ans;
                 getline(cin, ans);
                 if (ans == "y" || ans == "Y") {
-                    cout << "\n[*] Đang biên dịch lại ứng dụng qua build.bat...\n";
+                    cout << "\n[*] Đang biên dịch lại qua build.bat...\n";
                     SystemCore::runRawCommand("call build.bat");
                 }
             } else {
-                cout << "[!] Không tìm thấy thư mục .git. Vui lòng tải mã nguồn hoặc file từ GitHub.\n";
+                cout << "[!] Không tìm thấy kho lưu trữ Git cục bộ.\n";
             }
             SystemCore::waitEnter();
         } else if (choice == 3) {
