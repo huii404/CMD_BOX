@@ -79,7 +79,7 @@ GpuCodecInfo MediaProcessor::getGpuEncoder() {
     string testNvenc = ffmpeg + " -hide_banner -loglevel error -f lavfi -i color=s=64x64:d=0.1 -c:v h264_nvenc -f null -";
     if (SystemCore::runRawCommand(testNvenc)) {
         cachedGpuInfo.encoder = "h264_nvenc";
-        cachedGpuInfo.compressParams = "-c:v h264_nvenc -preset p4 -cq 26 -pix_fmt yuv420p";
+        cachedGpuInfo.compressParams = "-c:v h264_nvenc -preset p6 -cq 22 -b:v 0 -pix_fmt yuv420p";
         cachedGpuInfo.speedParams = "-c:v h264_nvenc -preset p4 -cq 23 -pix_fmt yuv420p";
         cachedGpuInfo.enhanceParamsLevel1 = "-c:v h264_nvenc -preset p3 -cq 20 -pix_fmt yuv420p";
         cachedGpuInfo.enhanceParamsLevel2 = "-c:v h264_nvenc -preset p5 -cq 22 -pix_fmt yuv420p";
@@ -93,7 +93,7 @@ GpuCodecInfo MediaProcessor::getGpuEncoder() {
     string testQsv = ffmpeg + " -hide_banner -loglevel error -f lavfi -i color=s=64x64:d=0.1 -c:v h264_qsv -f null -";
     if (SystemCore::runRawCommand(testQsv)) {
         cachedGpuInfo.encoder = "h264_qsv";
-        cachedGpuInfo.compressParams = "-c:v h264_qsv -global_quality 26 -pix_fmt yuv420p";
+        cachedGpuInfo.compressParams = "-c:v h264_qsv -preset medium -global_quality 22 -pix_fmt yuv420p";
         cachedGpuInfo.speedParams = "-c:v h264_qsv -global_quality 23 -pix_fmt yuv420p";
         cachedGpuInfo.enhanceParamsLevel1 = "-c:v h264_qsv -preset fast -global_quality 20 -pix_fmt yuv420p";
         cachedGpuInfo.enhanceParamsLevel2 = "-c:v h264_qsv -preset medium -global_quality 22 -pix_fmt yuv420p";
@@ -107,7 +107,7 @@ GpuCodecInfo MediaProcessor::getGpuEncoder() {
     string testAmf = ffmpeg + " -hide_banner -loglevel error -f lavfi -i color=s=64x64:d=0.1 -c:v h264_amf -f null -";
     if (SystemCore::runRawCommand(testAmf)) {
         cachedGpuInfo.encoder = "h264_amf";
-        cachedGpuInfo.compressParams = "-c:v h264_amf -rc cqp -qp_p 26 -qp_i 26 -pix_fmt yuv420p";
+        cachedGpuInfo.compressParams = "-c:v h264_amf -quality quality -rc cqp -qp_p 22 -qp_i 22 -pix_fmt yuv420p";
         cachedGpuInfo.speedParams = "-c:v h264_amf -rc cqp -qp_p 23 -qp_i 23 -pix_fmt yuv420p";
         cachedGpuInfo.enhanceParamsLevel1 = "-c:v h264_amf -quality speed -rc cqp -qp_p 20 -qp_i 20 -pix_fmt yuv420p";
         cachedGpuInfo.enhanceParamsLevel2 = "-c:v h264_amf -quality balanced -rc cqp -qp_p 22 -qp_i 22 -pix_fmt yuv420p";
@@ -119,7 +119,7 @@ GpuCodecInfo MediaProcessor::getGpuEncoder() {
 
     // 4. Fallback CPU
     cachedGpuInfo.encoder = "libx264";
-    cachedGpuInfo.compressParams = "-c:v libx264 -crf 24 -preset fast -pix_fmt yuv420p";
+    cachedGpuInfo.compressParams = "-c:v libx264 -crf 21 -preset medium -pix_fmt yuv420p";
     cachedGpuInfo.speedParams = "-c:v libx264 -crf 23 -preset fast -pix_fmt yuv420p";
     cachedGpuInfo.enhanceParamsLevel1 = "-c:v libx264 -crf 18 -preset fast -pix_fmt yuv420p";
     cachedGpuInfo.enhanceParamsLevel2 = "-c:v libx264 -crf 20 -preset medium -pix_fmt yuv420p";
@@ -131,8 +131,19 @@ GpuCodecInfo MediaProcessor::getGpuEncoder() {
 
 void MediaProcessor::compressImage(const string& inputPath, const string& outputPath, int quality) {
     string ffmpeg = getFFmpegPath();
-    string cmd = ffmpeg + " -y -i \"" + inputPath + "\" -map_metadata 0 -movflags +faststart -q:v " + to_string(quality) + " \"" + outputPath + "\"";
-    cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu dung lượng ảnh...";
+    fs::path outP(outputPath);
+    string outExt = outP.extension().string();
+    transform(outExt.begin(), outExt.end(), outExt.begin(), ::tolower);
+
+    string cmd;
+    if (outExt == ".png") {
+        // PNG nén Lossless, bảo toàn 100% độ nét, kênh trong suốt và metadata
+        cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + inputPath + "\" -map_metadata 0 -c:v png -compression_level 9 -pred mixed \"" + outputPath + "\"";
+    } else {
+        // JPG nén chất lượng cao (-q:v 2 tương đương 93-95% quality, hạn chế bệt và giữ chi tiết vi mô)
+        cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + inputPath + "\" -map_metadata 0 -movflags +faststart -q:v " + to_string(quality) + " \"" + outputPath + "\"";
+    }
+    cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu dung lượng ảnh (Bảo toàn độ nét & Metadata)...";
     if (SystemCore::runRawCommand(cmd)) cout << "\n Thành công: " << outputPath << "\n";
     else cout << "\n Xử lý thất bại hoặc sai đường dẫn!\n";
 }
@@ -228,12 +239,32 @@ void MediaProcessor::processMediaAuto() {
             string ext = inPath.extension().string();
             transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
+            bool isImage = (find(imageExts.begin(), imageExts.end(), ext) != imageExts.end());
+            bool isVideo = (find(videoExts.begin(), videoExts.end(), ext) != videoExts.end());
+
             fs::path tempOutPath;
-            if (ext == ".heic") {
-                tempOutPath = inPath.parent_path() / (inPath.stem().string() + "_temp_compressed.jpg");
+            fs::path finalOutPath;
+
+            if (isImage) {
+                // Tuyệt đối không xuất ra WebP theo yêu cầu; ưu tiên bảo toàn độ nét tối đa
+                // Nếu gốc là PNG -> giữ định dạng PNG (nén lossless 100% không mất nét)
+                // Các định dạng khác (JPG, HEIC, BMP, TIFF, WebP) -> chuẩn hóa sang JPG chất lượng cao
+                if (ext == ".png") {
+                    finalOutPath = inPath.parent_path() / (inPath.stem().string() + ".png");
+                    tempOutPath = inPath.parent_path() / (inPath.stem().string() + "_temp_compressed.png");
+                } else {
+                    finalOutPath = inPath.parent_path() / (inPath.stem().string() + ".jpg");
+                    tempOutPath = inPath.parent_path() / (inPath.stem().string() + "_temp_compressed.jpg");
+                }
+            } else if (isVideo) {
+                // Video luôn ưu tiên xuất ra định dạng chuẩn MP4 tương thích cao nhất
+                finalOutPath = inPath.parent_path() / (inPath.stem().string() + ".mp4");
+                tempOutPath = inPath.parent_path() / (inPath.stem().string() + "_temp_compressed.mp4");
             } else {
-                tempOutPath = inPath.parent_path() / (inPath.stem().string() + "_temp_compressed" + ext);
+                cout << "\nBỏ qua: Định dạng " << ext << " không hỗ trợ!\n\n";
+                continue;
             }
+
             bool renderSuccess = false;
 
             // Kiểm tra dung lượng file trước khi nén
@@ -251,20 +282,22 @@ void MediaProcessor::processMediaAuto() {
                 continue;
             }
 
-            if (find(imageExts.begin(), imageExts.end(), ext) != imageExts.end()) {
-                if (ext == ".heic") {
-                    string ffmpeg = getFFmpegPath();
-                    string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + input + "\" -map_metadata 0 -movflags +faststart -q:v 5 \"" + tempOutPath.string() + "\"";
-                    cout << " \x1b[35m[Media]\x1b[0m Đang chuyển HEIC sang JPG...";
-                    renderSuccess = SystemCore::runRawCommand(cmd) && fs::exists(tempOutPath);
+            if (isImage) {
+                string ffmpeg = getFFmpegPath();
+                string cmd;
+                if (finalOutPath.extension() == ".png") {
+                    // PNG Lossless compression: giữ nguyên 100% pixel, không mất nét, bảo toàn metadata
+                    cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + input + "\" -map_metadata 0 -c:v png -compression_level 9 -pred mixed \"" + tempOutPath.string() + "\"";
+                    cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu dung lượng PNG (Lossless 100% nét & Metadata)...";
                 } else {
-                    compressImage(input, tempOutPath.string(), 5);
-                    renderSuccess = fs::exists(tempOutPath);
+                    // JPG chất lượng cao (-q:v 2 tương đương 93-95% quality, bảo toàn chi tiết vi mô, giữ trọn vẹn EXIF/Metadata)
+                    cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + input + "\" -map_metadata 0 -movflags +faststart -q:v 2 \"" + tempOutPath.string() + "\"";
+                    cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu dung lượng ảnh JPG (Bảo toàn chi tiết nét & Metadata)...";
                 }
+                renderSuccess = SystemCore::runRawCommand(cmd) && fs::exists(tempOutPath);
                 
-                // Fix orientation
-                if (renderSuccess && fs::exists(tempOutPath)) {
-                    string ffmpeg = getFFmpegPath();
+                // Fix orientation cho file JPG nếu cần
+                if (renderSuccess && fs::exists(tempOutPath) && finalOutPath.extension() == ".jpg") {
                     string tempFixPath = tempOutPath.string() + ".fix";
                     string fixCmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + tempOutPath.string() + "\" -map_metadata 0 -metadata:s:v:0 rotate=0 -c copy \"" + tempFixPath + "\"";
                     if (SystemCore::runRawCommand(fixCmd) && fs::exists(tempFixPath)) {
@@ -275,15 +308,14 @@ void MediaProcessor::processMediaAuto() {
                     }
                 }
             }
-            else if (find(videoExts.begin(), videoExts.end(), ext) != videoExts.end()) {
+            else if (isVideo) {
                 string ffmpeg = getFFmpegPath();
-                string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + input + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 " + gpu.compressParams + " -c:a aac -b:a 128k \"" + tempOutPath.string() + "\"";
-                cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu Video (" << gpu.encoder << ")...";
+                // Bổ sung bộ lọc làm nét nhẹ luma unsharp (3:3:0.5:3:3:0.0) chống nhòe sau khi lượng tử hóa
+                // Bảo toàn toàn bộ metadata gốc (-map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0)
+                // Xuất chuẩn MP4
+                string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + input + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 -vf \"unsharp=3:3:0.5:3:3:0.0\" " + gpu.compressParams + " -c:a aac -b:a 160k -movflags +faststart \"" + tempOutPath.string() + "\"";
+                cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu Video MP4 (" << gpu.encoder << ", bảo toàn độ nét & Metadata)...";
                 renderSuccess = SystemCore::runRawCommand(cmd) && fs::exists(tempOutPath);
-            }
-            else {
-                cout << "\nBỏ qua: Định dạng " << ext << " không hỗ trợ!\n\n";
-                continue;
             }
 
             // Xử lý kết quả
@@ -297,16 +329,21 @@ void MediaProcessor::processMediaAuto() {
                         if (fs::exists(inPath)) {
                             fs::remove(inPath);
                         }
-                        fs::rename(tempOutPath, inPath);
+                        if (finalOutPath != inPath && fs::exists(finalOutPath)) {
+                            fs::remove(finalOutPath);
+                        }
+                        fs::rename(tempOutPath, finalOutPath);
                         currentOptimizedCount++;
                         
                         float ratio = (1.0f - (float)compressedSize / originalSize) * 100;
-                        cout << "\nĐã nén: " << SystemCore::formatSize(originalSize - compressedSize) << " (" << fixed << setprecision(1) << ratio << "%)\n\n";
+                        cout << "\nĐã nén: " << SystemCore::formatSize(originalSize - compressedSize) 
+                             << " (" << fixed << setprecision(1) << ratio << "%) -> " 
+                             << finalOutPath.filename().string() << "\n\n";
                     } 
                     else {
                         fs::remove(tempOutPath);
                         currentSkippedCount++;
-                        cout << "\nBỏ qua: File đã tối ưu\n\n";
+                        cout << "\nBỏ qua: File đã ở dung lượng tối ưu, giữ nguyên để tránh giảm nét\n\n";
                     }
                 } 
                 catch (const std::exception& e) {
