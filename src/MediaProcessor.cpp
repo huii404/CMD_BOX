@@ -590,12 +590,7 @@ void MediaProcessor::processMediaEnhancement() {
                 });
             }
         }
-
-        std::cout << "\n=================================================================================================\n";
-        std::cout << "                                  KẾT QUẢ LÀM NÉT ẢNH\n";
-        std::cout << "=================================================================================================\n";
-        std::cout << "STT| Tên file           | Thể loại        | Dung lượng\n";
-        std::cout << "---+--------------------+-----------------+-----------------------------------------------------\n";
+        cout<<"\n\n";
         for (const auto& res : results) {
             if (res.success) {
                 std::cout << res.index << "| " << res.filename << " | " << res.type << " | " 

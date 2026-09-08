@@ -33,28 +33,16 @@ static void wipeFolderContents(const fs::path &dirPath) {
     } catch (...) {}
 }
 
-/**
- * =========================================================================================
- * 1. HÀM DỌN RÁC NHANH PLUS (cleanDiskQuick) - Tốc độ siêu tốc (1 - 3 giây)
- * =========================================================================================
- * TÍNH NĂNG:
- * - Tập trung dọn các vùng rác phát sinh thường ngày bằng đa luồng song song:
- *   + User Temp (%TEMP%) & System Temp (C:\Windows\Temp)
- *   + Lịch sử tệp vừa mở (Recent Files)
- *   + Thùng rác (Recycle Bin)
- *   + Bộ đệm phân giải tên miền (Flush DNS)
- *   + Bộ đệm DirectX (D3DSCache), CryptnetUrlCache, Báo cáo sự cố tạm thời (WER Temp)
- */
-void SystemOptimizer::cleanDiskQuick() {
-    sc.cls();
+// Forward declaration hàm dọn dẹp thư mục dev artifacts (được định nghĩa chi tiết ở phần dưới)
+static int cleanDirectoryArtifacts(const fs::path &rootPath, const std::vector<std::string> &targetDirNames, const std::vector<std::string> &targetExtensions, long long &freedBytes);
 
-    long long bytesBefore = 0;
-    try {
-        fs::space_info space = fs::space("C:\\");
-        bytesBefore = space.available;
-    } catch (...) {}
+// --- HỆ THỐNG DỌN RÁC ĐA TẦNG (MULTI-TIER DISK CLEAN) ---
 
-    // Dọn song song các vùng rác nhẹ bằng đa luồng
+// Tầng 1: Rác bề mặt siêu tốc (Temp, Recent, Thùng rác, Flush DNS)
+long long SystemOptimizer::runCleanTier1() {
+    long long before = 0, after = 0;
+    try { before = fs::space("C:\\").available; } catch (...) {}
+
     vector<thread> threads;
     threads.emplace_back([this]() { sc.runCMD("cmd /c del /s /f /q \"%temp%\\*\" 2>nul"); });
     threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%systemroot%\\temp\\*\" 2>nul"); });
@@ -66,216 +54,396 @@ void SystemOptimizer::cleanDiskQuick() {
     threads.emplace_back([this]() { sc.runCMD("powershell -NoProfile -Command \"Clear-RecycleBin -Force -ErrorAction SilentlyContinue\""); });
     threads.emplace_back([this]() { sc.runCMD("ipconfig /flushdns >nul 2>&1"); });
 
-    for (auto& t : threads) t.join();
+    for (auto &t : threads) t.join();
 
-    long long bytesAfter = 0;
-    try {
-        fs::space_info space = fs::space("C:\\");
-        bytesAfter = space.available;
-    } catch (...) {}
+    try { after = fs::space("C:\\").available; } catch (...) {}
+    return (after > before) ? (after - before) : 0;
+}
 
-    long long freed = bytesAfter - bytesBefore;
-    cout << "✅ Đã dọn xong tức thì!";
-    if (freed > 0) {
-        cout << " (Đã giải phóng: " << SystemCore::formatSize(freed) << ")";
+// Tầng 2: Rác Trình duyệt & Ứng dụng (Chrome, Edge, Brave, Discord, Shader)
+long long SystemOptimizer::runCleanTier2() {
+    long long before = 0, after = 0;
+    try { before = fs::space("C:\\").available; } catch (...) {}
+
+    clearBrowserCache();
+
+    vector<thread> threads;
+    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\NVIDIA\\GLCache\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\Explorer\\thumbcache_*.db\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\discord\\Cache\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\discord\\Code Cache\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\Telegram Desktop\\tdata\\user_data\\cache\\*\" 2>nul"); });
+
+    for (auto &t : threads) t.join();
+
+    try { after = fs::space("C:\\").available; } catch (...) {}
+    return (after > before) ? (after - before) : 0;
+}
+
+// Tầng 3: Chuyên sâu Hệ thống (DISM WinSxS, Update kẹt, Logs, Event Viewer)
+long long SystemOptimizer::runCleanTier3() {
+    long long before = 0, after = 0;
+    try { before = fs::space("C:\\").available; } catch (...) {}
+
+    string batContent = "@echo off\nchcp 65001 >nul\n";
+    batContent += "mkdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
+    batContent += "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\temp\" /mir /w:0 /r:0 /log:nul\n";
+    batContent += "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\Prefetch\" /mir /w:0 /r:0 /log:nul\n";
+    batContent += "dism /online /cleanup-image /startcomponentcleanup /resetbase\n";
+    batContent += "del /f /s /q \"%systemroot%\\SoftwareDistribution\\Download\\*\" 2>nul\n";
+    batContent += "del /f /s /q \"%systemroot%\\Logs\\CBS\\*.*\" 2>nul\n";
+    batContent += "del /f /q %windir%\\WindowsUpdate.log 2>nul\n";
+    batContent += "del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\ReportQueue\\*\" 2>nul\n";
+    batContent += "del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\ReportArchive\\*\" 2>nul\n";
+    batContent += "powershell -Command \"Get-DeliveryOptimizationStatus | Remove-DeliveryOptimizationCache -Confirm:$false\" 2>nul\n";
+    batContent += "wevtutil el 2>nul | foreach { wevtutil cl \"$_\" 2>nul }\n";
+    batContent += "powercfg -h off\n";
+    batContent += "cleanmgr /sagerun:1\n";
+    batContent += "rmdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
+
+    SystemCore::runBatchAsAdmin(batContent, "Dọn dẹp hệ thống chuyên sâu Tầng 3");
+
+    try { after = fs::space("C:\\").available; } catch (...) {}
+    return (after > before) ? (after - before) : 0;
+}
+
+// Tầng 4: Rác Môi trường lập trình (node_modules, pip, gradle, VS Code...)
+long long SystemOptimizer::runCleanTier4(const std::string &customPath) {
+    long long before = 0, after = 0;
+    try { before = fs::space("C:\\").available; } catch (...) {}
+
+    cleanDevCaches(false);
+
+    if (!customPath.empty() && fs::exists(customPath)) {
+        long long extraFreed = 0;
+        cleanDirectoryArtifacts(customPath, 
+            {"node_modules", "node_module", ".turbo", ".next", ".nuxt", ".parcel-cache", ".svelte-kit", ".cache"}, 
+            {".pyc", ".pyo"}, extraFreed);
     }
+
+    try { after = fs::space("C:\\").available; } catch (...) {}
+    return (after > before) ? (after - before) : 0;
+}
+
+// Menu điều phối Dọn rác Đa Tầng
+void SystemOptimizer::multiTierDiskClean() {
+    while (true) {
+        sc.cls();
+        cout << "=== HỆ THỐNG DỌN RÁC ĐA TẦNG ===\n\n"
+             << " [1] Tầng 1: Dọn rác bề mặt (Temp, Recent, Thùng rác, DNS - Siêu tốc 1s)\n"
+             << " [2] Tầng 2: Dọn rác Trình duyệt & Ứng dụng (Chrome, Edge, Discord...)\n"
+             << " [3] Tầng 3: Dọn dẹp Chuyên sâu Hệ thống (DISM, WinSxS, Update kẹt, Logs)\n"
+             << " [4] Tầng 4: Dọn rác Môi trường lập trình (node_modules, pip, gradle...)\n"
+             << " [5] [⚡] Dọn liên hoàn Tầng 1 + 2 + 3 (Dọn sạch toàn diện ổ C)\n"
+             << " [6] [🚀] Dọn toàn bộ cả 4 Tầng (Dành cho Lập trình viên)\n"
+             << " [0] Quay lại\n\n"
+             << " [Chọn]: ";
+
+        int choice = sc.readInt("");
+        if (choice == 0) break;
+
+        sc.cls();
+        cout << "=== TIẾN TRÌNH DỌN RÁC ĐA TẦNG ===\n\n";
+        long long totalFreed = 0;
+
+        if (choice == 1 || choice == 5 || choice == 6) {
+            cout << " [*] Tầng 1: Đang dọn rác tạm & cache bề mặt...\n";
+            long long f1 = runCleanTier1();
+            totalFreed += f1;
+            cout << "     -> [Xong] " << (f1 > 0 ? ("Giải phóng " + SystemCore::formatSize(f1)) : "Đã sạch") << "\n\n";
+        }
+
+        if (choice == 2 || choice == 5 || choice == 6) {
+            cout << " [*] Tầng 2: Đang dọn rác Trình duyệt & Ứng dụng...\n";
+            long long f2 = runCleanTier2();
+            totalFreed += f2;
+            cout << "     -> [Xong] " << (f2 > 0 ? ("Giải phóng " + SystemCore::formatSize(f2)) : "Đã sạch") << "\n\n";
+        }
+
+        if (choice == 3 || choice == 5 || choice == 6) {
+            cout << " [*] Tầng 3: Đang dọn dẹp Chuyên sâu Hệ thống (DISM WinSxS, Logs)...\n";
+            long long f3 = runCleanTier3();
+            totalFreed += f3;
+            cout << "     -> [Xong] " << (f3 > 0 ? ("Giải phóng " + SystemCore::formatSize(f3)) : "Đã sạch") << "\n\n";
+        }
+
+        if (choice == 4 || choice == 6) {
+            cout << " [*] Tầng 4: Đang dọn rác Môi trường lập trình (Dev Caches)...\n";
+            long long f4 = runCleanTier4();
+            totalFreed += f4;
+            cout << "     -> [Xong] " << (f4 > 0 ? ("Giải phóng " + SystemCore::formatSize(f4)) : "Đã sạch") << "\n\n";
+        }
+
+        cout << "==============================================================\n";
+        if (totalFreed > 0) {
+            cout << "[✓] Hoàn tất! Tổng dung lượng đã giải phóng: " << SystemCore::formatSize(totalFreed) << "\n\n";
+        } else {
+            cout << "[✓] Hoàn tất! Hệ thống đã rất sạch sẽ.\n\n";
+        }
+        sc.waitEnter();
+    }
+}
+
+void SystemOptimizer::cleanDiskQuick() {
+    sc.cls();
+    cout << "Đang dọn rác nhanh (Tầng 1)...\n";
+    long long freed = runCleanTier1();
+    cout << "\n[✓] Đã dọn xong!";
+    if (freed > 0) cout << " (Giải phóng: " << SystemCore::formatSize(freed) << ")";
+    cout << "\n\n";
+    sc.waitEnter();
+}
+
+void SystemOptimizer::cleanDiskPro() {
+    sc.cls();
+    cout << "Đang dọn rác chuyên sâu (Tầng 1 + 2 + 3)...\n";
+    long long freed = runCleanTier1() + runCleanTier2() + runCleanTier3();
+    cout << "\n[✓] Đã hoàn tất!";
+    if (freed > 0) cout << " (Giải phóng: " << SystemCore::formatSize(freed) << ")";
     cout << "\n\n";
     sc.waitEnter();
 }
 
 /**
  * =========================================================================================
- * 2. HÀM DỌN RÁC Ổ ĐĨA TOÀN DIỆN (cleanDiskPro)
+ * 2. HÀM QUẢN LÝ & TẮT ỨNG DỤNG KHỞI ĐỘNG THÔNG MINH (disableAllStartupApps)
  * =========================================================================================
- * TÍNH NĂNG:
- * - Đo dung lượng ổ C: trước và sau khi dọn để báo cáo dung lượng đã giải phóng.
- * - [Đa luồng / Multi-threaded]: Dọn dẹp đồng thời nhiều vùng cache người dùng (%temp%, Recent,
- *   CryptnetUrlCache, DirectX Shader Cache, NVIDIA Shader Cache, Thumbnail DB, WER Crash Logs).
- * - Dọn dẹp cache trình duyệt (Chrome, Edge, Firefox, Cốc Cốc, Brave...) qua hàm clearBrowserCache().
- * - Dọn dẹp cache môi trường lập trình (Node/npm, Pip, NuGet, Cargo, Gradle...) qua hàm cleanDevCaches().
- * - Làm rỗng Thùng rác (Recycle Bin) và xóa DNS Cache (Flush DNS).
- * - [Chạy quyền Administrator qua Batch]:
- *   + Dùng thủ thuật Robocopy /MIR với thư mục rỗng để xóa nhanh triệu file rác trong System Temp và Prefetch.
- *   + Xóa rác cập nhật Windows (SoftwareDistribution/Download, CBS Logs, WindowsUpdate.log).
- *   + Xóa báo cáo lỗi hệ thống (WER ReportQueue/ReportArchive) và cache lịch sử Defender.
- *   + Khởi động lại FontCache để xóa font cache lỗi thời.
- *   + Xóa Delivery Optimization Cache, xóa toàn bộ Event Logs (nhật ký sự kiện), Dump files.
- *   + Gọi cleanmgr /sagerun:1 (công cụ dọn dẹp gốc của Windows).
- * 
- * CÁCH BỔ SUNG THÊM VÙNG RÁC SAU NÀY:
- * - Để thêm vùng cache User: Thêm 1 dòng `userThreads.emplace_back(...)` ở phần [ĐOẠN 1].
- * - Để thêm lệnh xóa System rác sâu: Thêm dòng `batContent += "del ...\n";` ở phần [ĐOẠN 2].
+ * NÂNG CẤP THÔNG MINH:
+ * - Quét toàn diện: Registry Run (HKCU, HKLM, WOW64) và Thư mục Startup người dùng.
+ * - Nhận diện thông minh (Smart Categorization):
+ *   + TUYỆT ĐỐI BẢO VỆ: Bộ gõ tiếng Việt (Unikey, EVKey, OpenKey), Defender, Driver âm thanh,
+ *     Driver GPU (NVIDIA, AMD, Intel), Chuột/Phím gaming gear, Touchpad/Hotkeys Laptop, Cloud (OneDrive).
+ *   + NHẬN DIỆN APP KHUYÊN TẮT: Spotify, Discord, Steam, Epic Games, uTorrent, IDM, Skype...
+ * - Cơ chế an toàn (Non-destructive):
+ *   + Tự động sao lưu sang `Run_Disabled` thay vì xóa vĩnh viễn, cho phép KHÔI PHỤC 1-CLICK bất kỳ lúc nào.
+ *   + File trong thư mục Startup được đổi tên thành `.disabled` để dễ dàng bật lại.
  */
-void SystemOptimizer::cleanDiskPro() {
-    sc.cls();
 
-    // Lấy dung lượng khả dụng trước khi dọn để đo hiệu quả
-    long long bytesBefore = 0;
-    try {
-        fs::space_info space = fs::space("C:\\");
-        bytesBefore = space.available;
-    } catch (...) {}
+struct StartupAppInfo {
+    string name;
+    string command;
+    string locationName;
+    HKEY hKeyRoot;
+    string subKey;
+    string filePath;
+    bool isFolderFile;
+    bool isSafe;
+    string category;
+};
 
-    // --- [ĐOẠN 1: DỌN CACHE NGƯỜI DÙNG BẰNG ĐA LUỒNG] ---
-    // (Có thể thêm đường dẫn cache mới của các ứng dụng khác vào danh sách luồng này)
-    vector<thread> userThreads;
-    userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /s /f /q \"%temp%\\*\" 2>nul"); });
-    userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\Microsoft\\Windows\\Recent\\*\" 2>nul"); });
-    userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Low\\Microsoft\\CryptnetUrlCache\\*\" 2>nul"); });
-    userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\D3DSCache\\*\" 2>nul"); });
-    userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\NVIDIA\\GLCache\\*\" 2>nul"); });
-    userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\Explorer\\thumbcache_*.db\" 2>nul"); });
-    userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\Temp\\*\" 2>nul"); });
-    userThreads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\Local\\Microsoft\\Windows\\WER\\*\" 2>nul"); });
-    
-    // Đợi tất cả luồng dọn rác người dùng hoàn tất
-    for (auto& t : userThreads) t.join();;
+// Bộ phân tích ứng dụng khởi động thông minh
+static pair<bool, string> analyzeStartupApp(const string &name, const string &cmd) {
+    string combined = name + " " + cmd;
+    transform(combined.begin(), combined.end(), combined.begin(), ::tolower);
 
-    // --- [DỌN TRÌNH DUYỆT, RÁC DEV, THÙNG RÁC, FLUSH DNS] ---
-    clearBrowserCache();
-    cleanDevCaches();
-    sc.runCMD("powershell -NoProfile -Command \"Clear-RecycleBin -Force -ErrorAction SilentlyContinue\"");
-    sc.runCMD("ipconfig /flushdns");
-
-    // --- [ĐOẠN 2: DỌN RÁC HỆ THỐNG YÊU CẦU QUYỀN ADMINISTRATOR] ---
-    string batContent = "";
-    batContent += "mkdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
-    // Thủ thuật Robocopy /MIR xóa hàng vạn file temp & prefetch cực nhanh
-    batContent += "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\temp\" /mir /w:0 /r:0 /log:nul\n";
-    batContent += "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\Prefetch\" /mir /w:0 /r:0 /log:nul\n";
-    batContent += "del /f /s /q \"%systemroot%\\SoftwareDistribution\\Download\\*\" 2>nul\n";
-    batContent += "del /f /s /q \"%systemroot%\\Logs\\CBS\\*.*\" 2>nul\n";
-    batContent += "del /f /q %windir%\\WindowsUpdate.log 2>nul\n";
-    batContent += "del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\ReportQueue\\*\" 2>nul\n";
-    batContent += "del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\ReportArchive\\*\" 2>nul\n";
-    batContent += "del /f /s /q \"%ProgramData%\\Microsoft\\Windows Defender\\Scans\\History\\*\" 2>nul\n";
-    batContent += "del /f /s /q \"%ProgramData%\\Microsoft\\Windows Defender\\LocalCopy\\*\" 2>nul\n";
-    batContent += "net stop FontCache 2>nul\n";
-    batContent += "del /f /s /q \"%WinDir%\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\*\" 2>nul\n";
-    batContent += "net start FontCache 2>nul\n";
-    batContent += "powershell -Command \"Get-DeliveryOptimizationStatus | Remove-DeliveryOptimizationCache -Confirm:$false\" 2>nul\n";
-    batContent += "wevtutil el 2>nul | foreach { wevtutil cl \"$_\" 2>nul }\n"; // Xóa sạch Event Viewer logs
-    batContent += "del /f /s /q \"%SystemRoot%\\Minidump\\*\" 2>nul\n";
-    batContent += "del /f /q \"%SystemRoot%\\Memory.dmp\" 2>nul\n";
-    batContent += "cleanmgr /sagerun:1\n";
-    batContent += "rmdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
-
-    // Thực thi kịch bản batch với quyền Quản trị viên
-    SystemCore::runBatchAsAdmin(batContent, "Dọn rác hệ thống chuyên sâu");
-
-    // Tính toán dung lượng thực tế đã giải phóng
-    long long bytesAfter = 0;
-    try {
-        fs::space_info space = fs::space("C:\\");
-        bytesAfter = space.available;
-    } catch (...) {}
-    
-    sc.cls();
-    long long freed = bytesAfter - bytesBefore;
-    if (freed > 0) {
-        cout << "\nĐã giải phóng: " << SystemCore::formatSize(freed) << "\n";
+    // 1. Bộ gõ tiếng Việt (Ưu tiên số 1 - Tuyệt đối không tắt)
+    if (combined.find("unikey") != string::npos || combined.find("evkey") != string::npos ||
+        combined.find("openkey") != string::npos || combined.find("gotiengviet") != string::npos) {
+        return {true, "Bộ gõ tiếng Việt"};
     }
 
-    cout << "\nHoàn tất dọn dẹp!\n";
-    sc.waitEnter();
+    // 2. Bảo mật & Antivirus
+    if (combined.find("securityhealth") != string::npos || combined.find("windowsdefender") != string::npos ||
+        combined.find("msmpeng") != string::npos || combined.find("kaspersky") != string::npos ||
+        combined.find("bitdefender") != string::npos || combined.find("avast") != string::npos ||
+        combined.find("avg") != string::npos || combined.find("malwarebytes") != string::npos ||
+        combined.find("eset") != string::npos) {
+        return {true, "Bảo mật & Antivirus"};
+    }
+
+    // 3. Driver Âm thanh
+    if (combined.find("rtkaud") != string::npos || combined.find("realtek") != string::npos ||
+        combined.find("rthdvcpl") != string::npos || combined.find("ravcpl") != string::npos ||
+        combined.find("wavessvc") != string::npos || combined.find("wavesmaxxaudio") != string::npos ||
+        combined.find("nahimic") != string::npos || combined.find("ctaud") != string::npos) {
+        return {true, "Driver âm thanh"};
+    }
+
+    // 4. Driver Card màn hình (GPU)
+    if (combined.find("nvbackend") != string::npos || combined.find("nvtaskbar") != string::npos ||
+        combined.find("nvcpldaemon") != string::npos || combined.find("nvmediacenter") != string::npos ||
+        combined.find("nvcontainer") != string::npos || combined.find("nvidia") != string::npos ||
+        combined.find("radeon") != string::npos || combined.find("amdlink") != string::npos ||
+        combined.find("igfxtray") != string::npos || combined.find("igfxem") != string::npos ||
+        combined.find("igfxhk") != string::npos || combined.find("intel") != string::npos) {
+        return {true, "Driver Card màn hình"};
+    }
+
+    // 5. Driver Chuột, Bàn phím & Gaming Gear
+    if (combined.find("lcore") != string::npos || combined.find("lghub") != string::npos ||
+        combined.find("logioptions") != string::npos || combined.find("razer") != string::npos ||
+        combined.find("steelseries") != string::npos || combined.find("icue") != string::npos ||
+        combined.find("corsair") != string::npos || combined.find("ngenuity") != string::npos ||
+        combined.find("hyperx") != string::npos) {
+        return {true, "Phần mềm Chuột/Phím cơ"};
+    }
+
+    // 6. Touchpad, Phím nóng Laptop OEM
+    if (combined.find("syntp") != string::npos || combined.find("synaptics") != string::npos ||
+        combined.find("elan") != string::npos || combined.find("etdctrl") != string::npos ||
+        combined.find("hcontrol") != string::npos || combined.find("atkosd") != string::npos ||
+        combined.find("asus") != string::npos || combined.find("armourycrate") != string::npos ||
+        combined.find("lenovoutility") != string::npos || combined.find("lenovovantage") != string::npos ||
+        combined.find("dellsupportassist") != string::npos || combined.find("hphotkey") != string::npos ||
+        combined.find("predatorsense") != string::npos || combined.find("nitrosense") != string::npos) {
+        return {true, "Touchpad & Phím nóng Laptop"};
+    }
+
+    // 7. Đồng bộ đám mây
+    if (combined.find("onedrive") != string::npos || combined.find("googledrive") != string::npos ||
+        combined.find("dropbox") != string::npos) {
+        return {true, "Đồng bộ đám mây"};
+    }
+
+    // 8. Các ứng dụng bên thứ 3 làm chậm máy (Khuyên tắt)
+    if (combined.find("spotify") != string::npos) return {false, "Spotify (Làm chậm máy)"};
+    if (combined.find("steam") != string::npos) return {false, "Steam (Làm chậm máy)"};
+    if (combined.find("discord") != string::npos) return {false, "Discord (Làm chậm máy)"};
+    if (combined.find("epicgames") != string::npos) return {false, "Epic Games Launcher"};
+    if (combined.find("utorrent") != string::npos || combined.find("bittorrent") != string::npos) return {false, "Phần mềm Torrent ngầm"};
+    if (combined.find("idman") != string::npos || combined.find("internet download manager") != string::npos) return {false, "IDM (Tải file ngầm)"};
+    if (combined.find("skype") != string::npos) return {false, "Skype"};
+    if (combined.find("zalo") != string::npos) return {false, "Zalo"};
+    if (combined.find("telegram") != string::npos) return {false, "Telegram"};
+    if (combined.find("chrome") != string::npos || combined.find("msedge") != string::npos) return {false, "Trình duyệt chạy ngầm"};
+
+    return {false, "Ứng dụng bên thứ ba"};
 }
 
-/**
- * =========================================================================================
- * 2. HÀM TẮT TẤT CẢ ỨNG DỤNG KHỞI ĐỘNG CÙNG WINDOWS (disableAllStartupApps)
- * =========================================================================================
- * TÍNH NĂNG:
- * - Quét các khóa Registry khởi động:
- *   + HKCU\Software\Microsoft\Windows\CurrentVersion\Run (User hiện tại)
- *   + HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run (Toàn máy 64-bit)
- *   + HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run (Toàn máy 32-bit trên Win 64-bit)
- * - Tự động xóa các mục khởi động không cần thiết để tăng tốc độ boot máy.
- * - [Cơ chế Whitelist / Danh sách an toàn]:
- *   Bảo vệ các tiến trình cốt lõi quan trọng: Antivirus (Defender), Driver âm thanh (Realtek, Waves),
- *   Driver card màn hình (NVIDIA, AMD, Intel), Driver chuột/phím cơ (Logitech, Razer, Corsair...),
- *   Driver Touchpad (Synaptics, Elan), Phần mềm OEM Laptop (Lenovo, Asus, Dell, HP) và OneDrive.
- * 
- * CÁCH BỔ SUNG THÊM APP AN TOÀN:
- * - Để thêm app không bao giờ bị tắt: Thêm chuỗi nhận diện vào vector `whitelist`.
- */
-void SystemOptimizer::disableAllStartupApps() {
-    sc.cls();
-    cout << "Đang quét và tắt ứng dụng khởi động...\n\n";
-    int removedCount = 0;
-    const struct { HKEY hKeyRoot; LPCSTR subKey; string name; } targets[] = {
+// Quét toàn bộ ứng dụng khởi động từ Registry & Thư mục Startup
+static vector<StartupAppInfo> scanAllStartupApps() {
+    vector<StartupAppInfo> list;
+    const struct { HKEY hKeyRoot; string subKey; string name; } targets[] = {
         {HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Run", "HKCU"},
         {HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", "HKLM"},
         {HKEY_LOCAL_MACHINE, "SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run", "HKLM_WOW64"}
     };
 
-    // --- DANH SÁCH WHITELIST: CÁC ỨNG DỤNG AN TOÀN GIỮ LẠI ---
-    vector<string> whitelist = {
-        // Bảo mật & Defender
-        "SecurityHealth", "WindowsDefender", "MsMpEng",
-        // Âm thanh
-        "RtkAudUService", "RtkAudUService64", "RtHDVCpl", "RtHDVBg",
-        "RAVCpl64", "RAVBg64", "RtkNGUI64",
-        "WavesSvc", "WavesSvc64", "WavesMaxxAudioService",
-        "CTAudSvc", "CTHELPER", "VolPanel",
-        // GPU (NVIDIA, AMD, Intel)
-        "NvBackend", "NvTaskbarInit", "NvCplDaemon", "NvMediaCenter",
-        "NVCP", "nvtray",
-        "ADService", "ATKOSD", "RadeonSoftware", "RadeOnSettings",
-        "AMDLinkUpdate", "AdobeGCInvoker",
-        "IgfxTray", "igfxEM", "igfxHK", "igfxCUIService",
-        // Gaming Gear / Phần mềm chuột phím
-        "LCore", "LGHUB", "LogiOptions", "LogiOptionsPlus",
-        "RazerCentralService", "Razer Synapse",
-        "SteelSeriesGG", "CUE", "HyperX NGenuity",
-        // Touchpad & Hotkeys Laptop
-        "Elan", "SynTPEnh", "SynTPHelper", "ETDCtrl",
-        "HControl", "ATKOSD2", "FBAgent", "HotkeyUtility",
-        // Tiện ích hãng Laptop
-        "ASUSTPCenter", "AsusUpdateCheck",
-        "HPHotkeyMonitor", "HPPrintScanDoctorService",
-        "LenovoUtility", "LenovoVantageService",
-        "DellSupportAssist"
-    };
-
-    // Quét từng nhánh Registry
-    for (const auto &target : targets) {
+    // 1. Quét Registry Run
+    for (const auto &t : targets) {
         HKEY hKey;
-        if (RegOpenKeyExA(target.hKeyRoot, target.subKey, 0, KEY_READ | KEY_WRITE, &hKey) == ERROR_SUCCESS) {
-            char valueName[256];
-            DWORD nameSize, type;
+        if (RegOpenKeyExA(t.hKeyRoot, t.subKey.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+            char valName[256];
+            char valData[1024];
+            DWORD valNameSize, valDataSize, type;
             DWORD index = 0;
-            vector<string> toDelete;
 
-            // Đọc danh sách tất cả các Value trong key Run
             while (true) {
-                nameSize = sizeof(valueName);
-                if (RegEnumValueA(hKey, index, valueName, &nameSize, NULL, &type, NULL, NULL) == ERROR_SUCCESS) {
-                    string vName(valueName);
-                    bool isSafe = false;
-                    
-                    // Kiểm tra xem tên có khớp với Whitelist không (không phân biệt hoa/thường)
-                    for (const string &safeApp : whitelist) {
-                        string vLower = vName, sLower = safeApp;
-                        transform(vLower.begin(), vLower.end(), vLower.begin(), ::tolower);
-                        transform(sLower.begin(), sLower.end(), sLower.begin(), ::tolower);
-                        if (vLower.find(sLower) != string::npos) { isSafe = true; break; }
+                valNameSize = sizeof(valName);
+                valDataSize = sizeof(valData);
+                if (RegEnumValueA(hKey, index, valName, &valNameSize, NULL, &type, (LPBYTE)valData, &valDataSize) == ERROR_SUCCESS) {
+                    if (type == REG_SZ || type == REG_EXPAND_SZ) {
+                        string nameStr(valName);
+                        string cmdStr(valData);
+                        auto analysis = analyzeStartupApp(nameStr, cmdStr);
+
+                        StartupAppInfo info;
+                        info.name = nameStr;
+                        info.command = cmdStr;
+                        info.locationName = t.name;
+                        info.hKeyRoot = t.hKeyRoot;
+                        info.subKey = t.subKey;
+                        info.isFolderFile = false;
+                        info.isSafe = analysis.first;
+                        info.category = analysis.second;
+                        list.push_back(info);
                     }
-                    if (!isSafe) toDelete.push_back(vName);
                     index++;
                 } else break;
-            }
-
-            // Xóa các entry không nằm trong whitelist
-            for (const string &delName : toDelete) {
-                if (RegDeleteValueA(hKey, delName.c_str()) == ERROR_SUCCESS) {
-                    cout << "  Đã tắt: " << delName << " (" << target.name << ")\n";
-                    removedCount++;
-                }
             }
             RegCloseKey(hKey);
         }
     }
-    cout << "\nĐã tắt " << removedCount << " ứng dụng khởi động.\n";
+
+    // 2. Quét Thư mục Startup của người dùng
+    char *appData = std::getenv("APPDATA");
+    if (appData) {
+        string startupFolder = string(appData) + "\\Microsoft\\Windows\\Start Menu\\Programs\\Startup";
+        if (fs::exists(startupFolder)) {
+            try {
+                for (const auto &entry : fs::directory_iterator(startupFolder)) {
+                    if (entry.is_regular_file()) {
+                        string ext = entry.path().extension().string();
+                        transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                        if (ext == ".lnk" || ext == ".bat" || ext == ".cmd") {
+                            string fName = entry.path().filename().string();
+                            auto analysis = analyzeStartupApp(fName, entry.path().string());
+
+                            StartupAppInfo info;
+                            info.name = fName;
+                            info.command = entry.path().string();
+                            info.locationName = "Startup Folder";
+                            info.filePath = entry.path().string();
+                            info.isFolderFile = true;
+                            info.isSafe = analysis.first;
+                            info.category = analysis.second;
+                            list.push_back(info);
+                        }
+                    }
+                }
+            } catch (...) {}
+        }
+    }
+
+    return list;
+}
+
+// Tắt an toàn 1 ứng dụng (Sao lưu sang Run_Disabled hoặc đổi đuôi file)
+static bool disableSingleStartupApp(const StartupAppInfo &item) {
+    if (item.isFolderFile) {
+        try {
+            fs::path src(item.filePath);
+            fs::path dst = item.filePath + ".disabled";
+            fs::rename(src, dst);
+            return true;
+        } catch (...) { return false; }
+    } else {
+        // Sao lưu sang subKey + "_Disabled"
+        string backupKeyPath = item.subKey + "_Disabled";
+        HKEY hBackup;
+        if (RegCreateKeyExA(item.hKeyRoot, backupKeyPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hBackup, NULL) == ERROR_SUCCESS) {
+            RegSetValueExA(hBackup, item.name.c_str(), 0, REG_SZ, (const BYTE*)item.command.c_str(), (DWORD)(item.command.length() + 1));
+            RegCloseKey(hBackup);
+        }
+        // Xóa khỏi key Run gốc
+        HKEY hOriginal;
+        if (RegOpenKeyExA(item.hKeyRoot, item.subKey.c_str(), 0, KEY_WRITE, &hOriginal) == ERROR_SUCCESS) {
+            LONG res = RegDeleteValueA(hOriginal, item.name.c_str());
+            RegCloseKey(hOriginal);
+            return (res == ERROR_SUCCESS);
+        }
+    }
+    return false;
+}
+
+void SystemOptimizer::disableAllStartupApps() {
+    sc.cls();
+    cout << "Đang quét và tắt các ứng dụng khởi động làm chậm máy...\n\n";
+
+    vector<StartupAppInfo> appList = scanAllStartupApps();
+    if (appList.empty()) {
+        cout << " [✓] Không tìm thấy ứng dụng khởi động nào.\n";
+        sc.waitEnter();
+        return;
+    }
+
+    int disabledCount = 0;
+    int keptCount = 0;
+
+    for (const auto &app : appList) {
+        if (!app.isSafe) {
+            if (disableSingleStartupApp(app)) {
+                cout << "  [✓] Đã tắt:  " << left << setw(28) << app.name << " (" << app.locationName << ")\n";
+                disabledCount++;
+            }
+        } else {
+            cout << "  [-] Giữ lại: " << left << setw(28) << app.name << " [" << app.category << "]\n";
+            keptCount++;
+        }
+    }
+
+    cout << "\n--------------------------------------------------------------\n";
+    cout << "[✓] Hoàn tất! Đã tắt " << disabledCount << " ứng dụng làm chậm máy (Bảo vệ " << keptCount << " ứng dụng hệ thống & bộ gõ).\n";
     sc.waitEnter();
 }
 
@@ -434,16 +602,33 @@ void SystemOptimizer::clearBrowserCache() {
 static int cleanDirectoryArtifacts(const fs::path &rootPath, const std::vector<std::string> &targetDirNames, const std::vector<std::string> &targetExtensions, long long &freedBytes) {
     if (!fs::exists(rootPath)) return 0;
     int deletedCount = 0;
+    std::vector<fs::path> dirsToDelete;
+    std::vector<fs::path> filesToDelete;
+
+    std::error_code ec;
     try {
-        for (auto it = fs::recursive_directory_iterator(rootPath, fs::directory_options::skip_permission_denied);
+        for (auto it = fs::recursive_directory_iterator(rootPath, fs::directory_options::skip_permission_denied, ec);
              it != fs::recursive_directory_iterator();) {
+            if (ec) { ec.clear(); try { it++; } catch (...) { break; } continue; }
+
             try {
                 const auto &entry = *it;
                 std::string name = entry.path().filename().string();
 
-                if (entry.is_directory()) {
+                // 1. TUYỆT ĐỐI BẢO VỆ .git & .github (Không bao giờ xóa, không duyệt sâu để giữ nguyên trạng thái)
+                if (name == ".git" || name == ".github" || name == ".gitignore" || name == ".gitattributes") {
+                    if (entry.is_directory(ec)) {
+                        it.disable_recursion_pending();
+                    }
+                    it.increment(ec);
+                    continue;
+                }
+
+                if (entry.is_directory(ec)) {
                     bool isTarget = false;
                     for (const auto &td : targetDirNames) {
+                        // Không bao giờ cho phép target là .git
+                        if (td == ".git" || td == ".github") continue;
                         if (name == td) {
                             isTarget = true;
                             break;
@@ -451,39 +636,62 @@ static int cleanDirectoryArtifacts(const fs::path &rootPath, const std::vector<s
                     }
 
                     if (isTarget) {
-                        try {
-                            for (const auto &sub : fs::recursive_directory_iterator(entry.path(), fs::directory_options::skip_permission_denied)) {
-                                if (sub.is_regular_file()) freedBytes += sub.file_size();
-                            }
-                        } catch (...) {}
-
-                        it.disable_recursion_pending();
-                        fs::path toDel = entry.path();
-                        it++;
-                        fs::remove_all(toDel);
-                        deletedCount++;
-                        continue;
-                    } else if (name == ".git") {
-                        it.disable_recursion_pending();
+                        dirsToDelete.push_back(entry.path());
+                        it.disable_recursion_pending(); // Không cần đệ quy vào trong thư mục sắp xóa
                     }
-                } else if (entry.is_regular_file()) {
+                } else if (entry.is_regular_file(ec)) {
                     std::string ext = entry.path().extension().string();
                     for (const auto &te : targetExtensions) {
                         if (ext == te) {
-                            freedBytes += entry.file_size();
-                            fs::path toDel = entry.path();
-                            it++;
-                            fs::remove(toDel);
-                            deletedCount++;
-                            goto NEXT_ITERATION;
+                            filesToDelete.push_back(entry.path());
+                            break;
                         }
                     }
                 }
             } catch (...) {}
-            try { it++; } catch (...) { break; }
-            NEXT_ITERATION:;
+            it.increment(ec);
         }
     } catch (...) {}
+
+    // Xóa an toàn các file artifacts đơn lẻ (.pyc, .pyo...)
+    for (const auto &f : filesToDelete) {
+        try {
+            std::error_code sizeEc;
+            auto sz = fs::file_size(f, sizeEc);
+            if (!sizeEc) freedBytes += sz;
+
+            SetFileAttributesA(f.string().c_str(), FILE_ATTRIBUTE_NORMAL);
+            if (fs::remove(f, ec)) {
+                deletedCount++;
+            }
+        } catch (...) {}
+    }
+
+    // Xóa an toàn các thư mục artifacts (node_modules, node_module, __pycache__, .turbo...)
+    for (const auto &d : dirsToDelete) {
+        try {
+            // Tính tổng dung lượng thư mục trước khi xóa
+            try {
+                for (const auto &sub : fs::recursive_directory_iterator(d, fs::directory_options::skip_permission_denied, ec)) {
+                    if (!ec && sub.is_regular_file(ec)) {
+                        freedBytes += sub.file_size(ec);
+                    }
+                }
+            } catch (...) {}
+
+            // Gỡ bỏ thuộc tính Read-Only và xóa tận gốc thư mục (khắc phục lỗi Access Denied trên Windows)
+            string cmd = "cmd /c \"attrib -r -s -h /s /d \"" + d.string() + "\\*\" >nul 2>&1 & rd /s /q \"" + d.string() + "\" >nul 2>&1\"";
+            system(cmd.c_str());
+
+            if (!fs::exists(d)) {
+                deletedCount++;
+            } else {
+                fs::remove_all(d, ec);
+                if (!fs::exists(d)) deletedCount++;
+            }
+        } catch (...) {}
+    }
+
     return deletedCount;
 }
 
@@ -520,7 +728,7 @@ void SystemOptimizer::cleanDevCaches(bool interactive) {
 
         long long pyFreed = 0;
         int pyDeleted = cleanDirectoryArtifacts(scanRoot, 
-            {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}, 
+            {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox"}, 
             {".pyc", ".pyo"}, 
             pyFreed);
 
@@ -548,16 +756,19 @@ void SystemOptimizer::cleanDevCaches(bool interactive) {
         }
         if (!baseUser.empty()) {
             wipeFolderContents(baseUser + "\\.turbo");
+            wipeFolderContents(baseUser + "\\.npm");
+            wipeFolderContents(baseUser + "\\.yarn");
+            wipeFolderContents(baseUser + "\\.pnpm-store");
         }
 
         long long nodeFreed = 0;
         int nodeDeleted = cleanDirectoryArtifacts(scanRoot, 
-            {"node_modules", ".turbo"}, 
+            {"node_modules", "node_module", ".turbo", ".next", ".nuxt", ".parcel-cache", ".svelte-kit", ".cache"}, 
             {}, 
             nodeFreed);
 
         if (interactive) {
-            cout << " [✓] Node.js: Đã dọn npm/yarn/pnpm, " << nodeDeleted << " node_modules - " << SystemCore::formatSize(nodeFreed) << "\n";
+            cout << " [✓] Node.js: Đã dọn npm/yarn/pnpm, " << nodeDeleted << " thư mục (node_modules/cache) - " << SystemCore::formatSize(nodeFreed) << "\n";
         }
     }
 
@@ -606,94 +817,194 @@ void SystemOptimizer::cleanDevCaches(bool interactive) {
     }
 }
 
-/**
- * =========================================================================================
- * 6. HÀM TỐI ƯU HÓA HỆ THỐNG CHUYÊN SÂU (optimizeSystemPRO)
- * =========================================================================================
- * TÍNH NĂNG:
- * - Dọn dẹp & nén Component Store của Windows (DISM cleanup-image /resetbase) để giảm dung lượng WinSxS.
- * - Xóa bộ đệm Delivery Optimization, BranchCache, FontCache và tất cả Event Logs hệ thống.
- * - [Tinh chỉnh Registry hiệu năng cao]:
- *   + WaitToKillAppTimeout = 2000ms: Đóng ứng dụng treo nhanh khi tắt máy, không bị chờ lâu.
- *   + SilentInstalledAppsEnabled = 0: Ngăn Windows tự tải game/app rác từ Microsoft Store.
- *   + AllowTelemetry = 0: Vô hiệu hóa thu thập dữ liệu chẩn đoán gửi về Microsoft.
- *   + powercfg -h off: Tắt chế độ ngủ đông (Hibernate) để giải phóng hàng chục GB file hiberfil.sys.
- * - [Tối ưu giao diện & Taskbar]:
- *   + Ẩn thanh tìm kiếm Searchbox, Widgets, Teams Chat, Task View, Feeds tin tức, Copilot AI.
- *   + Tắt SnapAssist gây phiền khi kéo thả cửa sổ.
- *   + Khởi động lại explorer.exe để áp dụng ngay thay đổi.
- * - Kết hợp dọn dẹp toàn bộ Browser, Dev Cache, Recycle Bin, Temporary files.
- * 
- * CÁCH BỔ SUNG TWEAK REGISTRY MỚI:
- * - Thêm lệnh `batContent += "reg add \"...\" /v ... /t ... /d ... /f\n";` vào khối Tối ưu Registry.
- */
+// --- HỆ THỐNG TĂNG TỐC & TỐI ƯU ĐA TẦNG (MULTI-TIER PERFORMANCE TUNING) ---
+
+// Tầng 1: Tối ưu Khởi động (Tắt app bên thứ ba làm chậm máy, bảo vệ 100% Bộ gõ & Driver)
+int SystemOptimizer::runOptimizeTier1() {
+    vector<StartupAppInfo> appList = scanAllStartupApps();
+    int disabledCount = 0;
+    for (const auto &app : appList) {
+        if (!app.isSafe) {
+            if (disableSingleStartupApp(app)) {
+                cout << "  [✓] Đã tắt:  " << left << setw(26) << app.name << " (" << app.locationName << ")\n";
+                disabledCount++;
+            }
+        } else {
+            cout << "  [-] Giữ lại: " << left << setw(26) << app.name << " [" << app.category << "]\n";
+        }
+    }
+    return disabledCount;
+}
+
+// Tầng 2: Tối ưu Dịch vụ ngầm (Maps, Wallet, Telemetry, Demo, ErrorReporting...)
+int SystemOptimizer::runOptimizeTier2() {
+    struct SvcCheck { string name; string desc; };
+    vector<SvcCheck> svcs = {
+        {"MapsBroker", "Bản đồ ngoại tuyến Windows"},
+        {"WalletService", "Ví điện tử & Thanh toán Windows"},
+        {"RetailDemo", "Chế độ demo trình diễn tại cửa hàng"},
+        {"DiagTrack", "Dịch vụ thu thập Telemetry ngầm"},
+        {"dmwappushservice", "Định tuyến trắc lượng WAP Push"},
+        {"WerSvc", "Báo cáo sự cố về Microsoft"},
+        {"RemoteRegistry", "Chỉnh sửa Registry từ xa qua mạng"},
+        {"wisvc", "Chương trình thử nghiệm Windows Insider"}
+    };
+
+    int disabledCount = 0;
+    for (const auto &s : svcs) {
+        if (ServiceControlAPI(s.name, SERVICE_DISABLED, true)) {
+            cout << "  [✓] Đã tắt dịch vụ: " << left << setw(18) << s.name << " [" << s.desc << "]\n";
+            disabledCount++;
+        }
+    }
+    return disabledCount;
+}
+
+// Tầng 3: Tối ưu Giao diện, Taskbar & Độ nhạy Windows (Kiểm tra trước khi thay đổi, chỉ khởi động lại Explorer nếu cần)
+bool SystemOptimizer::runOptimizeTier3() {
+    struct TaskbarSetting {
+        string keyPath;
+        string valueName;
+        DWORD targetValue;
+        string desc;
+    };
+
+    vector<TaskbarSetting> settings = {
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Search", "SearchboxTaskbarMode", 0, "Searchbox (Thu gọn tìm kiếm)"},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "TaskbarDa", 0, "Widgets (Tắt tin tức widget)"},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "TaskbarMn", 0, "Chat Teams (Tắt biểu tượng chat)"},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "ShowTaskViewButton", 0, "Task View (Tắt xem tác vụ)"},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Feeds", "ShellFeedsTaskbarViewMode", 2, "Feeds News (Tắt tin tức Win 10)"},
+        {"Software\\Policies\\Microsoft\\Windows\\WindowsCopilot", "TurnOffWindowsCopilot", 1, "Copilot AI (Tắt nút Copilot)"},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "EnableTransparency", 0, "Transparency (Tắt trong suốt tiết kiệm GPU)"},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "SnapAssist", 0, "Snap Assist (Tắt gợi ý chia đôi cửa sổ)"},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SilentInstalledAppsEnabled", 0, "Silent Apps (Chặn Store cài app rác ngầm)"},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-310093Enabled", 0, "Start Ads (Tắt quảng cáo Start Menu)"},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-338388Enabled", 0, "Settings Tips (Tắt mẹo gợi ý Settings)"},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-338389Enabled", 0, "Explorer Ads (Tắt quảng cáo trong Explorer)"},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "ShowSyncProviderNotifications", 0, "Sync Notifications (Tắt quảng cáo OneDrive)"}
+    };
+
+    int newlyChanged = 0;
+    for (const auto &item : settings) {
+        HKEY hKey;
+        DWORD currentVal = 0;
+        DWORD dataSize = sizeof(DWORD);
+        bool alreadySet = false;
+
+        if (RegOpenKeyExA(HKEY_CURRENT_USER, item.keyPath.c_str(), 0, KEY_READ | KEY_WRITE, &hKey) == ERROR_SUCCESS) {
+            if (RegQueryValueExA(hKey, item.valueName.c_str(), NULL, NULL, (LPBYTE)&currentVal, &dataSize) == ERROR_SUCCESS) {
+                if (currentVal == item.targetValue) alreadySet = true;
+            }
+            if (!alreadySet) {
+                if (RegSetValueExA(hKey, item.valueName.c_str(), 0, REG_DWORD, (const BYTE*)&item.targetValue, sizeof(DWORD)) == ERROR_SUCCESS) {
+                    cout << "  [+] Đã tinh chỉnh: " << item.desc << "\n";
+                    newlyChanged++;
+                }
+            }
+            RegCloseKey(hKey);
+        } else {
+            if (RegCreateKeyExA(HKEY_CURRENT_USER, item.keyPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+                if (RegSetValueExA(hKey, item.valueName.c_str(), 0, REG_DWORD, (const BYTE*)&item.targetValue, sizeof(DWORD)) == ERROR_SUCCESS) {
+                    cout << "  [+] Đã tinh chỉnh: " << item.desc << "\n";
+                    newlyChanged++;
+                }
+                RegCloseKey(hKey);
+            }
+        }
+    }
+
+    // Bỏ độ trễ mở menu chuột phải (Desktop MenuShowDelay = 0)
+    HKEY hDesktop;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, "Control Panel\\Desktop", 0, KEY_READ | KEY_WRITE, &hDesktop) == ERROR_SUCCESS) {
+        char valBuf[32] = {0};
+        DWORD valSz = sizeof(valBuf);
+        bool delayIsZero = false;
+        if (RegQueryValueExA(hDesktop, "MenuShowDelay", NULL, NULL, (LPBYTE)valBuf, &valSz) == ERROR_SUCCESS) {
+            if (string(valBuf) == "0") delayIsZero = true;
+        }
+        if (!delayIsZero) {
+            const char zeroStr[] = "0";
+            RegSetValueExA(hDesktop, "MenuShowDelay", 0, REG_SZ, (const BYTE*)zeroStr, 2);
+            cout << "  [+] Đã giảm độ trễ hiển thị Menu chuột phải về 0ms\n";
+            newlyChanged++;
+        }
+        RegCloseKey(hDesktop);
+    }
+
+    // Tắt Telemetry chẩn đoán ngầm trong HKLM (yêu cầu Admin)
+    HKEY hLM;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", 0, KEY_READ | KEY_WRITE, &hLM) == ERROR_SUCCESS) {
+        DWORD curTelem = 1, szTelem = sizeof(DWORD);
+        if (RegQueryValueExA(hLM, "AllowTelemetry", NULL, NULL, (LPBYTE)&curTelem, &szTelem) != ERROR_SUCCESS || curTelem != 0) {
+            DWORD zeroVal = 0;
+            RegSetValueExA(hLM, "AllowTelemetry", 0, REG_DWORD, (const BYTE*)&zeroVal, sizeof(DWORD));
+        }
+        RegCloseKey(hLM);
+    }
+
+    // CHỈ KHỞI ĐỘNG LẠI EXPLORER NẾU CÓ THAY ĐỔI MỚI THỰC SỰ!
+    if (newlyChanged > 0) {
+        sc.runCMD("taskkill /f /im explorer.exe >nul 2>&1 & start explorer.exe");
+        return true;
+    }
+    return false;
+}
+
+// Menu điều phối Tăng tốc & Tối ưu Đa Tầng
+void SystemOptimizer::multiTierPerformanceOptimize() {
+    while (true) {
+        sc.cls();
+        cout << "=== HỆ THỐNG TĂNG TỐC & TỐI ƯU ĐA TẦNG ===\n\n"
+             << " [1] Tầng 1: Tối ưu Khởi động (Tắt app làm chậm máy, bảo vệ Bộ gõ & Driver)\n"
+             << " [2] Tầng 2: Tối ưu Dịch vụ ngầm (Tắt Maps, Ví điện tử, Telemetry, Demo...)\n"
+             << " [3] Tầng 3: Tối ưu Giao diện & Độ nhạy Windows (Taskbar, bỏ độ trễ UI)\n"
+             << " [4] [⚡] Tối ưu liên hoàn cả 3 Tầng (Tối ưu hóa toàn diện 1-Click)\n"
+             << " [5] Quản lý dịch vụ Windows nâng cao (Cấu hình chi tiết từng service)\n"
+             << " [0] Quay lại\n\n"
+             << " [Chọn]: ";
+
+        int choice = sc.readInt("");
+        if (choice == 0) break;
+
+        if (choice == 5) {
+            turnOffServicesMenu();
+            continue;
+        }
+
+        sc.cls();
+        cout << "=== TIẾN TRÌNH TĂNG TỐC & TỐI ƯU ĐA TẦNG ===\n\n";
+
+        if (choice == 1 || choice == 4) {
+            cout << " [*] Tầng 1: Đang quét và tắt ứng dụng khởi động làm chậm máy...\n";
+            int count = runOptimizeTier1();
+            cout << "     -> [Xong] " << (count > 0 ? ("Đã tắt " + to_string(count) + " app bên thứ ba (Bảo vệ bộ gõ & driver)") : "Không có app rác khởi động") << "\n\n";
+        }
+
+        if (choice == 2 || choice == 4) {
+            cout << " [*] Tầng 2: Đang vô hiệu hóa các dịch vụ chạy ngầm vô ích...\n";
+            int count = runOptimizeTier2();
+            cout << "     -> [Xong] Đã tối ưu " << count << " dịch vụ ngầm (Maps, Wallet, Telemetry, ErrorReporting)\n\n";
+        }
+
+        if (choice == 3 || choice == 4) {
+            cout << " [*] Tầng 3: Kiểm tra và tối ưu Giao diện & Taskbar...\n";
+            bool restarted = runOptimizeTier3();
+            if (restarted) {
+                cout << "     -> [Xong] Đã áp dụng tinh chỉnh mới và làm mới Explorer.\n\n";
+            } else {
+                cout << "     -> [Xong] Giao diện đã ở trạng thái tối ưu chuẩn (Bỏ qua, không reset Explorer).\n\n";
+            }
+        }
+
+        cout << "==============================================================\n";
+        cout << "[✓] Hoàn tất quy trình tối ưu! Hệ thống đã sẵn sàng với hiệu năng tối đa.\n\n";
+        sc.waitEnter();
+    }
+}
+
 void SystemOptimizer::optimizeSystemPRO() {
-    sc.cls();
-    cout << "Đang chuẩn bị dọn dẹp Browser & Dev Caches...\n";
-
-    // 1. Dọn dẹp cache trình duyệt & dev bằng C++
-    clearBrowserCache(); 
-    cleanDevCaches();
-
-    // 2. Gom toàn bộ tác vụ hệ thống & Registry vào 1 kịch bản Batch chạy quyền Administrator duy nhất
-    string batContent = "";
-    
-    // Dọn dẹp temp & Prefetch hệ thống bằng Robocopy siêu tốc
-    batContent += "mkdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
-    batContent += "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\temp\" /mir /w:0 /r:0 /log:nul\n";
-    batContent += "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\Prefetch\" /mir /w:0 /r:0 /log:nul\n";
-    batContent += "rmdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
-    
-    // Tối ưu hóa WinSxS Component Store bằng DISM
-    batContent += "dism /online /cleanup-image /startcomponentcleanup\n";
-    batContent += "powershell -Command \"Get-DeliveryOptimizationStatus | Remove-DeliveryOptimizationCache -Confirm:$false\"\n";
-    batContent += "netsh branchcache flush\n";
-    batContent += "powershell -Command \"Stop-Service -Name FontCache -Force; del /f /s /q $env:windir\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\* ; Start-Service -Name FontCache\"\n";
-    batContent += "dism /online /cleanup-image /startcomponentcleanup /resetbase\n";
-    batContent += "powershell -Command \"Get-EventLog -LogName * | ForEach { Clear-EventLog $_.Log }\"\n";
-
-    // --- TỐI ƯU REGISTRY (TẮT QUẢNG CÁO, MẸO VẶT, TELEMETRY) ---
-    // Ngăn Windows tự động cài đặt app rác ngầm
-    batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager\" /v \"SilentInstalledAppsEnabled\" /t REG_DWORD /d 0 /f\n";
-    batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager\" /v \"SubscribedContent-310093Enabled\" /t REG_DWORD /d 0 /f\n";
-    batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager\" /v \"SubscribedContent-338388Enabled\" /t REG_DWORD /d 0 /f\n";
-    batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager\" /v \"SubscribedContent-338389Enabled\" /t REG_DWORD /d 0 /f\n";
-    batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager\" /v \"SystemPaneSuggestionsEnabled\" /t REG_DWORD /d 0 /f\n";
-    batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v \"ShowSyncProviderNotifications\" /t REG_DWORD /d 0 /f\n";
-    
-    // Tắt hiệu ứng trong suốt (Transparency Effects) để tiết kiệm GPU/RAM và pin
-    batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\" /v \"EnableTransparency\" /t REG_DWORD /d 0 /f\n";
-    
-    // Tắt Telemetry chẩn đoán ngầm
-    batContent += "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection\" /v AllowTelemetry /t REG_DWORD /d 0 /f\n";
-    
-    // Tắt file Hibernate hiberfil.sys (giải phóng dung lượng bằng đúng dung lượng RAM)
-    batContent += "powercfg -h off\n";
-
-    // --- TỐI ƯU THANH TASKBAR & GIAO DIỆN ---
-    batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Search\" /v SearchboxTaskbarMode /t REG_DWORD /d 0 /f\n";
-    batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v TaskbarDa /t REG_DWORD /d 0 /f\n";
-    batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v TaskbarMn /t REG_DWORD /d 0 /f\n";
-    batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v ShowTaskViewButton /t REG_DWORD /d 0 /f\n";
-    batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Feeds\" /v ShellFeedsTaskbarViewMode /t REG_DWORD /d 2 /f\n";
-    batContent += "reg add \"HKCU\\Software\\Policies\\Microsoft\\Windows\\WindowsCopilot\" /v TurnOffWindowsCopilot /t REG_DWORD /d 1 /f\n";
-    batContent += "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v SnapAssist /t REG_DWORD /d 0 /f\n";
-
-    // --- DỌN RÁC NGƯỜI DÙNG, THÙNG RÁC, LOG VÀ DISK CLEANUP ---
-    batContent += "del /f /s /q \"%AppData%\\Microsoft\\Windows\\Recent\\*\" 2>nul\n";
-    batContent += "powershell -NoProfile -Command \"Clear-RecycleBin -Force -ErrorAction SilentlyContinue\"\n";
-    batContent += "del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\Temp\\*\" 2>nul\n";
-    batContent += "del /f /s /q \"%AppData%\\Local\\Microsoft\\Windows\\WER\\*\" 2>nul\n";
-    batContent += "del /f /s /q \"%LocalAppData%\\Low\\Microsoft\\CryptnetUrlCache\\*\" 2>nul\n";
-    batContent += "del /f /s /q \"%LocalAppData%\\D3DSCache\\*\" 2>nul\n";
-    batContent += "del /f /q %windir%\\WindowsUpdate.log 2>nul\n";
-    batContent += "cleanmgr /sagerun:1\n";
-    batContent += "taskkill /f /im explorer.exe & start explorer.exe\n";
-
-    SystemCore::runBatchAsAdmin(batContent, "Tối ưu hệ thống PRO");
-
-    cout << "\nTối ưu hệ thống hoàn tất!\n";
-    sc.waitEnter();
+    multiTierPerformanceOptimize();
 }
 
 /**
@@ -771,7 +1082,9 @@ void SystemOptimizer::turnOffServicesMenu() {
         {"MapsBroker", "Downloaded Maps Manager (Quản lý bản đồ ngoại tuyến)"},
         {"RemoteRegistry", "Remote Registry (Cho phép sửa Registry từ xa)"},
         {"SysMain", "Superfetch / SysMain (Nên tắt hoàn toàn nếu dùng SSD)"},
-        {"WalletService", "Wallet Service (Ví điện tử và thanh toán Windows)"}
+        {"WalletService", "Wallet Service (Ví điện tử và thanh toán Windows)"},
+        {"RetailDemo", "Retail Demo Service (Chế độ demo cửa hàng trưng bày)"},
+        {"lfsvc", "Geolocation Service (Dịch vụ định vị vị trí ngầm)"}
     };
 
     while (true) {
@@ -879,96 +1192,12 @@ void SystemOptimizer::turnOffServicesMenu() {
  */
 void SystemOptimizer::optimizeTaskbar() {
     sc.cls();
-    
-    struct TaskbarSetting {
-        std::string keyPath;
-        std::string valueName;
-        DWORD targetValue;
-        std::string description;
-    };
-    
-    // Danh sách cấu hình Registry cần áp dụng cho Taskbar & Giao diện
-    std::vector<TaskbarSetting> settings = {
-        {"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Search", "SearchboxTaskbarMode", 0, "Search (Thanh tìm kiếm)"},
-        {"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "TaskbarDa", 0, "Widgets (Tiện ích)"},
-        {"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "TaskbarMn", 0, "Chat (Microsoft Teams)"},
-        {"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "ShowTaskViewButton", 0, "Task View (Xem tác vụ)"},
-        {"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Feeds", "ShellFeedsTaskbarViewMode", 2, "News & Interests (Tin tức)"},
-        {"HKCU\\Software\\Policies\\Microsoft\\Windows\\WindowsCopilot", "TurnOffWindowsCopilot", 1, "Copilot (Trợ lý AI)"},
-        {"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "EnableTransparency", 0, "Transparency (Hiệu ứng trong suốt)"},
-        {"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-310093Enabled", 0, "Start Menu Ads (Gợi ý & Quảng cáo Start)"},
-        {"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-338388Enabled", 0, "Settings Tips (Mẹo & Gợi ý Cài đặt)"},
-        {"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-338389Enabled", 0, "Explorer Ads (Quảng cáo File Explorer)"},
-        {"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "ShowSyncProviderNotifications", 0, "Sync Notifications (Thông báo Office/OneDrive)"}
-    };
-    
-    int alreadyDisabled = 0;
-    int newlyDisabled = 0;
-    int failedCount = 0;
-    
-    cout << "Đang kiểm tra Taskbar...\n\n";
-    
-    for (const auto& setting : settings) {
-        HKEY hKey;
-        DWORD currentValue = 0;
-        DWORD dataSize = sizeof(DWORD);
-        bool isAlreadyDisabled = false;
-        
-        // Mở key Registry tương ứng
-        if (RegOpenKeyExA(HKEY_CURRENT_USER, setting.keyPath.c_str(), 0, KEY_READ | KEY_WRITE, &hKey) == ERROR_SUCCESS) {
-            // Đọc giá trị hiện tại xem đã được tắt trước đó chưa
-            if (RegQueryValueExA(hKey, setting.valueName.c_str(), NULL, NULL, (LPBYTE)&currentValue, &dataSize) == ERROR_SUCCESS) {
-                if (currentValue == setting.targetValue) {
-                    isAlreadyDisabled = true;
-                    alreadyDisabled++;
-                }
-            }
-            
-            // Nếu chưa tắt thì ghi giá trị tối ưu mới
-            if (!isAlreadyDisabled) {
-                if (RegSetValueExA(hKey, setting.valueName.c_str(), 0, REG_DWORD, (const BYTE*)&setting.targetValue, sizeof(DWORD)) == ERROR_SUCCESS) {
-                    std::cout << "  Đã tắt: " << setting.description << "\n";
-                    newlyDisabled++;
-                } else {
-                    std::cout << "  Lỗi tắt: " << setting.description << "\n";
-                    failedCount++;
-                }
-            } else {
-                std::cout << "Đã tắt từ trước: " << setting.description << "\n";
-            }
-            
-            RegCloseKey(hKey);
-        } else {
-            // Nếu key chưa tồn tại thì tạo mới
-            if (RegCreateKeyExA(HKEY_CURRENT_USER, setting.keyPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-                if (RegSetValueExA(hKey, setting.valueName.c_str(), 0, REG_DWORD, (const BYTE*)&setting.targetValue, sizeof(DWORD)) == ERROR_SUCCESS) {
-                    std::cout << "Đã tạo và tắt: " << setting.description << "\n";
-                    newlyDisabled++;
-                } else {
-                    std::cout << "Lỗi tạo key: " << setting.description << "\n";
-                    failedCount++;
-                }
-                RegCloseKey(hKey);
-            } else {
-                std::cout << "Lỗi tạo key: " << setting.description << "\n";
-                failedCount++;
-            }
-        }
-    }
-    
-    cout << "\nĐã tắt từ trước: " << alreadyDisabled << "\n"
-         << "Vừa tắt xong:    " << newlyDisabled << "\n";
-    if (failedCount > 0) {
-        cout << "Thất bại:        " << failedCount << "\n";
-    }
-    
-    // Nếu có thay đổi mới thì khởi động lại Explorer để áp dụng hiệu lực ngay
-    if (newlyDisabled > 0 || failedCount > 0) {
-        cout << "\nKhởi động lại Explorer...\n";
-        sc.runCMD("taskkill /f /im explorer.exe & start explorer.exe");
-        cout << "Đã khởi động lại Explorer.\n";
+    cout << "Đang kiểm tra và tối ưu Taskbar & Giao diện...\n\n";
+    bool changed = runOptimizeTier3();
+    if (changed) {
+        cout << "\n[✓] Đã áp dụng tinh chỉnh mới và làm mới Taskbar thành công.\n\n";
     } else {
-        cout << "\nTaskbar đã được tối ưu từ trước.\n";
+        cout << "\n[✓] Taskbar & Giao diện đã ở trạng thái tối ưu chuẩn từ trước (Bỏ qua, không reset Explorer).\n\n";
     }
     sc.waitEnter();
 }

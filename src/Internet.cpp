@@ -1,4 +1,3 @@
-// Internet.cpp
 #include "../include/Internet.h"
 #include <iphlpapi.h>
 #pragma comment(lib, "iphlpapi.lib")
@@ -88,99 +87,55 @@ string Internet::getField(const string &line) {
     return "";
 }
 
-void Internet::showNetworkInfo() {
-    sc.cls();
-    cout << "\n\n";
-
-    cout << " [LAN IP]    : " << getLocalIP() << "\n";
-    cout << " [Public IP] : ";
-    cout.flush();
-    FILE *pipe = _popen("curl -s --max-time 2 https://api.ipify.org", "r");
-    if (pipe) {
-        char buf[64] = {0};
-        if (fgets(buf, sizeof(buf), pipe)) {
-            string pubIp = sc.trim(string(buf));
-            if (!pubIp.empty()) cout << pubIp << "\n";
-            else cout << "(Không có kết nối Internet)\n";
-        } else {
-            cout << "(Không có kết nối Internet)\n";
-        }
-        _pclose(pipe);
-    } else {
-        cout << "(Không thể kết nối)\n";
-    }
-
-    cout << "\n--- Danh sách Card mạng đang hoạt động ---\n";
-    IP_ADAPTER_INFO adapterInfo[16];
-    DWORD dwSize = sizeof(adapterInfo);
-    if (GetAdaptersInfo(adapterInfo, &dwSize) == ERROR_SUCCESS) {
-        PIP_ADAPTER_INFO p = adapterInfo;
-        int count = 0;
-        while (p) {
-            string ip = p->IpAddressList.IpAddress.String;
-            if (ip != "0.0.0.0" && ip != "127.0.0.1") {
-                count++;
-                cout << " * " << p->Description << "\n";
-                cout << "   - IPv4     : " << ip << " (Subnet: " << p->IpAddressList.IpMask.String << ")\n";
-                if (strlen(p->GatewayList.IpAddress.String) > 0 && strcmp(p->GatewayList.IpAddress.String, "0.0.0.0") != 0) {
-                    cout << "   - Gateway  : " << p->GatewayList.IpAddress.String << "\n";
-                }
-                if (p->DhcpEnabled && strlen(p->DhcpServer.IpAddress.String) > 0) {
-                    cout << "   - DHCP     : " << p->DhcpServer.IpAddress.String << "\n";
-                }
-            }
-            p = p->Next;
-        }
-        if (count == 0) {
-            cout << " (Không có card mạng IPv4 khả dụng)\n";
-        }
-    } else {
-        cout << " (Không thể đọc thông tin card mạng)\n";
-    }
-    cout << "\n";
-    sc.waitEnter();
-}
-
+// ----------------------------------------------------------------------------------
+// BƯỚC 1: SỬA LỖI & KHÔI PHỤC MẠNG TOÀN DIỆN
+// Cơ chế: Xóa sạch cache lỗi (DNS, ARP), reset ngăn xếp socket Winsock và TCP/IP,
+// sau đó ép Router cấp mới địa chỉ IP (release/renew) và khởi động lại WinNAT.
+// ----------------------------------------------------------------------------------
 void Internet::repairNetwork() {
     sc.cls();
-    cout << "Tiến trình sẽ đặt lại Winsock, TCP/IP, xóa DNS cache và làm mới IP.\n";
-    if (!sc.confirm("Xác nhận thực hiện sửa lỗi mạng? (y/n): ")) return;
+    cout << "Đặt lại Winsock, TCP/IP, xóa cache DNS/ARP và cấp mới IP.\n";
+    if (!sc.confirm("Tiếp tục sửa lỗi mạng? (y/n): ")) return;
 
     std::string batContent = 
         "@echo off\n"
         "chcp 65001 >nul\n"
         "title SUA LOI MANG\n"
-        "echo 1/6. Xoa bo dem DNS (Flush DNS)...\n"
+        "echo [1/6] Xoa bo dem DNS...\n"
         "ipconfig /flushdns >nul 2>&1\n"
-        "echo 2/6. Dat lai Winsock Catalog...\n"
+        "echo [2/6] Dat lai Winsock Catalog...\n"
         "netsh winsock reset >nul 2>&1\n"
-        "echo 3/6. Dat lai ngan xep TCP/IP...\n"
+        "echo [3/6] Dat lai ngan xep TCP/IP...\n"
         "netsh int ip reset >nul 2>&1\n"
-        "echo 4/6. Xoa bang ARP Cache...\n"
+        "echo [4/6] Xoa bang ARP Cache...\n"
         "netsh interface ip delete arpcache >nul 2>&1\n"
-        "echo 5/6. Lam moi dia chi IP...\n"
+        "echo [5/6] Lam moi dia chi IP (DHCP)...\n"
         "ipconfig /release >nul 2>&1\n"
         "ipconfig /renew >nul 2>&1\n"
-        "echo 6/6. Khoi dong lai WinNAT va HNS...\n"
+        "echo [6/6] Khoi dong lai WinNAT va HNS...\n"
         "net stop winnat >nul 2>&1 & net start winnat >nul 2>&1\n"
         "net stop hns >nul 2>&1 & net start hns >nul 2>&1\n"
         "echo Hoan tat!\n";
 
-    cout << "\nĐang chạy tiến trình sửa lỗi mạng trong cửa sổ quản trị...\n";
+    cout << "\nĐang sửa lỗi mạng (quyền Admin)...\n";
     if (SystemCore::runBatchAsAdmin(batContent, "Sửa lỗi mạng")) {
-        cout << "[OK] Đã sửa lỗi và khôi phục cài đặt mạng thành công!\n";
+        cout << "[✓] Đã khôi phục mạng thành công!\n";
     } else {
-        cout << "[Lỗi] Thất bại khi thực thi (Cần quyền Administrator).\n";
+        cout << "[!] Thất bại (Cần quyền Administrator).\n";
     }
     sc.waitEnter();
 }
 
+// ----------------------------------------------------------------------------------
+// BƯỚC 2: TRA CỨU MẬT KHẨU WI-FI ĐÃ LƯU
+// Cơ chế: Sử dụng netsh wlan truy xuất trực tiếp profile XML được Windows lưu trong máy.
+// ----------------------------------------------------------------------------------
 void Internet::wifiAudit() {
     sc.cls();
 
     FILE *pipe = _popen("netsh wlan show profiles", "r");
     if (!pipe) {
-        cout << "Không thể truy cập cấu hình Wi-Fi.\n";
+        cout << "[!] Không thể truy cập cấu hình Wi-Fi.\n";
         sc.waitEnter();
         return;
     }
@@ -199,7 +154,7 @@ void Internet::wifiAudit() {
     _pclose(pipe);
 
     if (wifiList.empty()) {
-        cout << "Không tìm thấy cấu hình Wi-Fi nào trên máy.\n";
+        cout << "[!] Không tìm thấy cấu hình Wi-Fi nào trên máy.\n";
         sc.waitEnter();
         return;
     }
@@ -209,11 +164,11 @@ void Internet::wifiAudit() {
     }
     cout << " [0] Quay lại\n\n";
 
-    int choice = sc.readInt(" -> Nhập số thứ tự Wi-Fi muốn xem mật khẩu: ");
+    int choice = sc.readInt(" -> Chọn số thứ tự: ");
     if (choice == 0) return;
 
     if (choice < 1 || choice > static_cast<int>(wifiList.size())) {
-        cout << "Lựa chọn không hợp lệ!\n";
+        cout << "[!] Lựa chọn không hợp lệ!\n";
         sc.waitEnter();
         return;
     }
@@ -222,13 +177,13 @@ void Internet::wifiAudit() {
     string cmd = "netsh wlan show profile \"" + selectedWifi + "\" key=clear";
     FILE *p2 = _popen(cmd.c_str(), "r");
     if (!p2) {
-        cout << "Thất bại khi truy vấn mật khẩu.\n";
+        cout << "[!] Thất bại khi truy vấn mật khẩu.\n";
         sc.waitEnter();
         return;
     }
 
     char b2[512];
-    string auth = "", cipher = "", pass = "(Mạng Mở/Open)";
+    string auth = "", cipher = "", pass = "(Mạng Mở/Không mật khẩu)";
     while (fgets(b2, sizeof(b2), p2)) {
         string inf = b2;
         if (inf.find("Authentication") != string::npos) auth = getField(inf);
@@ -238,14 +193,15 @@ void Internet::wifiAudit() {
     _pclose(p2);
 
     sc.cls();
-    cout << " Tên Wi-Fi  : " << selectedWifi << "\n"
-         << " Mật khẩu   : " << pass << "\n"
-         << " Bảo mật    : " << auth << "\n"
-         << " Mã hóa     : " << cipher << "\n\n";
+    cout << " Tên Wi-Fi : " << selectedWifi << "\n"
+         << " Mật khẩu  : \x1b[32m" << pass << "\x1b[0m\n"
+         << " Bảo mật   : " << auth << " (" << cipher << ")\n\n";
     sc.waitEnter();
 }
 
-// Native Win32 Registry & Service Helpers
+// ----------------------------------------------------------------------------------
+// BƯỚC 3: CÁC TIỆN ÍCH TRUY VẤN HỆ THỐNG NATIVE (Win32 Registry & Service API)
+// ----------------------------------------------------------------------------------
 bool Internet::readRegDword(HKEY hRoot, const std::string &subKey, const std::string &valueName, DWORD &outVal) {
     HKEY hKey;
     if (RegOpenKeyExA(hRoot, subKey.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
@@ -261,16 +217,6 @@ bool Internet::readRegDword(HKEY hRoot, const std::string &subKey, const std::st
         return true;
     }
     return false;
-}
-
-bool Internet::writeRegDword(HKEY hRoot, const std::string &subKey, const std::string &valueName, DWORD val) {
-    HKEY hKey;
-    if (RegCreateKeyExA(hRoot, subKey.c_str(), 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) != ERROR_SUCCESS) {
-        return false;
-    }
-    LONG res = RegSetValueExA(hKey, valueName.c_str(), 0, REG_DWORD, reinterpret_cast<const BYTE*>(&val), sizeof(val));
-    RegCloseKey(hKey);
-    return (res == ERROR_SUCCESS);
 }
 
 bool Internet::isServiceRunningNative(const std::string &serviceName) {
@@ -292,35 +238,18 @@ bool Internet::isServiceRunningNative(const std::string &serviceName) {
     return isRunning;
 }
 
-bool Internet::isServiceDisabledNative(const std::string &serviceName) {
-    SC_HANDLE hSCM = OpenSCManagerA(NULL, NULL, SC_MANAGER_CONNECT);
-    if (!hSCM) return false;
-    SC_HANDLE hService = OpenServiceA(hSCM, serviceName.c_str(), SERVICE_QUERY_CONFIG);
-    if (!hService) {
-        CloseServiceHandle(hSCM);
-        return false;
-    }
-    DWORD bytesNeeded = 0;
-    QueryServiceConfigA(hService, NULL, 0, &bytesNeeded);
-    bool isDisabled = false;
-    if (bytesNeeded > 0) {
-        std::vector<BYTE> buffer(bytesNeeded);
-        LPQUERY_SERVICE_CONFIGA pConfig = (LPQUERY_SERVICE_CONFIGA)buffer.data();
-        if (QueryServiceConfigA(hService, pConfig, bytesNeeded, &bytesNeeded)) {
-            isDisabled = (pConfig->dwStartType == SERVICE_DISABLED);
-        }
-    }
-    CloseServiceHandle(hService);
-    CloseServiceHandle(hSCM);
-    return isDisabled;
-}
-
+// ----------------------------------------------------------------------------------
+// BƯỚC 4: LÁ CHẮN BẢO MẬT HỆ THỐNG & MẠNG
+// Quan trọng: Chỉ khóa các cổng nguy hiểm (Telnet 23, TFTP 69, RPC 135).
+// TUYỆT ĐỐI KHÔNG CHẶN 445, 137, 138, 139 để bảo toàn ứng dụng truyền file Media.
+// ----------------------------------------------------------------------------------
 void Internet::fullSecurityShield() {
     while (true) {
         sc.cls();
-        cout << "=== LÁ CHẮN BẢO MẬT HỆ THỐNG & MẠNG ===\n"
-             << " [1] Kích hoạt toàn diện (Defender, Firewall, Chặn Port, DoH)\n"
-             << " [2] Khôi phục mặc định (Mở Port, Tắt DoH, Chia sẻ LAN)\n"
+        cout << "=== LÁ CHẮN BẢO MẬT HỆ THỐNG & MẠNG ===\n\n"
+             << " [1] Bật lá chắn (Defender, Firewall, Chặn Port Telnet/RPC)\n"
+             << "     * Thông suốt 100% truyền file Media, Smart View, LAN\n"
+             << " [2] Khôi phục mặc định\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
 
@@ -330,58 +259,33 @@ void Internet::fullSecurityShield() {
         if (choice == 1) {
             sc.cls();
             cout << "=== ĐANG KÍCH HOẠT LÁ CHẮN BẢO MẬT ===\n\n"
-                 << "Đang tổng hợp quy tắc bảo mật trong cửa sổ quản trị...\n";
+                 << "Đang tổng hợp quy tắc an toàn trong cửa sổ quản trị...\n";
 
             std::string batContent = 
                 "@echo off\n"
                 "chcp 65001 >nul\n"
                 "title KICH HOAT LA CHAN BAO MAT HE THONG & MANG\n"
-                "echo 1/8. Bat Defender Realtime va cap nhat Signature...\n"
+                "echo 1/5. Bat Windows Defender Realtime va cap nhat mau virus...\n"
                 "powershell -Command \"Set-MpPreference -DisableRealtimeMonitoring $false\" >nul 2>&1\n"
                 "\"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -SignatureUpdate >nul 2>&1\n"
-                "echo 2/8. Kich hoat Tuong lua Windows...\n"
+                "echo 2/5. Kich hoat Tuong lua Windows (Tat ca profiles)...\n"
                 "netsh advfirewall set allprofiles state on >nul 2>&1\n"
-                "echo 3/8. Bat chong Ransomware (Controlled Folder Access)...\n"
+                "echo 3/5. Bat chong ma doc tong tien (Controlled Folder Access)...\n"
                 "powershell -Command \"Set-MpPreference -EnableControlledFolderAccess Enabled\" >nul 2>&1\n"
-                "echo 4/8. Vo hieu hoa SMBv1, LLMNR Multicast va NetBIOS...\n"
-                "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters\" /v SMB1 /t REG_DWORD /d 0 /f >nul 2>&1\n"
-                "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient\" /v EnableMulticast /t REG_DWORD /d 0 /f >nul 2>&1\n"
-                "powershell -Command \"Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-NetAdapter -Name $_.Name -NetLuid $_.NetLuid -NetBIOSSetting Disabled }\" >nul 2>&1\n"
-                "echo 5/8. Thiet lap chan cong nguy hiem (TCP: 445, 135, 137, 138, 139)...\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_445\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_445_out\" >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_445\" dir=in action=block protocol=TCP localport=445 >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_445_out\" dir=out action=block protocol=TCP localport=445 >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_139\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_139_out\" >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_139\" dir=in action=block protocol=TCP localport=139 >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_139_out\" dir=out action=block protocol=TCP localport=139 >nul 2>&1\n"
+                "echo 4/5. Chan cac cong nguy hiem de bi khai thac tu xa (Telnet: 23, TFTP: 69, RPC: 135)...\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_23\" >nul 2>&1\n"
+                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_23\" dir=in action=block protocol=TCP localport=23 >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_69\" >nul 2>&1\n"
+                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_69\" dir=in action=block protocol=UDP localport=69 >nul 2>&1\n"
                 "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_135\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_135_out\" >nul 2>&1\n"
                 "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_135\" dir=in action=block protocol=TCP localport=135 >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_135_out\" dir=out action=block protocol=TCP localport=135 >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_137\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_137_out\" >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_137\" dir=in action=block protocol=TCP localport=137 >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_137_out\" dir=out action=block protocol=TCP localport=137 >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_138\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_138_out\" >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_138\" dir=in action=block protocol=TCP localport=138 >nul 2>&1\n"
-                "netsh advfirewall firewall add rule name=\"Block_Dangerous_Port_138_out\" dir=out action=block protocol=TCP localport=138 >nul 2>&1\n"
-                "echo 6/8. Cau hinh DNS over HTTPS (Cloudflare 1.1.1.1)...\n"
-                "powershell -Command \"Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ServerAddresses ('1.1.1.1','1.0.0.1') }\" >nul 2>&1\n"
-                "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\" /v EnableAutoDoh /t REG_DWORD /d 2 /f >nul 2>&1\n"
-                "echo 7/8. Vo hieu hoa dich vu Remote nguy hiem...\n"
+                "echo 5/5. Vo hieu hoa dich vu Remote Registry doc hai...\n"
                 "sc config RemoteRegistry start= disabled >nul 2>&1\n"
                 "sc stop RemoteRegistry >nul 2>&1\n"
-                "sc config TermService start= disabled >nul 2>&1\n"
-                "sc stop TermService >nul 2>&1\n"
-                "echo 8/8. Vo hieu hoa Windows Telemetry...\n"
-                "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection\" /v AllowTelemetry /t REG_DWORD /d 0 /f >nul 2>&1\n"
                 "echo Hoan tat!\n";
 
             if (SystemCore::runBatchAsAdmin(batContent, "Kích hoạt lá chắn bảo mật")) {
-                cout << "\n[OK] Đã kích hoạt toàn bộ lá chắn bảo mật hệ thống & mạng thành công!\n";
+                cout << "\n[OK] Đã kích hoạt lá chắn bảo mật thành công! Các cổng chia sẻ Media vẫn hoạt động bình thường.\n";
             } else {
                 cout << "\n[Lỗi] Thất bại khi thực thi lá chắn bảo mật (Cần quyền Administrator).\n";
             }
@@ -396,49 +300,43 @@ void Internet::fullSecurityShield() {
                 "@echo off\n"
                 "chcp 65001 >nul\n"
                 "title KHOI PHUC CAI DAT MANG MAC DINH\n"
-                "echo 1/3. Khoi phuc giao thuc chia se mang LAN (Multicast, NetBIOS)...\n"
-                "reg add \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient\" /v EnableMulticast /t REG_DWORD /d 1 /f >nul 2>&1\n"
-                "powershell -Command \"Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-NetAdapter -Name $_.Name -NetLuid $_.NetLuid -NetBIOSSetting Default }\" >nul 2>&1\n"
-                "echo 2/3. Go bo quy tac chan cong mang (Mo lai TCP 445, 135-139)...\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_445\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_445_out\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_139\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_139_out\" >nul 2>&1\n"
+                "echo 1/2. Go bo quy tac chan cong tren tuong lua...\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_23\" >nul 2>&1\n"
+                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_69\" >nul 2>&1\n"
                 "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_135\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_135_out\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_137\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_137_out\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_138\" >nul 2>&1\n"
-                "netsh advfirewall firewall delete rule name=\"Block_Dangerous_Port_138_out\" >nul 2>&1\n"
-                "echo 3/3. Dat lai DNS tu dong tu Router (DHCP) va tat DoH...\n"
+                "echo 2/2. Dat lai DNS tu dong tu Router (DHCP)...\n"
                 "powershell -Command \"Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ResetServerAddresses }\" >nul 2>&1\n"
-                "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\" /v EnableAutoDoh /t REG_DWORD /d 0 /f >nul 2>&1\n"
                 "echo Hoan tat!\n";
 
             if (SystemCore::runBatchAsAdmin(batContent, "Khôi phục cài đặt mạng")) {
-                cout << "\n[OK] Đã hoàn tất khôi phục cài đặt mạng mặc định thành công!\n";
+                cout << "\n[OK] Đã hoàn tất khôi phục cài đặt mặc định thành công!\n";
             } else {
-                cout << "\n[Lỗi] Thất bại khi khôi phục cài đặt mạng (Cần quyền Administrator).\n";
+                cout << "\n[Lỗi] Thất bại khi khôi phục cài đặt (Cần quyền Administrator).\n";
             }
             SystemCore::waitEnter();
         }
     }
 }
 
+// ----------------------------------------------------------------------------------
+// BƯỚC 5: QUÉT & BẢO VỆ TẬP TIN HOSTS
+// Cơ chế: Đọc C:\Windows\System32\drivers\etc\hosts phát hiện các dòng điều hướng DNS
+// bất thường (malware thường chuyển hướng tên miền ngân hàng/Google/Facebook về máy chủ ảo).
+// ----------------------------------------------------------------------------------
 void Internet::checkHostsFileSecurity() {
     sc.cls();
     cout << "=== QUÉT & BẢO VỆ TẬP TIN HOSTS ===\n\n";
 
     std::string hostsPath = "C:\\Windows\\System32\\drivers\\etc\\hosts";
     if (!fs::exists(hostsPath)) {
-        cout << "Không tìm thấy tập tin hosts tại: " << hostsPath << "\n";
+        cout << "[!] Không tìm thấy tập tin hosts: " << hostsPath << "\n";
         SystemCore::waitEnter();
         return;
     }
 
     std::ifstream hf(hostsPath);
     if (!hf) {
-        cout << "Không thể mở đọc tập tin hosts (Cần quyền Administrator).\n";
+        cout << "[!] Không thể đọc tập tin hosts (Cần quyền Admin).\n";
         SystemCore::waitEnter();
         return;
     }
@@ -469,28 +367,28 @@ void Internet::checkHostsFileSecurity() {
     }
     hf.close();
 
-    cout << "Đường dẫn tập tin: " << hostsPath << "\n"
-         << "Tổng số quy tắc điều hướng đang kích hoạt: " << activeRules.size() << "\n\n";
+    cout << "Tập tin: " << hostsPath << "\n"
+         << "Quy tắc kích hoạt: " << activeRules.size() << "\n\n";
 
     if (!activeRules.empty()) {
-        cout << "--- Danh sách các dòng điều hướng trong hosts ---\n";
+        cout << "--- Danh sách dòng điều hướng ---\n";
         for (const auto &r : activeRules) {
             cout << "  -> " << r << "\n";
         }
-        cout << "--------------------------------------------------\n\n";
+        cout << "---------------------------------\n\n";
     }
 
     if (!suspiciousRules.empty()) {
-        cout << "CẢNH BÁO: Phát hiện " << suspiciousRules.size() << " quy tắc điều hướng đáng ngờ (chuyển hướng tên miền nhạy cảm):\n";
+        cout << "[!] CẢNH BÁO: Phát hiện " << suspiciousRules.size() << " quy tắc điều hướng đáng ngờ:\n";
         for (const auto &sr : suspiciousRules) {
             cout << "  [Nghi vấn] " << sr << "\n";
         }
         cout << "\n";
     } else {
-        cout << "Tập tin hosts an toàn, không phát hiện điều hướng độc hại.\n\n";
+        cout << "[✓] Tập tin hosts an toàn (Không có điều hướng độc hại).\n\n";
     }
 
-    cout << " [1] Khôi phục tập tin hosts sạch gốc chuẩn Microsoft\n"
+    cout << " [1] Khôi phục hosts sạch gốc Microsoft\n"
          << " [0] Quay lại\n\n"
          << " [Chọn]: ";
 
@@ -498,82 +396,85 @@ void Internet::checkHostsFileSecurity() {
     if (choice == 1) {
         std::string defaultHosts = 
             "# Copyright (c) 1993-2009 Microsoft Corp.\n"
-            "#\n"
             "# This is a sample HOSTS file used by Microsoft TCP/IP for Windows.\n"
             "#\n"
-            "# localhost name resolution is handled within DNS itself.\n"
-            "#\t127.0.0.1       localhost\n"
-            "#\t::1             localhost\n";
+            "# 127.0.0.1       localhost\n"
+            "# ::1             localhost\n";
 
         std::string tempBat = "@echo off\n";
         tempBat += "attrib -r -s -h \"C:\\Windows\\System32\\drivers\\etc\\hosts\" >nul 2>&1\n";
         tempBat += "(echo # Clean Hosts File & echo 127.0.0.1 localhost & echo ::1 localhost) > \"C:\\Windows\\System32\\drivers\\etc\\hosts\"\n";
 
         if (SystemCore::runBatchAsAdmin(tempBat, "Khôi phục tập tin hosts")) {
-            cout << "\nĐã khôi phục tập tin hosts về trạng thái sạch gốc thành công!\n";
+            cout << "\n[✓] Đã khôi phục hosts sạch gốc thành công!\n";
         } else {
-            cout << "\nThất bại khi ghi đè tập tin hosts (Cần quyền Administrator).\n";
+            cout << "\n[!] Thất bại (Cần quyền Administrator).\n";
         }
         SystemCore::waitEnter();
     }
 }
 
+// ----------------------------------------------------------------------------------
+// BƯỚC 6: KIỂM TRA TRẠNG THÁI BẢO MẬT HỆ THỐNG THIẾT YẾU
+// Cơ chế: Kiểm tra 4 yếu tố cốt lõi (Defender Realtime, Firewall, Spyware Proxy, Port hiểm)
+// ----------------------------------------------------------------------------------
 void Internet::checkSecurityStatus() {
     sc.cls();
     cout << "=== BÁO CÁO TRẠNG THÁI BẢO MẬT HỆ THỐNG ===\n\n";
 
-    // 1. Windows Defender
+    // 1. Windows Defender Real-time
     cout << " 1. Windows Defender:\n";
     bool defService = isServiceRunningNative("WinDefend");
     DWORD defDisable = 0;
     bool hasDefDisable = readRegDword(HKEY_LOCAL_MACHINE, "SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection", "DisableRealtimeMonitoring", defDisable);
     bool rtActive = defService && (!hasDefDisable || defDisable == 0);
-    cout << "    - Dịch vụ WinDefend : " << (defService ? "\x1b[32mĐANG CHẠY\x1b[0m" : "\x1b[31mĐÃ DỪNG\x1b[0m") << "\n"
-         << "    - Real-Time Protect : " << (rtActive ? "\x1b[32mBẬT (An toàn)\x1b[0m" : "\x1b[31mTẮT\x1b[0m") << "\n";
+    cout << "    - Dịch vụ WinDefend  : " << (defService ? "\x1b[32mĐANG CHẠY\x1b[0m" : "\x1b[31mĐÃ DỪNG\x1b[0m") << "\n"
+         << "    - Real-Time Protect  : " << (rtActive ? "\x1b[32mBẬT (An toàn)\x1b[0m" : "\x1b[31mTẮT\x1b[0m") << "\n";
 
-    // 2. Tường lửa
-    cout << "\n 2. Tường lửa Windows (Firewall):\n";
+    // 2. Tường lửa Windows (Firewall)
+    cout << "\n 2. Tường lửa Windows:\n";
     FILE *pipeFw = _popen("netsh advfirewall show allprofiles state", "r");
+    bool fwAnyOn = false;
     if (pipeFw) {
         char buf[256];
         while (fgets(buf, sizeof(buf), pipeFw)) {
             string l = sc.trim(string(buf));
             if (l.find("Profile") != string::npos || l.find("State") != string::npos || l.find("Trạng thái") != string::npos) {
                 cout << "    - " << l << "\n";
+                if (l.find("ON") != string::npos || l.find("BẬT") != string::npos) fwAnyOn = true;
             }
         }
         _pclose(pipeFw);
     }
-
-    // 3. Cổng nguy hiểm
-    cout << "\n 3. Trạng thái chặn Port nguy hiểm:\n";
-    vector<int> ports = {445, 139, 135, 137, 138};
-    for (int p : ports) {
-        string chk = "netsh advfirewall firewall show rule name=\"Block_Dangerous_Port_" + to_string(p) + "\" >nul 2>&1";
-        bool blocked = (system(chk.c_str()) == 0);
-        cout << "    - Port " << p << " : " << (blocked ? "\x1b[32mĐÃ CHẶN (An toàn)\x1b[0m" : "\x1b[33mMỞ (Chưa chặn)\x1b[0m") << "\n";
+    if (!fwAnyOn) {
+        cout << "    \x1b[33m-> Cảnh báo: Tường lửa đang tắt!\x1b[0m\n";
     }
 
-    // 4. Dịch vụ điều khiển từ xa
-    cout << "\n 4. Dịch vụ điều khiển từ xa:\n";
-    vector<pair<string, string>> svcs = {
-        {"RemoteRegistry", "Remote Registry"},
-        {"TermService", "Remote Desktop (RDP)"},
-        {"RasMan", "Remote Access"}
+    // 3. Kiểm tra Proxy lén (Spyware hay dùng để nghe lén gói tin)
+    cout << "\n 3. Cấu hình mạng Proxy (Kiểm tra phần mềm gián điệp):\n";
+    DWORD proxyEnable = 0;
+    readRegDword(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", "ProxyEnable", proxyEnable);
+    if (proxyEnable == 1) {
+        cout << "    - Proxy hệ thống     : \x1b[31mĐANG BẬT (Cần kiểm tra có bị cài lén không!)\x1b[0m\n";
+    } else {
+        cout << "    - Proxy hệ thống     : \x1b[32mTẮT (Kết nối trực tiếp an toàn)\x1b[0m\n";
+    }
+
+    // 4. Kiểm tra cổng rủi ro cao từ xa (Telnet, RPC)
+    cout << "\n 4. Trạng thái các cổng nguy hiểm:\n";
+    vector<pair<int, string>> critPorts = {
+        {23, "Telnet (Cũ, không mã hóa)"},
+        {135, "RPC Mapper (Dễ bị khai thác)"}
     };
-    for (auto &s : svcs) {
-        bool running = isServiceRunningNative(s.first);
-        bool disabled = isServiceDisabledNative(s.first);
-        cout << "    - " << s.second << ": " 
-             << (running ? "\x1b[31mĐANG CHẠY\x1b[0m" : "ĐÃ DỪNG") 
-             << " | Khởi động: " << (disabled ? "\x1b[32mDISABLED\x1b[0m" : "\x1b[33mENABLED\x1b[0m") << "\n";
+    for (const auto &cp : critPorts) {
+        string chk = "netsh advfirewall firewall show rule name=\"Block_Dangerous_Port_" + to_string(cp.first) + "\" >nul 2>&1";
+        bool blocked = (system(chk.c_str()) == 0);
+        cout << "    - Port " << cp.first << " [" << cp.second << "]: " 
+             << (blocked ? "\x1b[32mĐÃ CHẶN (An toàn)\x1b[0m" : "\x1b[33mMỞ (Mặc định)\x1b[0m") << "\n";
     }
 
-    // 5. Cấu hình DNS & DoH
-    cout << "\n 5. Cấu hình DNS & DNS over HTTPS (DoH):\n";
-    DWORD dohVal = 0;
-    readRegDword(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters", "EnableAutoDoh", dohVal);
-    cout << "    - Mã hóa DoH: " << (dohVal == 2 ? "\x1b[32mĐÃ BẬT (DoH Active)\x1b[0m" : "\x1b[33mCHƯA BẬT\x1b[0m") << "\n";
+    // 5. Ghi chú bảo toàn Media
+    cout << "\n * Lưu ý: Cổng chia sẻ Media (445, 137-139) được giữ mở để truyền file.\n";
 
     cout << "\n============================================\n";
     SystemCore::waitEnter();

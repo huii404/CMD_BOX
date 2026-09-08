@@ -111,28 +111,18 @@ public:
             case 1:
                 while (true) {
                     cls();
-                    cout << " [1] Dọn rác nhanh \n"
-                         << " [2] Dọn rác chuyên sâu \n"
-                         << " [3] Tắt ứng dụng khởi động\n"
-                         << " [4] Tối ưu dịch vụ Windows\n"
-                         << " [5] Chỉnh giao diện & Taskbar Win 11\n"
-                         << " [6] Sửa lỗi Windows Update\n"
-                         << " [7] Tối ưu hóa tổng thể hệ thống\n"
-                         << " [8] Dọn rác môi trường Dev (Python, Node, Java...)\n"
+                    cout << " [1] Dọn rác Đa Tầng (Nhanh -> Trình duyệt -> Hệ thống -> Dev)\n"
+                         << " [2] Tăng tốc & Tối ưu Đa Tầng (Khởi động -> Dịch vụ -> Taskbar/UI)\n"
+                         << " [3] Sửa lỗi kẹt Windows Update\n"
                          << " [0] Quay lại\n\n"
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;
                     
                     switch (sub) {
-                    case 1:  getOptimizer().cleanDiskQuick(); break;
-                    case 2:  getOptimizer().cleanDiskPro(); break;
-                    case 3:  getOptimizer().disableAllStartupApps(); break;
-                    case 4:  getOptimizer().turnOffServicesMenu(); break;
-                    case 5:  getOptimizer().optimizeTaskbar(); break;
-                    case 6:  getOptimizer().fixWindowsUpdate(); break;
-                    case 7:  getOptimizer().optimizeSystemPRO(); break;
-                    case 8:  getOptimizer().cleanDevCaches(true); break;
+                    case 1:  getOptimizer().multiTierDiskClean(); break;
+                    case 2:  getOptimizer().multiTierPerformanceOptimize(); break;
+                    case 3:  getOptimizer().fixWindowsUpdate(); break;
                     default: Sleep(300); break;
                     }
                 }
@@ -142,26 +132,24 @@ public:
             case 2:
                 while (true) {
                     cls();
-                    cout << " [1] Xem thông tin mạng chi tiết\n"
-                         << " [2] Sửa lỗi & Khôi phục mạng toàn diện\n"
-                         << " [3] Kích hoạt Lá chắn bảo mật toàn diện\n"
-                         << " [4] Kiểm tra trạng thái bảo mật hệ thống\n"
-                         << " [5] Xem danh sách mật khẩu Wi-Fi đã lưu\n"
-                         << " [6] Quét & Bảo vệ tập tin Hosts\n"
-                         << " [7] Quét thiết bị kết nối Wi-Fi / LAN\n"
+                    cout << " [1] Sửa lỗi & Khôi phục mạng toàn diện\n"
+                         << " [2] Kích hoạt Lá chắn bảo mật toàn diện\n"
+                         << " [3] Kiểm tra trạng thái bảo mật hệ thống\n"
+                         << " [4] Xem danh sách mật khẩu Wi-Fi đã lưu\n"
+                         << " [5] Quét & Bảo vệ tập tin Hosts\n"
+                         << " [6] Quét thiết bị kết nối Wi-Fi / LAN\n"
                          << " [0] Quay lại\n\n"
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;
                     
                     switch (sub) {
-                    case 1:  getInternet().showNetworkInfo(); break;
-                    case 2:  getInternet().repairNetwork(); break;
-                    case 3:  getInternet().fullSecurityShield(); break;
-                    case 4:  getInternet().checkSecurityStatus(); break;
-                    case 5:  getInternet().wifiAudit(); break;
-                    case 6:  getInternet().checkHostsFileSecurity(); break;
-                    case 7:  getInternet().scanConnectedDevices(); break;
+                    case 1:  getInternet().repairNetwork(); break;
+                    case 2:  getInternet().fullSecurityShield(); break;
+                    case 3:  getInternet().checkSecurityStatus(); break;
+                    case 4:  getInternet().wifiAudit(); break;
+                    case 5:  getInternet().checkHostsFileSecurity(); break;
+                    case 6:  getInternet().scanConnectedDevices(); break;
                     default: Sleep(300); break;
                     }
                 }
@@ -171,12 +159,12 @@ public:
             case 3:
                 while (true) {
                     cls();
-                    cout << " [1] Auto Click chuột\n"
+                    cout << " [1] Auto Click\n"
                          << " [2] Spam Text\n"
-                         << " [3] Auto Paste dữ liệu nhiều dòng\n"
-                         << " [4] Tải & Cài đặt phần mềm tự động\n"
-                         << " [5] Gỡ bỏ ứng dụng rác windows\n"
-                         << " [6] Kiểm tra chai Pin Laptop\n"
+                         << " [3] Auto Paste\n"
+                         << " [4] Tải & Cài đặt phần mềm\n"
+                         << " [5] Gỡ bỏ ứng dụng rác\n"
+                         << " [6] Kiểm tra Pin Laptop\n"
                          << " [0] Quay lại\n\n"
                          << " [Chọn]: ";
                     sub = readInt("");
@@ -203,7 +191,7 @@ public:
                          << " [3] Mp4 -> Mp3\n"
                          << " [4] Tốc độ Video\n"
                          << " [5] Đổi định dạng Media\n"
-                         << " [6] Chuẩn hóa tên file trong thư mục\n"
+                         << " [6] Chuẩn hóa tên file\n"
                          << " [7] Ẩn file trong file\n"
                          << " [0] Quay lại\n\n"
                          << " [Chọn]: ";

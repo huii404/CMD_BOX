@@ -15,17 +15,14 @@ private:
     std::string getField(const std::string &line);
     std::string getLocalIP();
 
-    // Native Win32 Registry & Service Helpers
+    // Native Win32 Registry & Service Helpers (Chỉ giữ hàm thực sự sử dụng)
     static bool readRegDword(HKEY hRoot, const std::string &subKey, const std::string &valueName, DWORD &outVal);
-    static bool writeRegDword(HKEY hRoot, const std::string &subKey, const std::string &valueName, DWORD val);
     static bool isServiceRunningNative(const std::string &serviceName);
-    static bool isServiceDisabledNative(const std::string &serviceName);
 
 public:
     Internet(SystemCore &s);
     ~Internet();
 
-    void showNetworkInfo();
     void repairNetwork();
     void wifiAudit();
     void checkSecurityStatus();
