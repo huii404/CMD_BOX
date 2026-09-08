@@ -45,8 +45,7 @@ public:
     void processMediaAuto(); 
     void processExtractAudioBatch();
     void processChangeSpeedBatch();
-    void processMediaEnhancementBase();
-    void processMediaEnhancementPro();
+    void processMediaEnhancement();
     void processConvertFormatBatch();
     void normalizeMediaFilenames();
     

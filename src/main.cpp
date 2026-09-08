@@ -212,23 +212,7 @@ public:
 
                     switch (sub) {
                     case 1:  getMedia().processMediaAuto(); break;
-                    case 2: {
-                        while (true) {
-                            cls();
-                            cout << " [1] Làm nét Base (Tiêu chuẩn đồ họa)\n"
-                                 << " [2] Làm nét PRO (Giả lập Model AI Local)\n"
-                                 << " [0] Quay lại\n\n"
-                                 << " [Chọn]: ";
-                            int mode = readInt("");
-                            if (mode == 0) break;
-                            if (mode == 1) {
-                                getMedia().processMediaEnhancementBase();
-                            } else if (mode == 2) {
-                                getMedia().processMediaEnhancementPro();
-                            }
-                        }
-                        break;
-                    }
+                    case 2:  getMedia().processMediaEnhancement(); break;
                     case 3:  getMedia().processExtractAudioBatch(); break;
                     case 4:  getMedia().processChangeSpeedBatch(); break;
                     case 5:  getMedia().processConvertFormatBatch(); break;

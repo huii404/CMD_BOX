@@ -1,7 +1,6 @@
 #include "../include/MediaProcessor.h"
 #include "../include/SystemCore.h"
 #include "../include/ImageEnhancer.h"
-#include "../include/ImageEnhancerPro.h"
 #include <iostream>
 #include <conio.h>
 #include <random>
@@ -474,7 +473,7 @@ void MediaProcessor::processChangeSpeedBatch() {
     SystemCore::waitEnter();
 }
 
-void MediaProcessor::processMediaEnhancementBase() {
+void MediaProcessor::processMediaEnhancement() {
     std::vector<std::string> imageExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".heic", ".tif", ".tiff", ".dng" };
     std::string ffmpeg = getFFmpegPath();
 
@@ -499,43 +498,30 @@ void MediaProcessor::processMediaEnhancementBase() {
         
         if (inputs.empty()) return;
 
-        // 1. cls xóa phiên cũ và render file ngầm
-        system("cls");
-        std::cout << "Đang xử lý ngầm " << inputs.size() << " ảnh, vui lòng đợi...\n";
-        std::cout.flush();
-
+        int level = 0; // Mặc định tự động (Auto-Adaptive)
         std::vector<EnhanceResult> results;
-        results.reserve(inputs.size());
-        int level = 0; // 100% Auto Adaptive - Tự động chấm điểm & cân bằng chi tiết
+
+        std::cout << "\n[!] Đang xử lý (" << inputs.size() << " ảnh)...\n\n";
 
         for (size_t i = 0; i < inputs.size(); ++i) {
-            fs::path inPath(inputs[i]);
-            if (!fs::exists(inPath)) {
-                results.push_back({ (int)i + 1, inPath.filename().string(), "Không tìm thấy", "0 B", "0 B", false });
-                continue;
-            }
-
+            fs::path inPath = fs::u8path(inputs[i]);
             std::string ext = inPath.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+            transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-            if (std::find(imageExts.begin(), imageExts.end(), ext) == imageExts.end()) {
-                results.push_back({ (int)i + 1, inPath.filename().string(), "Bỏ qua (không phải ảnh)", "0 B", "0 B", false });
+            if (find(imageExts.begin(), imageExts.end(), ext) == imageExts.end()) {
+                results.push_back({ (int)i + 1, inPath.filename().string(), "Bỏ qua (Sai định dạng)", "0 B", "0 B", false });
                 continue;
             }
 
-            uintmax_t oldSize = fs::file_size(inPath);
-            fs::path outPath;
-            if (ext == ".heic" || ext == ".dng" || ext == ".webp") {
-                outPath = inPath.parent_path() / (inPath.stem().string() + "_enhanced.jpg");
-            } else {
-                outPath = inPath.parent_path() / (inPath.stem().string() + "_enhanced" + ext);
-            }
+            uintmax_t oldSize = fs::exists(inPath) ? fs::file_size(inPath) : 0;
+            fs::path outPath = inPath.parent_path() / (inPath.stem().string() + "_enhanced" + ext);
 
             bool ok = false;
             ImageScore score;
 
+            // Xử lý bằng WIC native trước
             if (ext == ".webp") {
-                std::string tempPng = (fs::temp_directory_path() / ("cmdbox_enhance_" + to_string(rand()) + ".png")).string();
+                std::string tempPng = (fs::temp_directory_path() / ("cmdbox_webp_" + to_string(rand()) + ".png")).string();
                 ok = ImageEnhancer::enhanceImage(inputs[i], tempPng, level, &score);
                 if (ok && fs::exists(tempPng)) {
                     // Không xuất ra webp -> xuất JPG chất lượng cao bảo toàn độ nét
@@ -605,8 +591,11 @@ void MediaProcessor::processMediaEnhancementBase() {
             }
         }
 
-        // 2. render xong hiện danh sách kết quả
-        system("cls");
+        std::cout << "\n=================================================================================================\n";
+        std::cout << "                                  KẾT QUẢ LÀM NÉT ẢNH\n";
+        std::cout << "=================================================================================================\n";
+        std::cout << "STT| Tên file           | Thể loại        | Dung lượng\n";
+        std::cout << "---+--------------------+-----------------+-----------------------------------------------------\n";
         for (const auto& res : results) {
             if (res.success) {
                 std::cout << res.index << "| " << res.filename << " | " << res.type << " | " 
@@ -616,228 +605,6 @@ void MediaProcessor::processMediaEnhancementBase() {
             }
         }
 
-        SystemCore::waitEnter();
-    }
-}
-
-void MediaProcessor::processMediaEnhancementPro() {
-    std::vector<std::string> imageExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".heic", ".tif", ".tiff", ".dng" };
-    std::string ffmpeg = getFFmpegPath();
-
-    while (true) {
-        std::cout << std::flush;
-        system("cls");
-
-        // ==========================================
-        // CHẶNG 1: INPUT N ẢNH
-        // ==========================================
-        std::cout << "--- LÀM NÉT ẢNH PRO: GIẢ LẬP MODEL AI LOCAL ---\n\n"
-                  << "Kéo thả N file ảnh vào đây (0 để thoát): ";
-        string rawInput;
-        getline(cin, rawInput);
-        std::vector<std::string> inputs = SystemCore::parsePaths(rawInput);
-
-        if (inputs.empty()) return;
-
-        // ==========================================
-        // CHẶNG 2: SCAN & CHẤM ĐIỂM N ẢNH (AI SCAN)
-        // ==========================================
-        system("cls");
-        std::cout << "=== HỆ THỐNG LÀM NÉT PRO: AI LOCAL NEURAL SCAN ===\n";
-        std::cout << "[*] Đang kích hoạt vi xử lý ma trận ảnh đa luồng...\n\n";
-
-        std::vector<ProImageAnalysis> validAnalyses;
-        validAnalyses.reserve(inputs.size());
-
-        for (size_t i = 0; i < inputs.size(); ++i) {
-            fs::path p(inputs[i]);
-            if (!fs::exists(p)) continue;
-            std::string ext = p.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-            if (std::find(imageExts.begin(), imageExts.end(), ext) == imageExts.end()) continue;
-
-            ProImageAnalysis analysis;
-            bool ok = ImageEnhancerPro::analyzeImagePro(inputs[i], analysis);
-            if (!ok && (ext == ".heic" || ext == ".dng") && !ffmpeg.empty()) {
-                std::string tempPng = (fs::temp_directory_path() / ("cmdbox_raw_" + to_string(rand()) + ".png")).string();
-                std::string decCmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + inputs[i] + "\" -pix_fmt rgb24 \"" + tempPng + "\"";
-                if (SystemCore::runRawCommand(decCmd) && fs::exists(tempPng)) {
-                    ok = ImageEnhancerPro::analyzeImagePro(tempPng, analysis);
-                    analysis.filePath = inputs[i];
-                    analysis.filename = p.filename().string();
-                    try { fs::remove(tempPng); } catch (...) {}
-                }
-            }
-
-            if (ok) {
-                validAnalyses.push_back(analysis);
-            }
-
-            int percent = (int)((i + 1) * 100 / inputs.size());
-            int barLen = 24;
-            int filled = percent * barLen / 100;
-            std::cout << "\r[>>] Quét cấu trúc hạt & phổ tần số: [";
-            for (int b = 0; b < barLen; ++b) {
-                if (b < filled) std::cout << "=";
-                else if (b == filled) std::cout << ">";
-                else std::cout << " ";
-            }
-            std::cout << "] " << percent << "% (" << (i + 1) << "/" << inputs.size() << " ảnh)" << std::flush;
-        }
-
-        if (validAnalyses.empty()) {
-            std::cout << "\n\n[!] Không tìm thấy file ảnh hợp lệ nào!\n";
-            SystemCore::waitEnter();
-            continue;
-        }
-
-        std::cout << "\n[*] Đã phân tích xong ma trận cấu trúc vi mô " << validAnalyses.size() << " ảnh.\n";
-        Sleep(400);
-
-        // ==========================================
-        // CHẶNG 3: DASHBOARD - HIỂN THỊ N SỐ LIỆU ÁP DỤNG
-        // ==========================================
-        system("cls");
-        std::cout << "=================================================================================================\n";
-        std::cout << "                          MA TRẬN CẤU HÌNH AI THÍCH ỨNG CHO TỪNG ẢNH                             \n";
-        std::cout << "=================================================================================================\n";
-        std::cout << " STT | Tên file             | Thể loại   | Phân giải gốc -> Đích | Neural Boost | Denoise | Gamut\n";
-        std::cout << "─────┼──────────────────────┼────────────┼───────────────────────┼──────────────┼─────────┼──────\n";
-
-        for (size_t i = 0; i < validAnalyses.size(); ++i) {
-            const auto& a = validAnalyses[i];
-            std::string name = a.filename;
-            if (name.length() > 20) name = name.substr(0, 17) + "...";
-
-            char resStr[64];
-            snprintf(resStr, sizeof(resStr), "%4dx%-4d -> %4dx%-4d", a.origW, a.origH, a.targetW, a.targetH);
-
-            char boostStr[32];
-            int boostPct = (int)std::round((a.neuralBoost - 1.0f) * 100.0f);
-            if (a.detectedType == "Chân dung") {
-                snprintf(boostStr, sizeof(boostStr), "+%d%% (Da)", boostPct);
-            } else {
-                snprintf(boostStr, sizeof(boostStr), "+%d%%", boostPct);
-            }
-
-            char line[256];
-            snprintf(line, sizeof(line), " %3d | %-20s | %-10s | %-21s | %-12s |  %4.2f   | %3.0f%%\n",
-                     (int)(i + 1), name.c_str(), a.detectedType.c_str(), resStr, boostStr,
-                     a.denoiseStrength, a.gamutRetain * 100.0f);
-            std::cout << line;
-        }
-        std::cout << "=================================================================================================\n";
-        std::cout << "[*] Tự động khởi chạy Render sau 2 giây... (hoặc nhấn phím bất kỳ để bắt đầu ngay)\n";
-
-        for (int step = 0; step < 20; ++step) {
-            if (_kbhit()) {
-                _getch();
-                break;
-            }
-            Sleep(100);
-        }
-
-        // ==========================================
-        // CHẶNG 4: RENDER FILE + UI THỜI GIAN RENDER
-        // ==========================================
-        system("cls");
-        std::cout << "=== TIẾN TRÌNH RENDER LÀM NÉT PRO (OPENMP MULTI-CORE) ===\n\n";
-
-        std::vector<ProQualityReport> reports;
-        reports.reserve(validAnalyses.size());
-
-        for (size_t i = 0; i < validAnalyses.size(); ++i) {
-            const auto& a = validAnalyses[i];
-            fs::path inPath(a.filePath);
-            std::string ext = inPath.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-
-            fs::path outPath;
-            if (ext == ".heic" || ext == ".dng" || ext == ".webp") {
-                outPath = inPath.parent_path() / (inPath.stem().string() + "_enhanced_pro.jpg");
-            } else {
-                outPath = inPath.parent_path() / (inPath.stem().string() + "_enhanced_pro" + ext);
-            }
-
-            std::cout << "[" << (i + 1) << "/" << validAnalyses.size() << "] Đang xử lý: " << a.filename << "\n";
-
-            ProQualityReport rep;
-            rep.index = (int)(i + 1);
-
-            auto progressCb = [&](float pct, float elapsed) {
-                int p = (int)(pct * 100.0f);
-                int barLen = 20;
-                int filled = p * barLen / 100;
-                std::cout << "\r      └─ Tiến độ: [";
-                for (int b = 0; b < barLen; ++b) {
-                    if (b < filled) std::cout << "=";
-                    else if (b == filled) std::cout << ">";
-                    else std::cout << " ";
-                }
-                char timeStr[32];
-                int sec = (int)elapsed;
-                int ms = (int)((elapsed - sec) * 100.0f);
-                snprintf(timeStr, sizeof(timeStr), "%02d:%02d.%02ds", sec / 60, sec % 60, ms);
-                std::cout << "] " << p << "% | Thời gian: " << timeStr << std::flush;
-            };
-
-            bool ok = ImageEnhancerPro::enhanceImagePro(a, outPath.string(), rep, progressCb);
-            std::cout << "\n\n";
-
-            if (ok) {
-                rep.success = true;
-                reports.push_back(rep);
-            } else {
-                rep.success = false;
-                rep.filename = a.filename;
-                rep.detectedType = a.detectedType;
-                rep.oldSizeBytes = a.oldSizeBytes;
-                rep.newSizeBytes = 0;
-                reports.push_back(rep);
-            }
-        }
-
-        // ==========================================
-        // CHẶNG 5: BẢNG KẾT QUẢ (LOẠI BỎ THỜI GIAN RENDER)
-        // ==========================================
-        system("cls");
-        std::cout << "=================================================================================================\n";
-        std::cout << "                         CMD BOX PRO - KẾT QUẢ PHỤC CHẾ & LÀM NÉT AI LOCAL                       \n";
-        std::cout << "=================================================================================================\n";
-        std::cout << " STT | Tên file             | Dung lượng gốc --> Dung lượng mới | Vượt ?% độ nét                 \n";
-        std::cout << "─────┼──────────────────────┼───────────────────────────────────┼────────────────────────────────\n";
-
-        for (const auto& rep : reports) {
-            std::string name = rep.filename;
-            if (name.length() > 20) name = name.substr(0, 17) + "...";
-
-            if (rep.success) {
-                std::string oldSz = SystemCore::formatSize(rep.oldSizeBytes);
-                std::string newSz = SystemCore::formatSize(rep.newSizeBytes);
-                char sizeStr[64];
-                snprintf(sizeStr, sizeof(sizeStr), "%10s --> %-10s", oldSz.c_str(), newSz.c_str());
-
-                char gainStr[64];
-                std::string detailNote = (rep.detectedType == "Chân dung") ? "Tần số cao & Da mềm" :
-                                         (rep.detectedType == "Nén mờ/Cũ") ? "Khôi phục ma trận nén" : "Chi tiết biên vi mô";
-                snprintf(gainStr, sizeof(gainStr), "+%.1f%% (%s)", rep.sharpnessGainPercent, detailNote.c_str());
-
-                char line[256];
-                snprintf(line, sizeof(line), " %3d | %-20s | %-33s | %-30s\n",
-                         rep.index, name.c_str(), sizeStr, gainStr);
-                std::cout << line;
-            } else {
-                std::string oldSz = SystemCore::formatSize(rep.oldSizeBytes);
-                char sizeStr[64];
-                snprintf(sizeStr, sizeof(sizeStr), "%10s --> %-10s", oldSz.c_str(), "Lỗi render");
-                char line[256];
-                snprintf(line, sizeof(line), " %3d | %-20s | %-33s | %-30s\n",
-                         rep.index, name.c_str(), sizeStr, "Không thể phục chế");
-                std::cout << line;
-            }
-        }
-        std::cout << "=================================================================================================\n";
-        std::cout << "[Hoàn tất xử lý: " << reports.size() << " ảnh | Kích hoạt OpenMP | Nhấn Enter để tiếp tục...]\n";
         SystemCore::waitEnter();
     }
 }

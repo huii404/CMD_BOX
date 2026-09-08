@@ -322,7 +322,7 @@ void UtilityTools::downloadManager() {
 
     while (true) {
         sc.cls();
-        cout << "=== TẢI & CÀI ĐẶT PHẦN MỀM === [Lưu: " << downloadDir << "]\n\n";
+        cout << "[Lưu: " << downloadDir << "]\n\n";
 
         if (apps.empty()) {
             cout << " [!] Không tìm thấy danh sách trong " << configPath << "\n\n";
@@ -338,7 +338,7 @@ void UtilityTools::downloadManager() {
             }
         }
 
-        cout << "\n [A] Tải tất cả | [R] Nạp lại | [0] Quay lại\n"
+        cout << "\n [A] Tải tất cả | [R] Nạp lại | [0] Quay lại\n\n"
              << " Chọn số (hoặc nhiều số, vd: 1 5 8): ";
 
         string inputLine;
@@ -646,92 +646,60 @@ static void cleanAdvancedBloat(SystemCore &sc, const AdvancedBloatStatus &adv) {
     if (adv.hasTeams) cout << " [✓] Đã gỡ Teams cá nhân & ẩn icon Chat trên Taskbar.\n";
 }
 
-// Gỡ bỏ ứng dụng rác Bloatware (Phân biệt 2 luồng: Thứ cấp & Nâng cao)
+// Gỡ bỏ ứng dụng rác Bloatware (Dọn dẹp toàn diện cả 2 luồng: Thứ cấp & Nâng cao)
 void UtilityTools::uninstallBloatware() {
-    while (true) {
-        sc.cls();
-        cout << "=== GỠ BỎ BLOATWARE & APP RÁC HỆ THỐNG ===\n\n"
-             << " [1] Dọn app rác thứ cấp (Store Apps, Game, Ads cài sẵn)\n"
-             << " [2] Gỡ tận gốc app rác nâng cao (OneDrive, Phone Link, Service, C:\\)\n"
-             << " [3] Dọn dẹp toàn diện cả 2 luồng\n"
-             << " [0] Quay lại\n\n"
-             << " [Chọn]: ";
+    sc.cls();
+    cout << "\n[-] Đang dò quét ứng dụng rác trên hệ thống...\n\n";
 
-        string choice;
-        getline(cin, choice);
-        choice = SystemCore::trim(choice);
+    vector<BloatAppInfo> detectedSec;
+    AdvancedBloatStatus advStatus;
+    scanBloatware(detectedSec, advStatus);
 
-        if (choice == "0") break;
-        if (choice != "1" && choice != "2" && choice != "3") continue;
-
-        sc.cls();
-        cout << "[-] Đang dò quét ứng dụng rác trên hệ thống...\n\n";
-
-        vector<BloatAppInfo> detectedSec;
-        AdvancedBloatStatus advStatus;
-        scanBloatware(detectedSec, advStatus);
-
-        cout << " ┌─ [ KẾT QUẢ DÒ QUÉT ] ──────────────────────────────────────────\n";
-        
-        // Hiển thị app thứ cấp
-        cout << " │ [1] App rác thứ cấp: Phát hiện " << detectedSec.size() << "/" << g_secondaryBloat.size() << " ứng dụng\n";
-        if (!detectedSec.empty()) {
-            cout << " │     ↳ ";
-            for (size_t i = 0; i < detectedSec.size(); ++i) {
-                cout << detectedSec[i].name;
-                if (i + 1 < detectedSec.size()) cout << ", ";
-                if ((i + 1) % 4 == 0 && i + 1 < detectedSec.size()) cout << "\n │       ";
-            }
-            cout << "\n";
-        } else {
-            cout << " │     ↳ \x1b[32m(Hệ thống sạch, không có app thứ cấp)\x1b[0m\n";
+    cout << " ┌─ [ KẾT QUẢ DÒ QUÉT ] ──────────────────────────────────────────\n";
+    
+    // Hiển thị app thứ cấp
+    cout << " │ [1] App rác thứ cấp: Phát hiện " << detectedSec.size() << "/" << g_secondaryBloat.size() << " ứng dụng\n";
+    if (!detectedSec.empty()) {
+        cout << " │     ↳ ";
+        for (size_t i = 0; i < detectedSec.size(); ++i) {
+            cout << detectedSec[i].name;
+            if (i + 1 < detectedSec.size()) cout << ", ";
+            if ((i + 1) % 4 == 0 && i + 1 < detectedSec.size()) cout << "\n │       ";
         }
-
-        // Hiển thị app nâng cao
-        cout << " │\n │ [2] App rác nâng cao (Bám rễ sâu):\n";
-        cout << " │   - Microsoft OneDrive   : " << (advStatus.hasOneDrive ? (advStatus.oneDriveRunning ? "\x1b[33m[Phát hiện - Đang chạy ngầm]\x1b[0m" : "\x1b[33m[Phát hiện file/folder C:]\x1b[0m") : "\x1b[32m[Sạch]\x1b[0m") << "\n";
-        cout << " │   - Phone Link & Dịch vụ : " << (advStatus.hasPhoneLink ? (advStatus.phoneLinkRunning ? "\x1b[33m[Phát hiện - Tiến trình đang chạy]\x1b[0m" : "\x1b[33m[Phát hiện gói/dịch vụ]\x1b[0m") : "\x1b[32m[Sạch]\x1b[0m") << "\n";
-        cout << " │   - Cortana Assistant    : " << (advStatus.hasCortana ? "\x1b[33m[Phát hiện gói Cortana]\x1b[0m" : "\x1b[32m[Sạch]\x1b[0m") << "\n";
-        cout << " │   - Teams Chat Taskbar   : " << (advStatus.hasTeams ? "\x1b[33m[Phát hiện Teams cá nhân]\x1b[0m" : "\x1b[32m[Sạch]\x1b[0m") << "\n";
-        cout << " └────────────────────────────────────────────────────────────────\n\n";
-
-        // Kiểm tra xem lựa chọn hiện tại có mục nào cần dọn không
-        bool hasAnySec = !detectedSec.empty();
-        bool hasAnyAdv = advStatus.hasOneDrive || advStatus.hasPhoneLink || advStatus.hasCortana || advStatus.hasTeams;
-        bool hasTargetToClean = false;
-
-        if (choice == "1" && hasAnySec) hasTargetToClean = true;
-        else if (choice == "2" && hasAnyAdv) hasTargetToClean = true;
-        else if (choice == "3" && (hasAnySec || hasAnyAdv)) hasTargetToClean = true;
-
-        if (!hasTargetToClean) {
-            cout << " \x1b[32m[✓] Hệ thống đã hoàn toàn sạch sẽ, không phát hiện ứng dụng rác nào cần xử lý!\x1b[0m\n\n";
-            sc.waitEnter();
-            continue;
-        }
-
-        cout << "Xác nhận thực hiện dọn dẹp các mục trên? (y/n): ";
-        string confirm;
-        getline(cin, confirm);
-        if (confirm != "y" && confirm != "Y") {
-            cout << "Đã hủy thao tác.\n";
-            Sleep(800);
-            continue;
-        }
-
         cout << "\n";
-        if (choice == "1") {
-            cleanSecondaryBloat(sc, detectedSec);
-        } else if (choice == "2") {
-            cleanAdvancedBloat(sc, advStatus);
-        } else if (choice == "3") {
-            cleanSecondaryBloat(sc, detectedSec);
-            cleanAdvancedBloat(sc, advStatus);
-        }
-
-        cout << "\n[✓] Hoàn tất quá trình dọn dẹp!\n";
-        sc.waitEnter();
+    } else {
+        cout << " │     ↳ \x1b[32m(Hệ thống sạch, không có app thứ cấp)\x1b[0m\n";
     }
+
+    // Hiển thị app nâng cao
+    cout << " │\n │ [2] App rác nâng cao (Bám rễ sâu):\n";
+    cout << " │   - Microsoft OneDrive   : " << (advStatus.hasOneDrive ? (advStatus.oneDriveRunning ? "\x1b[33m[Phát hiện - Đang chạy ngầm]\x1b[0m" : "\x1b[33m[Phát hiện file/folder C:]\x1b[0m") : "\x1b[32m[Sạch]\x1b[0m") << "\n";
+    cout << " │   - Phone Link & Dịch vụ : " << (advStatus.hasPhoneLink ? (advStatus.phoneLinkRunning ? "\x1b[33m[Phát hiện - Tiến trình đang chạy]\x1b[0m" : "\x1b[33m[Phát hiện gói/dịch vụ]\x1b[0m") : "\x1b[32m[Sạch]\x1b[0m") << "\n";
+    cout << " │   - Cortana Assistant    : " << (advStatus.hasCortana ? "\x1b[33m[Phát hiện gói Cortana]\x1b[0m" : "\x1b[32m[Sạch]\x1b[0m") << "\n";
+    cout << " │   - Teams Chat Taskbar   : " << (advStatus.hasTeams ? "\x1b[33m[Phát hiện Teams cá nhân]\x1b[0m" : "\x1b[32m[Sạch]\x1b[0m") << "\n";
+    cout << " └────────────────────────────────────────────────────────────────\n\n";
+
+    bool hasAnySec = !detectedSec.empty();
+    bool hasAnyAdv = advStatus.hasOneDrive || advStatus.hasPhoneLink || advStatus.hasCortana || advStatus.hasTeams;
+
+    if (!hasAnySec && !hasAnyAdv) {
+        cout << " \x1b[32m[✓] Hệ thống đã hoàn toàn sạch sẽ, không phát hiện ứng dụng rác nào cần xử lý!\x1b[0m\n\n";
+        sc.waitEnter();
+        return;
+    }
+
+    if (!SystemCore::confirm("Xác nhận thực hiện dọn dẹp toàn diện cả 2 luồng?")) {
+        cout << "Đã hủy thao tác.\n";
+        Sleep(800);
+        return;
+    }
+
+    cout << "\n";
+    cleanSecondaryBloat(sc, detectedSec);
+    cleanAdvancedBloat(sc, advStatus);
+
+    cout << "\n[✓] Hoàn tất quá trình dọn dẹp toàn diện!\n";
+    sc.waitEnter();
 }
 
 static string getXmlTag(const string &xml, const string &tag) {
