@@ -695,11 +695,26 @@ void UtilityTools::uninstallBloatware() {
         cout << " │   - Teams Chat Taskbar   : " << (advStatus.hasTeams ? "\x1b[33m[Phát hiện Teams cá nhân]\x1b[0m" : "\x1b[32m[Sạch]\x1b[0m") << "\n";
         cout << " └────────────────────────────────────────────────────────────────\n\n";
 
-        cout << "Xác nhận thực hiện dọn dẹp? (y/n): ";
+        // Kiểm tra xem lựa chọn hiện tại có mục nào cần dọn không
+        bool hasAnySec = !detectedSec.empty();
+        bool hasAnyAdv = advStatus.hasOneDrive || advStatus.hasPhoneLink || advStatus.hasCortana || advStatus.hasTeams;
+        bool hasTargetToClean = false;
+
+        if (choice == "1" && hasAnySec) hasTargetToClean = true;
+        else if (choice == "2" && hasAnyAdv) hasTargetToClean = true;
+        else if (choice == "3" && (hasAnySec || hasAnyAdv)) hasTargetToClean = true;
+
+        if (!hasTargetToClean) {
+            cout << " \x1b[32m[✓] Hệ thống đã hoàn toàn sạch sẽ, không phát hiện ứng dụng rác nào cần xử lý!\x1b[0m\n\n";
+            sc.waitEnter();
+            continue;
+        }
+
+        cout << "Xác nhận thực hiện dọn dẹp các mục trên? (y/n): ";
         string confirm;
         getline(cin, confirm);
         if (confirm != "y" && confirm != "Y") {
-            cout << "Đã hủy.\n";
+            cout << "Đã hủy thao tác.\n";
             Sleep(800);
             continue;
         }

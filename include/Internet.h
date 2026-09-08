@@ -32,14 +32,6 @@ public:
     void fullSecurityShield();
     void checkHostsFileSecurity();
     void scanConnectedDevices();
-
-    // Các hàm Toggle bảo mật có kiểm tra trạng thái trước & sau
-    void toggleDefender(bool enable, int &alreadyCount, int &newlyCount, int &failedCount);
-    void toggleFirewall(bool enable, int &alreadyCount, int &newlyCount, int &failedCount);
-    void toggleControlledFolderAccess(bool enable, int &alreadyCount, int &newlyCount, int &failedCount);
-    void toggleInsecureProtocols(bool block, int &alreadyCount, int &newlyCount, int &failedCount);
-    void toggleDangerousPorts(bool block, int &alreadyCount, int &newlyCount, int &failedCount);
-    void toggleDNSoverHTTPS(bool enable, int &alreadyCount, int &newlyCount, int &failedCount);
 };
 
 #endif 
