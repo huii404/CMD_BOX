@@ -24,6 +24,7 @@ public:
     void cls();
     static std::string getTime(bool includeDate = true);
     static void waitEnter();
+    static bool confirm(const std::string& prompt);
     static std::string trim(const std::string& str);
     static int readInt(const std::string &prompt);
     static std::string formatSize(long long b);

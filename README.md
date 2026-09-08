@@ -58,7 +58,7 @@ Chương trình được phân tách thành 4 phân hệ chính theo từng lĩn
 
 ### 4. Xử lý Đa phương tiện & Nâng cao Chất lượng Ảnh (`MediaProcessor` & `ImageEnhancer`)
 - **Phục chế & Làm nét ảnh chuyên sâu (`ImageEnhancer`):**
-  - Xây dựng hoàn toàn bằng C++ native, không phụ thuộc công cụ ngoài, tận dụng bộ giải mã Windows Imaging Component (WIC) để hỗ trợ đầy đủ các định dạng: JPG, PNG, BMP, TIFF, WebP, HEIC, DNG (RAW).
+  - Xây dựng hoàn toàn bằng C++ native, không phụ thuộc công cụ ngoài, tận dụng bộ giải mã Windows Imaging Component (WIC) để hỗ trợ đầy đủ các định dạng: JPG, PNG, BMP, TIFF, WebP, HEIC, DNG (RAW). *(Chi tiết toán học và đặc tả kiến trúc: [README_IMAGE_ENHANCER.md](README_IMAGE_ENHANCER.md))*.
   - **Nội suy tái tạo mẫu Lanczos-3 (Lanczos-3 Resampling):** Sử dụng cửa sổ hàm Sinc $6 \times 6$ nhằm phóng đại kích thước ảnh mà vẫn bảo toàn dải tần số cao Nyquist, loại bỏ hiện tượng nhòe khối mờ vốn có ở thuật toán Bicubic truyền thống.
   - **Bộ lọc dẫn đường 2 tầng (2-Scale Guided Filter):** Tách bạch cấu trúc hình ảnh thành hai tầng chi tiết: tầng vi mô ($r=1$) cô lập chính xác từng sợi tóc, sợi gân lá ở mức 1 điểm ảnh; tầng cấu trúc ($r=3$) bảo toàn khối nổi và độ sâu tổng thể.
   - **Khử bệt màu liên tục Cauchy (Cauchy Continuous Coring):** Thay thế việc cắt ngưỡng nhị phân cứng bằng hàm mật độ liên tục $edgeWeight = \frac{grad^2}{grad^2 + 12.0}$, giữ trọn vẹn các vi chi tiết và triệt tiêu hoàn toàn hiện tượng dính chùm điểm ảnh (pixel clumping).
@@ -101,7 +101,8 @@ CMD_BOX/
 │   ├── SystemOptimizer.cpp  # Cài đặt dọn dẹp rác, Service API & Taskbar
 │   └── UtilityTools.cpp     # Cài đặt tự động hóa chuột/bàn phím & đọc ACPI pin
 ├── build.bat                # Kịch bản tự động dò tìm trình biên dịch và build mã nguồn
-└── README.md                # Tài liệu hướng dẫn kỹ thuật của dự án
+├── README.md                # Tài liệu hướng dẫn kỹ thuật của dự án
+└── README_IMAGE_ENHANCER.md # Tài liệu đặc tả kiến trúc & thuật toán làm nét ảnh
 ```
 
 ---

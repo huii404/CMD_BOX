@@ -205,6 +205,14 @@ void SystemCore::waitEnter() {
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
 
+bool SystemCore::confirm(const std::string& prompt) {
+    std::cout << prompt;
+    std::string choice;
+    std::getline(std::cin, choice);
+    choice = trim(choice);
+    return (choice == "y" || choice == "Y");
+}
+
 int SystemCore::readInt(const std::string &prompt) {
     std::string line;
     while (true) {
