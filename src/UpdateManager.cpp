@@ -3,6 +3,7 @@
 #include "../include/SystemCore.h"
 #include <windows.h>
 #include <iostream>
+#include <fstream>
 #include <sstream>
 #include <vector>
 #include <thread>
@@ -11,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cctype>
+#include <ctime>
 
 using namespace std;
 
@@ -18,11 +20,48 @@ const string UpdateManager::CURRENT_VERSION = "0.1.0";
 const string UpdateManager::GITHUB_REPO = "huii404/CMD_BOX";
 const string UpdateManager::API_RELEASES_URL = "https://api.github.com/repos/huii404/CMD_BOX/releases/latest";
 
+static const long long UPDATE_COOLDOWN_SECONDS = 2 * 24 * 3600; // 2 ngày (48 giờ)
+
 static atomic<bool> g_checkFinished(false);
 static atomic<bool> g_hasNewVersion(false);
 static string g_remoteVersion = "";
 static string g_releaseUrl = "https://github.com/huii404/CMD_BOX/releases";
 static mutex g_versionMutex;
+
+static string getCacheFilePath() {
+    char exePath[MAX_PATH];
+    if (GetModuleFileNameA(NULL, exePath, MAX_PATH) > 0) {
+        string path(exePath);
+        size_t lastSlash = path.find_last_of("\\/");
+        if (lastSlash != string::npos) {
+            return path.substr(0, lastSlash + 1) + ".update_cache";
+        }
+    }
+    return ".update_cache";
+}
+
+static bool loadCache(long long& outTime, string& outVersion, string& outUrl) {
+    ifstream file(getCacheFilePath());
+    if (!file.is_open()) return false;
+    string lineTime;
+    if (getline(file, lineTime) && getline(file, outVersion)) {
+        try {
+            outTime = stoll(lineTime);
+            getline(file, outUrl);
+            return true;
+        } catch (...) {
+            return false;
+        }
+    }
+    return false;
+}
+
+static void saveCache(long long checkTime, const string& version, const string& url) {
+    ofstream file(getCacheFilePath());
+    if (file.is_open()) {
+        file << checkTime << "\n" << version << "\n" << url << "\n";
+    }
+}
 
 static string extractJsonField(const string& json, const string& field) {
     string key = "\"" + field + "\"";
@@ -121,6 +160,30 @@ ReleaseInfo UpdateManager::fetchLatestRelease() {
 }
 
 void UpdateManager::checkUpdateAsync() {
+    // 1. Tải cache phiên bản từ lần kiểm tra trước (tức thì 0ms, không tốn tài nguyên)
+    long long lastCheckTime = 0;
+    string cachedVer = "";
+    string cachedUrl = "";
+    long long now = static_cast<long long>(time(nullptr));
+
+    if (loadCache(lastCheckTime, cachedVer, cachedUrl)) {
+        {
+            lock_guard<mutex> lock(g_versionMutex);
+            g_remoteVersion = cachedVer;
+            if (!cachedUrl.empty()) g_releaseUrl = cachedUrl;
+            if (isNewer(CURRENT_VERSION, cachedVer)) {
+                g_hasNewVersion = true;
+            }
+            g_checkFinished = true;
+        }
+
+        // Nếu chưa đủ 2 ngày kể từ lần kiểm tra gần nhất -> giữ nguyên dữ liệu cache, không gọi GitHub
+        if ((now - lastCheckTime) < UPDATE_COOLDOWN_SECONDS && (now >= lastCheckTime)) {
+            return;
+        }
+    }
+
+    // 2. Chưa có cache hoặc đã quá 2 ngày -> khởi chạy thread ngầm kiểm tra GitHub
     thread([]() {
         ReleaseInfo rel = fetchLatestRelease();
         if (rel.valid) {
@@ -129,7 +192,11 @@ void UpdateManager::checkUpdateAsync() {
             if (!rel.htmlUrl.empty()) g_releaseUrl = rel.htmlUrl;
             if (isNewer(CURRENT_VERSION, rel.version)) {
                 g_hasNewVersion = true;
+            } else {
+                g_hasNewVersion = false;
             }
+            // Lưu cache mới kèm mốc thời gian
+            saveCache(static_cast<long long>(time(nullptr)), rel.version, g_releaseUrl);
         }
         g_checkFinished = true;
     }).detach();
@@ -150,15 +217,9 @@ string UpdateManager::getRemoteVersion() {
 
 string UpdateManager::getVersionStatusText() {
     if (hasNewVersion()) {
-        return "v" + CURRENT_VERSION + " \x1b[33m(Có bản mới v" + getRemoteVersion() + "!)\x1b[0m";
+        return "v" + CURRENT_VERSION + " \x1b[33m(🚀 v" + getRemoteVersion() + ")\x1b[0m";
     }
-    if (isCheckingFinished()) {
-        if (!getRemoteVersion().empty()) {
-            return "v" + CURRENT_VERSION + " \x1b[32m(Mới nhất)\x1b[0m";
-        }
-        return "v" + CURRENT_VERSION;
-    }
-    return "v" + CURRENT_VERSION + " (Đang kiểm tra...)";
+    return "v" + CURRENT_VERSION;
 }
 
 void UpdateManager::showUpdateMenu() {
@@ -183,6 +244,7 @@ void UpdateManager::showUpdateMenu() {
                 g_hasNewVersion = false;
                 cout << "  Phiên bản hiện tại : \x1b[32mv" << CURRENT_VERSION << " (Đang là mới nhất)\x1b[0m\n\n";
             }
+            saveCache(static_cast<long long>(time(nullptr)), rel.version, g_releaseUrl);
         }
 
         cout << " [1] Tải bản mới (Mở GitHub)\n"

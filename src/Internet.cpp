@@ -1027,7 +1027,7 @@ struct DiscoveredDevice {
 void Internet::scanConnectedDevices() {
     while (true) {
         sc.cls();
-        cout << "\n [*] Đang quét nhanh các thiết bị đang kết nối Wi-Fi / LAN... Vui lòng đợi trong giây lát!\n";
+        cout << "\n [*] Vui lòng đợi trong giây lát!\n";
         cout.flush();
 
         // 1. Lấy thông tin Card mạng chính & dải Subnet

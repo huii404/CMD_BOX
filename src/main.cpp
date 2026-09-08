@@ -148,7 +148,7 @@ public:
                          << " [4] Kiểm tra trạng thái bảo mật hệ thống\n"
                          << " [5] Xem danh sách mật khẩu Wi-Fi đã lưu\n"
                          << " [6] Quét & Bảo vệ tập tin Hosts\n"
-                         << " [7] Quét thiết bị đang kết nối Wi-Fi / LAN\n"
+                         << " [7] Quét thiết bị kết nối Wi-Fi / LAN\n"
                          << " [0] Quay lại\n\n"
                          << " [Chọn]: ";
                     sub = readInt("");

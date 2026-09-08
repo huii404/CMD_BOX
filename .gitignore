@@ -1,3 +1,2 @@
 .vscode/tasks.json
-bin/ffmpeg.exe
-bin/main.exe
+bin/*

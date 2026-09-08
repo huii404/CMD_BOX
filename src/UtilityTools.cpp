@@ -1,14 +1,13 @@
 #include "../include/UtilityTools.h"
 #include <iostream>
 #include <windows.h>
+#include <tlhelp32.h>
 #include <vector>
 #include <iomanip>
 #include <string>
 #include <filesystem>
 #include <fstream>
-#include <algorithm>
-#include <random>
-#include <chrono>
+#include <sstream>
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -29,34 +28,31 @@ static bool sleepWithEmergencyCheck(int totalMs) {
 // Auto click chuột theo vị trí
 void UtilityTools::autoClickPoint() {
     sc.cls();
-    cout << "Nhấn ESC hoặc F6 để dừng khẩn cấp.\n\n";
     
     int times = sc.readInt("Số lần click: ");
-    if (times <= 0) {
-        cout << "Số lần không hợp lệ!\n";
-        return;
-    }
+    if (times <= 0) return;
     
-    int intervalMs = sc.readInt("Delay giữa các lần (ms): ");
-    if (intervalMs < 0) intervalMs = 100;
+    int intervalMs = sc.readInt("Delay giữa các lần (ms) [100]: ");
+    if (intervalMs <= 0) intervalMs = 100;
     
-    int delaySec = sc.readInt("Thời gian di chuyển chuột đến đích (giây): ");
-    if (delaySec < 0) delaySec = 3;
+    int clickType = sc.readInt("Kiểu click: [1] Trái | [2] Phải | [3] Đúp trái: ");
+    if (clickType < 1 || clickType > 3) clickType = 1;
+
+    int delaySec = sc.readInt("Thời gian chờ di chuột (giây) [3]: ");
+    if (delaySec <= 0) delaySec = 3;
     
-    cout << "\nDi chuyển chuột đến vị trí cần click...\n";
+    cout << "\nDi chuột đến vị trí cần click...\n";
     for (int i = delaySec; i > 0; i--) { 
         cout << " " << i << "... "; cout.flush(); 
         if (sleepWithEmergencyCheck(1000)) {
-            cout << "\nĐã hủy thao tác.\n";
+            cout << "\nĐã hủy.\n";
             return;
         }
     }
     
     POINT p; 
     GetCursorPos(&p);
-    cout << "\n\nBắt đầu click tại tọa độ: (" << p.x << ", " << p.y << ")\n"
-         << "Số lần: " << times << " | Delay: " << intervalMs << "ms\n"
-         << "(Nhấn ESC / F6 để dừng)\n\n";
+    cout << "\n\nTọa độ: (" << p.x << ", " << p.y << ") | " << times << " lần | Delay: " << intervalMs << "ms (Ngắt: ESC/F6)\n";
     
     bool stopped = false;
     int executed = 0;
@@ -67,7 +63,20 @@ void UtilityTools::autoClickPoint() {
         }
 
         SetCursorPos(p.x, p.y); 
-        sc.leftClick();
+        if (clickType == 1) {
+            sc.leftClick();
+        } else if (clickType == 2) {
+            INPUT inp[2] = {};
+            inp[0].type = INPUT_MOUSE;
+            inp[0].mi.dwFlags = MOUSEEVENTF_RIGHTDOWN;
+            inp[1].type = INPUT_MOUSE;
+            inp[1].mi.dwFlags = MOUSEEVENTF_RIGHTUP;
+            SendInput(2, inp, sizeof(INPUT));
+        } else if (clickType == 3) {
+            sc.leftClick();
+            Sleep(30);
+            sc.leftClick();
+        }
         executed++;
         
         if (times > 20 && i % (times / 20) == 0) {
@@ -82,9 +91,9 @@ void UtilityTools::autoClickPoint() {
     }
     
     if (stopped) {
-        cout << "\n\nĐã dừng khẩn cấp (Đã click " << executed << "/" << times << " lần)\n";
+        cout << "\n\n[!] Đã dừng khẩn cấp (" << executed << "/" << times << " lần)\n";
     } else {
-        cout << "\n\nHoàn thành " << times << " lần click!\n";
+        cout << "\n\n[✓] Hoàn thành " << times << " lần click!\n";
     }
     sc.waitEnter();
 }
@@ -92,44 +101,31 @@ void UtilityTools::autoClickPoint() {
 // Spam văn bản tự động
 void UtilityTools::spamText() {
     sc.cls();
-    cout << "Nhấn ESC hoặc F6 bất kỳ lúc nào để dừng khẩn cấp.\n\n";
     
-    string content; 
     cout << "Nhập text cần gửi: ";
-    cin.ignore(); 
+    string content; 
     getline(cin, content);
-    
-    if (content.empty()) { 
-        cout << "Nội dung trống!\n"; 
-        sc.waitEnter();
-        return; 
+    while (content.empty()) {
+        getline(cin, content);
     }
     
     int times = sc.readInt("Số lần gửi: ");
-    if (times <= 0) {
-        cout << "Số lần không hợp lệ!\n";
-        sc.waitEnter();
-        return;
-    }
+    if (times <= 0) return;
     
-    int delayMs = sc.readInt("Delay giữa các lần (ms): ");
-    if (delayMs < 0) delayMs = 100;
+    int delayMs = sc.readInt("Delay (ms) [100]: ");
+    if (delayMs <= 0) delayMs = 100;
     
-    cout << "\nTự động click vào ô nhập? (Y/N): ";
+    cout << "Tự động click vào ô nhập? (y/n): ";
     string autoFocus;
     getline(cin, autoFocus);
     bool shouldClick = (autoFocus == "y" || autoFocus == "Y");
     
-    cout << "\nChuẩn bị gửi...\n"
-         << "  - Nội dung : " << content << "\n"
-         << "  - Số lần   : " << times << "\n"
-         << "  - Delay    : " << delayMs << "ms\n"
-         << "  - Phím ngắt: ESC / F6\n"
-         << "\nBắt đầu sau 3 giây...\n";
+    cout << "Phím ngắt: ESC / F6\n"
+         << "Bắt đầu sau 3 giây...\n";
     for (int i = 3; i > 0; i--) { 
         cout << " " << i << "... "; cout.flush(); 
         if (sleepWithEmergencyCheck(1000)) {
-            cout << "\nĐã hủy thao tác.\n";
+            cout << "\nĐã hủy.\n";
             sc.waitEnter();
             return;
         }
@@ -170,9 +166,9 @@ void UtilityTools::spamText() {
     }
     
     if (stopped) {
-        cout << "\n\nĐã dừng khẩn cấp (Đã gửi " << executed << "/" << times << " lần)\n";
+        cout << "\n\n[!] Đã dừng khẩn cấp (" << executed << "/" << times << ")\n";
     } else {
-        cout << "\n\nHoàn thành gửi " << times << " lần!\n";
+        cout << "\n\n[✓] Hoàn tất " << times << " lần!\n";
     }
     sc.waitEnter();
 }
@@ -180,21 +176,14 @@ void UtilityTools::spamText() {
 // Tự động paste danh sách dữ liệu
 void UtilityTools::autoPasteData() {
     sc.cls();
-    cout << "Nhấn ESC hoặc F6 bất kỳ lúc nào để dừng khẩn cấp.\n\n";
     
     int n = sc.readInt("Số dòng dữ liệu: ");
-    if (n <= 0) {
-        cout << "Số dòng không hợp lệ!\n";
-        sc.waitEnter();
-        return;
-    }
+    if (n <= 0) return;
     
-    int delayMs = sc.readInt("Delay giữa các dòng (ms): ");
-    if (delayMs < 0) delayMs = 200;
+    int delayMs = sc.readInt("Delay giữa các dòng (ms) [200]: ");
+    if (delayMs <= 0) delayMs = 200;
     
-    cin.ignore();
     vector<string> dataList(n);
-    
     cout << "\nNhập " << n << " dòng dữ liệu:\n";
     for (int i = 0; i < n; i++) { 
         cout << "  [" << i + 1 << "]: "; 
@@ -204,16 +193,17 @@ void UtilityTools::autoPasteData() {
         }
     }
     
-    cout << "\nTự động click vào ô nhập? (Y/N): ";
+    cout << "Tự động click vào ô nhập? (y/n): ";
     string autoFocus;
     getline(cin, autoFocus);
     bool shouldClick = (autoFocus == "y" || autoFocus == "Y");
     
-    cout << "\nBắt đầu sau 3 giây...\n";
+    cout << "Phím ngắt: ESC / F6\n"
+         << "Bắt đầu sau 3 giây...\n";
     for (int i = 3; i > 0; i--) { 
         cout << " " << i << "... "; cout.flush(); 
         if (sleepWithEmergencyCheck(1000)) {
-            cout << "\nĐã hủy thao tác.\n";
+            cout << "\nĐã hủy.\n";
             sc.waitEnter();
             return;
         }
@@ -252,9 +242,9 @@ void UtilityTools::autoPasteData() {
     }
     
     if (stopped) {
-        cout << "\n\nĐã dừng khẩn cấp (Đã dán " << executed << "/" << n << " dòng)\n";
+        cout << "\n\n[!] Đã dừng khẩn cấp (" << executed << "/" << n << ")\n";
     } else {
-        cout << "\n\nHoàn thành dán " << n << " dòng!\n";
+        cout << "\n\n[✓] Hoàn tất dán " << n << " dòng!\n";
     }
     sc.waitEnter();
 }
@@ -332,12 +322,10 @@ void UtilityTools::downloadManager() {
 
     while (true) {
         sc.cls();
-        cout << "=== TẢI & CÀI ĐẶT PHẦN MỀM TỰ ĐỘNG ===\n"
-             << "Lưu: " << downloadDir << " | Nguồn: " << apps.size() << " ứng dụng\n"
-             << "----------------------------------------------------------------------\n\n";
+        cout << "=== TẢI & CÀI ĐẶT PHẦN MỀM === [Lưu: " << downloadDir << "]\n\n";
 
         if (apps.empty()) {
-            cout << " [!] Không tìm thấy ứng dụng trong " << configPath << "\n\n";
+            cout << " [!] Không tìm thấy danh sách trong " << configPath << "\n\n";
         } else {
             size_t half = (apps.size() + 1) / 2;
             for (size_t i = 0; i < half; i++) {
@@ -350,34 +338,32 @@ void UtilityTools::downloadManager() {
             }
         }
 
-        cout << "\n----------------------------------------------------------------------\n"
-             << " [A] Tải tất cả | [R] Nạp lại | [0] Quay lại\n"
-             << " Chọn: ";
+        cout << "\n [A] Tải tất cả | [R] Nạp lại | [0] Quay lại\n"
+             << " Chọn số (hoặc nhiều số, vd: 1 5 8): ";
 
-        string choice;
-        cin >> choice;
+        string inputLine;
+        getline(cin, inputLine);
+        inputLine = SystemCore::trim(inputLine);
 
-        if (choice == "0") break;
+        if (inputLine.empty()) continue;
+        if (inputLine == "0") break;
 
-        if (choice == "R" || choice == "r") {
+        if (inputLine == "R" || inputLine == "r") {
             configPath = resolveAppConfigPath();
             apps = loadAppsFromTxt(configPath);
             cout << "\nĐã nạp lại (" << apps.size() << " ứng dụng)!\n";
-            Sleep(800);
+            Sleep(600);
             continue;
         }
 
-        if (choice == "A" || choice == "a") {
+        if (inputLine == "A" || inputLine == "a") {
             if (apps.empty()) continue;
             sc.cls();
-            cout << "=== TẢI TOÀN BỘ ỨNG DỤNG ===\n"
-                 << "Bắt đầu tải " << apps.size() << " ứng dụng về: " << downloadDir << "\n\n";
+            cout << "=== TẢI TOÀN BỘ " << apps.size() << " ỨNG DỤNG ===\n\n";
 
             int successCount = 0;
-
             for (size_t i = 0; i < apps.size(); ++i) {
                 cout << "[" << (i + 1) << "/" << apps.size() << "] Đang tải: " << apps[i].name << "...\n";
-
                 string targetPath = downloadDir + "\\" + apps[i].fileName;
                 string cmd = "curl -# -L \"" + apps[i].url + "\" -o \"" + targetPath + "\"";
                 int ret = system(cmd.c_str());
@@ -395,97 +381,194 @@ void UtilityTools::downloadManager() {
             continue;
         }
 
-        try {
-            int idx = stoi(choice);
-            if (idx >= 1 && idx <= (int)apps.size()) {
-                const auto &app = apps[idx - 1];
-                sc.cls();
-                cout << "=== TẢI ỨNG DỤNG: " << app.name << " ===\n"
-                     << "Lưu tại: " << downloadDir << "\\" << app.fileName << "\n\n"
-                     << "Đang tải xuống...\n\n";
+        // Phân tích danh sách số được chọn (ví dụ: "1", "1 5 8", "1,5,8")
+        vector<int> selectedIndices;
+        stringstream ss(inputLine);
+        string token;
+        while (ss >> token) {
+            for (char &c : token) { if (c == ',') c = ' '; }
+            stringstream subSs(token);
+            string num;
+            while (subSs >> num) {
+                try {
+                    int idx = stoi(num);
+                    if (idx >= 1 && idx <= (int)apps.size()) {
+                        selectedIndices.push_back(idx - 1);
+                    }
+                } catch (...) {}
+            }
+        }
 
+        if (selectedIndices.empty()) {
+            cout << "\n[!] Lựa chọn không hợp lệ!\n";
+            Sleep(500);
+            continue;
+        }
+
+        // Nếu chỉ chọn 1 ứng dụng
+        if (selectedIndices.size() == 1) {
+            const auto &app = apps[selectedIndices[0]];
+            sc.cls();
+            cout << "[-] Đang tải " << app.name << " (" << app.fileName << ")...\n\n";
+
+            string targetPath = downloadDir + "\\" + app.fileName;
+            string cmd = "curl -# -L \"" + app.url + "\" -o \"" + targetPath + "\"";
+            int ret = system(cmd.c_str());
+
+            if (ret == 0 && fs::exists(targetPath)) {
+                cout << "\n[✓] Đã tải về: " << targetPath << "\n";
+                cout << "Mở file cài đặt ngay? (y/n): ";
+                string runChoice;
+                getline(cin, runChoice);
+                if (runChoice == "y" || runChoice == "Y") {
+                    ShellExecuteA(NULL, "open", targetPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+                }
+            } else {
+                cout << "\n[!] Tải thất bại! Kiểm tra kết nối mạng.\n";
+                sc.waitEnter();
+            }
+        } else {
+            // Tải nhiều ứng dụng được chọn theo lô
+            sc.cls();
+            cout << "=== TẢI " << selectedIndices.size() << " ỨNG DỤNG ĐÃ CHỌN ===\n\n";
+
+            int successCount = 0;
+            for (size_t i = 0; i < selectedIndices.size(); ++i) {
+                const auto &app = apps[selectedIndices[i]];
+                cout << "[" << (i + 1) << "/" << selectedIndices.size() << "] Đang tải: " << app.name << "...\n";
                 string targetPath = downloadDir + "\\" + app.fileName;
                 string cmd = "curl -# -L \"" + app.url + "\" -o \"" + targetPath + "\"";
                 int ret = system(cmd.c_str());
 
                 if (ret == 0 && fs::exists(targetPath)) {
-                    cout << "\n[✓] Đã tải về: " << targetPath << "\n";
-
-                    cout << "\nMở file cài đặt ngay? (y/n): ";
-                    string runChoice;
-                    cin >> runChoice;
-                    if (runChoice == "y" || runChoice == "Y") {
-                        ShellExecuteA(NULL, "open", targetPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
-                    }
+                    cout << "  [✓] Xong: " << app.fileName << "\n";
+                    successCount++;
                 } else {
-                    cout << "\n[!] Tải thất bại! Kiểm tra kết nối mạng.\n";
-                    sc.waitEnter();
+                    cout << "  [!] Thất bại: " << app.name << "\n";
                 }
-            } else {
-                cout << "\n[!] Lựa chọn không hợp lệ!\n";
-                Sleep(500);
             }
-        } catch (...) {
-            cout << "\n[!] Lựa chọn không hợp lệ!\n";
-            Sleep(500);
+
+            cout << "\n[✓] Hoàn tất " << successCount << "/" << selectedIndices.size() << " ứng dụng!\n";
+            cout << "Mở thư mục Downloads? (y/n): ";
+            string openChoice;
+            getline(cin, openChoice);
+            if (openChoice == "y" || openChoice == "Y") {
+                ShellExecuteA(NULL, "open", downloadDir.c_str(), NULL, NULL, SW_SHOWNORMAL);
+            }
         }
     }
 }
 
-// Gỡ bỏ ứng dụng rác Bloatware (Bao gồm Phone Link, Cross Device & game/app quảng cáo cài sẵn)
-void UtilityTools::uninstallBloatware() {
-    sc.cls();
-    
-    // Danh sách các ứng dụng rác
-    const std::vector<std::pair<std::string, std::string>> bloatList = {
-        {"Microsoft.YourPhone", "Phone Link (Liên kết điện thoại)"},
-        {"MicrosoftWindows.CrossDevice", "Cross Device (Liên kết thiết bị)"},
-        {"Microsoft.BingNews", "Bing News"},
-        {"Microsoft.BingWeather", "Bing Weather"},
-        {"Microsoft.GetHelp", "Get Help"},
-        {"Microsoft.Getstarted", "Tips (Mẹo & Bắt đầu)"},
-        {"Microsoft.MicrosoftOfficeHub", "Quảng cáo Office 365"},
-        {"Microsoft.MicrosoftSolitaireCollection", "Game Solitaire"},
-        {"Microsoft.PowerAutomateDesktop", "Power Automate"},
-        {"Microsoft.SkypeApp", "Skype mặc định"},
-        {"Microsoft.Todos", "Microsoft To-Do"},
-        {"Microsoft.WindowsFeedbackHub", "Feedback Hub"},
-        {"Microsoft.WindowsMaps", "Windows Maps"},
-        {"Microsoft.MixedReality.Portal", "Mixed Reality Portal"},
-        {"Microsoft.549981C3F5F10", "Cortana"},
-        {"Clipchamp.Clipchamp", "Clipchamp"},
-        {"Disney.37853FC22B2CE", "Disney+"},
-        {"SpotifyAB.SpotifyMusic", "Spotify"},
-        {"king.com.CandyCrushSaga", "Candy Crush Saga"},
-        {"king.com.CandyCrushSodaSaga", "Candy Crush Soda"},
-        {"king.com.BubbleWitch3Saga", "Bubble Witch 3"},
-        {"Playtika.CaesarsSlotsFreeCasino", "Caesars Slots"},
-        {"ShazamEntertainmentLtd.Shazam", "Shazam"},
-        {"ByteDancePte.Ltd.TikTok", "TikTok"},
-        {"Amazon.com.Amazon", "Amazon"}
-    };
+static bool isProcessRunning(const string &procName) {
+    HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnap == INVALID_HANDLE_VALUE) return false;
+    PROCESSENTRY32 pe;
+    pe.dwSize = sizeof(pe);
+    bool found = false;
+    if (Process32First(hSnap, &pe)) {
+        do {
+            if (_stricmp(pe.szExeFile, procName.c_str()) == 0) {
+                found = true;
+                break;
+            }
+        } while (Process32Next(hSnap, &pe));
+    }
+    CloseHandle(hSnap);
+    return found;
+}
 
-    cout << "=== GỠ BỎ ỨNG DỤNG RÁC (BLOATWARE CLEANER) ===\n"
-         << "Tổng số gói quét: " << bloatList.size() << " ứng dụng.\n\n"
-         << "Xác nhận quét & gỡ bỏ toàn bộ? (y/n): ";
-    string confirm;
-    cin >> confirm;
-    if (confirm != "y" && confirm != "Y") {
-        cout << "\nĐã hủy thao tác.\n";
-        return;
+struct BloatAppInfo {
+    string id;
+    string name;
+};
+
+// 1. Nhóm App rác thứ cấp (Store Apps, Game, Ads cài sẵn - không hook sâu hệ thống)
+static const vector<BloatAppInfo> g_secondaryBloat = {
+    {"Microsoft.BingNews", "Bing News"},
+    {"Microsoft.BingWeather", "Bing Weather"},
+    {"Microsoft.GetHelp", "Get Help"},
+    {"Microsoft.Getstarted", "Tips (Mẹo & Bắt đầu)"},
+    {"Microsoft.MicrosoftOfficeHub", "Quảng cáo Office 365"},
+    {"Microsoft.MicrosoftSolitaireCollection", "Game Solitaire"},
+    {"Microsoft.SkypeApp", "Skype mặc định"},
+    {"Microsoft.Todos", "Microsoft To-Do"},
+    {"Microsoft.WindowsFeedbackHub", "Feedback Hub"},
+    {"Microsoft.WindowsMaps", "Windows Maps"},
+    {"Microsoft.MixedReality.Portal", "Mixed Reality Portal"},
+    {"Clipchamp.Clipchamp", "Clipchamp"},
+    {"Disney.37853FC22B2CE", "Disney+"},
+    {"SpotifyAB.SpotifyMusic", "Spotify"},
+    {"king.com.CandyCrushSaga", "Candy Crush Saga"},
+    {"king.com.CandyCrushSodaSaga", "Candy Crush Soda"},
+    {"king.com.BubbleWitch3Saga", "Bubble Witch 3"},
+    {"Playtika.CaesarsSlotsFreeCasino", "Caesars Slots"},
+    {"ShazamEntertainmentLtd.Shazam", "Shazam"},
+    {"ByteDancePte.Ltd.TikTok", "TikTok"},
+    {"Amazon.com.Amazon", "Amazon"}
+};
+
+// 2. Trạng thái App rác nâng cao (Bám rễ sâu: Chạy ngầm Taskmgr, Dịch vụ Service, File exe trong C:\, Registry)
+struct AdvancedBloatStatus {
+    bool hasOneDrive = false;
+    bool oneDriveRunning = false;
+    bool hasPhoneLink = false;
+    bool phoneLinkRunning = false;
+    bool hasCortana = false;
+    bool hasTeams = false;
+    bool teamsRunning = false;
+};
+
+// Dò quét thực tế trên máy tính
+static void scanBloatware(vector<BloatAppInfo> &outSecondary, AdvancedBloatStatus &outAdv) {
+    char tempPath[MAX_PATH];
+    GetTempPathA(MAX_PATH, tempPath);
+    string scanFile = string(tempPath) + "cmd_installed_apps.txt";
+    string scanCmd = "powershell -NoProfile -Command \"Get-AppxPackage | Select-Object -ExpandProperty Name | Out-File -FilePath '" + scanFile + "' -Encoding ascii\"";
+    system(scanCmd.c_str());
+
+    string installed = "";
+    if (fs::exists(scanFile)) {
+        ifstream f(scanFile);
+        if (f.is_open()) {
+            stringstream ss;
+            ss << f.rdbuf();
+            installed = ss.str();
+            f.close();
+        }
+        try { fs::remove(scanFile); } catch (...) {}
     }
 
-    cout << "\nĐang tiến hành gỡ bỏ...\n\n";
+    outSecondary.clear();
+    for (const auto &app : g_secondaryBloat) {
+        if (installed.find(app.id) != string::npos) {
+            outSecondary.push_back(app);
+        }
+    }
 
-    string psScript = "";
-    // 1. Tắt tiến trình Phone Link & Cross Device đang chạy
-    psScript += "Stop-Process -Name 'CrossDeviceService','PhoneExperienceHost' -Force -ErrorAction SilentlyContinue;\n";
+    char* userProf = getenv("USERPROFILE");
+    string oneDriveLocal = userProf ? (string(userProf) + "\\AppData\\Local\\Microsoft\\OneDrive") : "";
+    outAdv.oneDriveRunning = isProcessRunning("OneDrive.exe");
+    outAdv.hasOneDrive = outAdv.oneDriveRunning || (fs::exists(oneDriveLocal) && !fs::is_empty(oneDriveLocal)) || fs::exists("C:\\ProgramData\\Microsoft OneDrive");
 
-    // 2. Gỡ bỏ các gói Appx và Provisioned Package
-    psScript += "$apps = @(\n";
-    for (size_t i = 0; i < bloatList.size(); ++i) {
-        psScript += "    '" + bloatList[i].first + "'";
-        if (i + 1 < bloatList.size()) psScript += ",";
+    outAdv.phoneLinkRunning = isProcessRunning("PhoneExperienceHost.exe") || isProcessRunning("CrossDeviceService.exe");
+    outAdv.hasPhoneLink = outAdv.phoneLinkRunning || (installed.find("Microsoft.YourPhone") != string::npos) || (installed.find("CrossDevice") != string::npos);
+
+    outAdv.hasCortana = isProcessRunning("Cortana.exe") || (installed.find("Microsoft.549981C3F5F10") != string::npos);
+    outAdv.teamsRunning = isProcessRunning("ms-teams.exe") || isProcessRunning("msteams.exe");
+    outAdv.hasTeams = outAdv.teamsRunning || (installed.find("MicrosoftTeams") != string::npos);
+}
+
+// Luồng 1: Xử lý gỡ sạch app rác thứ cấp
+static void cleanSecondaryBloat(SystemCore &sc, const vector<BloatAppInfo> &list) {
+    if (list.empty()) {
+        cout << " [✓] Không có ứng dụng rác thứ cấp nào cần gỡ.\n";
+        return;
+    }
+    cout << " [-] Đang gỡ bỏ " << list.size() << " ứng dụng rác thứ cấp...\n";
+    string psScript = "$apps = @(\n";
+    for (size_t i = 0; i < list.size(); ++i) {
+        psScript += "    '" + list[i].id + "'";
+        if (i + 1 < list.size()) psScript += ",";
         psScript += "\n";
     }
     psScript += ");\n";
@@ -494,37 +577,146 @@ void UtilityTools::uninstallBloatware() {
     psScript += "    Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like ('*' + $pkg + '*') -or $_.PackageName -like ('*' + $pkg + '*') } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue;\n";
     psScript += "}\n";
 
-    // 3. Khóa hoàn toàn Service và Group Policy liên kết thiết bị
-    psScript += "Stop-Service -Name 'CDPUserSvc*' -Force -ErrorAction SilentlyContinue;\n";
-    psScript += "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\CDPUserSvc' -Name 'Start' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-    psScript += "New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Force -ErrorAction SilentlyContinue | Out-Null;\n";
-    psScript += "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Name 'EnableMmx' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-
-    // 4. Gỡ bỏ triệt để Microsoft OneDrive & xóa tàn dư / icon Explorer
-    psScript += "Stop-Process -Name 'OneDrive' -Force -ErrorAction SilentlyContinue;\n";
-    psScript += "if (Test-Path \"$env:SystemRoot\\SysWOW64\\OneDriveSetup.exe\") {\n";
-    psScript += "    Start-Process \"$env:SystemRoot\\SysWOW64\\OneDriveSetup.exe\" -ArgumentList '/uninstall' -Wait -NoNewWindow -ErrorAction SilentlyContinue;\n";
-    psScript += "} elseif (Test-Path \"$env:SystemRoot\\System32\\OneDriveSetup.exe\") {\n";
-    psScript += "    Start-Process \"$env:SystemRoot\\System32\\OneDriveSetup.exe\" -ArgumentList '/uninstall' -Wait -NoNewWindow -ErrorAction SilentlyContinue;\n";
-    psScript += "} elseif (Test-Path \"$env:LocalAppData\\Microsoft\\OneDrive\\Update\\OneDriveSetup.exe\") {\n";
-    psScript += "    Start-Process \"$env:LocalAppData\\Microsoft\\OneDrive\\Update\\OneDriveSetup.exe\" -ArgumentList '/uninstall' -Wait -NoNewWindow -ErrorAction SilentlyContinue;\n";
-    psScript += "}\n";
-    psScript += "Remove-Item -Path \"$env:LocalAppData\\Microsoft\\OneDrive\" -Recurse -Force -ErrorAction SilentlyContinue;\n";
-    psScript += "Remove-Item -Path \"$env:ProgramData\\Microsoft OneDrive\" -Recurse -Force -ErrorAction SilentlyContinue;\n";
-    psScript += "Remove-Item -Path \"C:\\OneDriveTemp\" -Recurse -Force -ErrorAction SilentlyContinue;\n";
-    psScript += "Remove-Item -Path 'HKCR:\\CLSID\\{018D5C66-4533-4307-9B53-224DE2ED1FE6}' -Recurse -Force -ErrorAction SilentlyContinue;\n";
-    psScript += "Remove-Item -Path 'HKCR:\\Wow6432Node\\CLSID\\{018D5C66-4533-4307-9B53-224DE2ED1FE6}' -Recurse -Force -ErrorAction SilentlyContinue;\n";
-
     string cmd = "powershell -NoProfile -Command \"" + psScript + "\"";
     sc.runAdmin(cmd, true);
+    cout << " [✓] Đã dọn sạch " << list.size() << " ứng dụng rác thứ cấp thành công!\n";
+}
 
-    for (const auto &item : bloatList) {
-        cout << "  [✓] Đã dọn sạch: " << left << setw(45) << item.second << " [" << item.first << "]\n";
+// Luồng 2: Xử lý tận gốc app rác nâng cao (Chỉ chạy khi phát hiện có trên máy)
+static void cleanAdvancedBloat(SystemCore &sc, const AdvancedBloatStatus &adv) {
+    if (!adv.hasOneDrive && !adv.hasPhoneLink && !adv.hasCortana && !adv.hasTeams) {
+        cout << " [✓] Các ứng dụng rác nâng cao đều sạch sẽ, không có gì cần gỡ!\n";
+        return;
     }
-    cout << "  [✓] Đã dọn sạch: " << left << setw(45) << "Gỡ bỏ tận gốc Microsoft OneDrive" << " [OneDriveSetup /uninstall]\n";
-    cout << "  [✓] Đã khóa:   " << left << setw(45) << "Dịch vụ liên kết CDPUserSvc & Group Policy" << " [CDPUserSvc/EnableMmx]\n";
-    
-    sc.waitEnter();
+
+    cout << " [-] Đang xử lý gỡ bỏ các ứng dụng nâng cao được phát hiện...\n";
+    string psScript = "";
+
+    // 1. Kiểm tra & Gỡ Microsoft OneDrive nếu có
+    if (adv.hasOneDrive) {
+        psScript += "Stop-Process -Name 'OneDrive' -Force -ErrorAction SilentlyContinue;\n";
+        psScript += "if (Test-Path \"$env:SystemRoot\\SysWOW64\\OneDriveSetup.exe\") {\n";
+        psScript += "    Start-Process \"$env:SystemRoot\\SysWOW64\\OneDriveSetup.exe\" -ArgumentList '/uninstall' -Wait -NoNewWindow -ErrorAction SilentlyContinue;\n";
+        psScript += "} elseif (Test-Path \"$env:SystemRoot\\System32\\OneDriveSetup.exe\") {\n";
+        psScript += "    Start-Process \"$env:SystemRoot\\System32\\OneDriveSetup.exe\" -ArgumentList '/uninstall' -Wait -NoNewWindow -ErrorAction SilentlyContinue;\n";
+        psScript += "} elseif (Test-Path \"$env:LocalAppData\\Microsoft\\OneDrive\\Update\\OneDriveSetup.exe\") {\n";
+        psScript += "    Start-Process \"$env:LocalAppData\\Microsoft\\OneDrive\\Update\\OneDriveSetup.exe\" -ArgumentList '/uninstall' -Wait -NoNewWindow -ErrorAction SilentlyContinue;\n";
+        psScript += "}\n";
+        psScript += "Remove-Item -Path \"$env:LocalAppData\\Microsoft\\OneDrive\" -Recurse -Force -ErrorAction SilentlyContinue;\n";
+        psScript += "Remove-Item -Path \"$env:ProgramData\\Microsoft OneDrive\" -Recurse -Force -ErrorAction SilentlyContinue;\n";
+        psScript += "Remove-Item -Path \"C:\\OneDriveTemp\" -Recurse -Force -ErrorAction SilentlyContinue;\n";
+        psScript += "Remove-Item -Path 'HKCR:\\CLSID\\{018D5C66-4533-4307-9B53-224DE2ED1FE6}' -Recurse -Force -ErrorAction SilentlyContinue;\n";
+        psScript += "Remove-Item -Path 'HKCR:\\Wow6432Node\\CLSID\\{018D5C66-4533-4307-9B53-224DE2ED1FE6}' -Recurse -Force -ErrorAction SilentlyContinue;\n";
+    }
+
+    // 2. Kiểm tra & Gỡ Phone Link, vô hiệu hóa Service CDPUserSvc nếu có
+    if (adv.hasPhoneLink) {
+        psScript += "Stop-Process -Name 'CrossDeviceService','PhoneExperienceHost' -Force -ErrorAction SilentlyContinue;\n";
+        psScript += "Get-AppxPackage -AllUsers -Name '*YourPhone*','*CrossDevice*' -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
+        psScript += "Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like '*YourPhone*' -or $_.DisplayName -like '*CrossDevice*' } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue;\n";
+        psScript += "Stop-Service -Name 'CDPUserSvc*' -Force -ErrorAction SilentlyContinue;\n";
+        psScript += "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\CDPUserSvc' -Name 'Start' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
+        psScript += "New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Force -ErrorAction SilentlyContinue | Out-Null;\n";
+        psScript += "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Name 'EnableMmx' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
+    }
+
+    // 3. Kiểm tra & Gỡ Cortana nếu có
+    if (adv.hasCortana) {
+        psScript += "Stop-Process -Name 'Cortana' -Force -ErrorAction SilentlyContinue;\n";
+        psScript += "Get-AppxPackage -AllUsers -Name '*549981C3F5F10*' -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
+        psScript += "New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search' -Force -ErrorAction SilentlyContinue | Out-Null;\n";
+        psScript += "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search' -Name 'AllowCortana' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
+    }
+
+    // 4. Kiểm tra & Gỡ Teams cá nhân nếu có
+    if (adv.hasTeams) {
+        psScript += "Stop-Process -Name 'ms-teams','msteams' -Force -ErrorAction SilentlyContinue;\n";
+        psScript += "Get-AppxPackage -AllUsers -Name '*MicrosoftTeams*' -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
+        psScript += "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'TaskbarMn' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
+    }
+
+    if (!psScript.empty()) {
+        string cmd = "powershell -NoProfile -Command \"" + psScript + "\"";
+        sc.runAdmin(cmd, true);
+    }
+
+    if (adv.hasOneDrive) cout << " [✓] Đã gỡ triệt để Microsoft OneDrive (tiến trình, thư mục C:, icon Explorer).\n";
+    if (adv.hasPhoneLink) cout << " [✓] Đã gỡ Phone Link & vô hiệu hóa dịch vụ ngầm CDPUserSvc.\n";
+    if (adv.hasCortana) cout << " [✓] Đã gỡ Cortana & chặn Policy tìm kiếm.\n";
+    if (adv.hasTeams) cout << " [✓] Đã gỡ Teams cá nhân & ẩn icon Chat trên Taskbar.\n";
+}
+
+// Gỡ bỏ ứng dụng rác Bloatware (Phân biệt 2 luồng: Thứ cấp & Nâng cao)
+void UtilityTools::uninstallBloatware() {
+    while (true) {
+        sc.cls();
+        cout << "=== GỠ BỎ BLOATWARE & APP RÁC HỆ THỐNG ===\n\n"
+             << " [1] Dọn app rác thứ cấp (Store Apps, Game, Ads cài sẵn)\n"
+             << " [2] Gỡ tận gốc app rác nâng cao (OneDrive, Phone Link, Service, C:\\)\n"
+             << " [3] Dọn dẹp toàn diện cả 2 luồng\n"
+             << " [0] Quay lại\n\n"
+             << " [Chọn]: ";
+
+        string choice;
+        getline(cin, choice);
+        choice = SystemCore::trim(choice);
+
+        if (choice == "0") break;
+        if (choice != "1" && choice != "2" && choice != "3") continue;
+
+        sc.cls();
+        cout << "[-] Đang dò quét ứng dụng rác trên hệ thống...\n\n";
+
+        vector<BloatAppInfo> detectedSec;
+        AdvancedBloatStatus advStatus;
+        scanBloatware(detectedSec, advStatus);
+
+        cout << " ┌─ [ KẾT QUẢ DÒ QUÉT ] ──────────────────────────────────────────\n";
+        
+        // Hiển thị app thứ cấp
+        cout << " │ [1] App rác thứ cấp: Phát hiện " << detectedSec.size() << "/" << g_secondaryBloat.size() << " ứng dụng\n";
+        if (!detectedSec.empty()) {
+            cout << " │     ↳ ";
+            for (size_t i = 0; i < detectedSec.size(); ++i) {
+                cout << detectedSec[i].name;
+                if (i + 1 < detectedSec.size()) cout << ", ";
+                if ((i + 1) % 4 == 0 && i + 1 < detectedSec.size()) cout << "\n │       ";
+            }
+            cout << "\n";
+        } else {
+            cout << " │     ↳ \x1b[32m(Hệ thống sạch, không có app thứ cấp)\x1b[0m\n";
+        }
+
+        // Hiển thị app nâng cao
+        cout << " │\n │ [2] App rác nâng cao (Bám rễ sâu):\n";
+        cout << " │   - Microsoft OneDrive   : " << (advStatus.hasOneDrive ? (advStatus.oneDriveRunning ? "\x1b[33m[Phát hiện - Đang chạy ngầm]\x1b[0m" : "\x1b[33m[Phát hiện file/folder C:]\x1b[0m") : "\x1b[32m[Sạch]\x1b[0m") << "\n";
+        cout << " │   - Phone Link & Dịch vụ : " << (advStatus.hasPhoneLink ? (advStatus.phoneLinkRunning ? "\x1b[33m[Phát hiện - Tiến trình đang chạy]\x1b[0m" : "\x1b[33m[Phát hiện gói/dịch vụ]\x1b[0m") : "\x1b[32m[Sạch]\x1b[0m") << "\n";
+        cout << " │   - Cortana Assistant    : " << (advStatus.hasCortana ? "\x1b[33m[Phát hiện gói Cortana]\x1b[0m" : "\x1b[32m[Sạch]\x1b[0m") << "\n";
+        cout << " │   - Teams Chat Taskbar   : " << (advStatus.hasTeams ? "\x1b[33m[Phát hiện Teams cá nhân]\x1b[0m" : "\x1b[32m[Sạch]\x1b[0m") << "\n";
+        cout << " └────────────────────────────────────────────────────────────────\n\n";
+
+        cout << "Xác nhận thực hiện dọn dẹp? (y/n): ";
+        string confirm;
+        getline(cin, confirm);
+        if (confirm != "y" && confirm != "Y") {
+            cout << "Đã hủy.\n";
+            Sleep(800);
+            continue;
+        }
+
+        cout << "\n";
+        if (choice == "1") {
+            cleanSecondaryBloat(sc, detectedSec);
+        } else if (choice == "2") {
+            cleanAdvancedBloat(sc, advStatus);
+        } else if (choice == "3") {
+            cleanSecondaryBloat(sc, detectedSec);
+            cleanAdvancedBloat(sc, advStatus);
+        }
+
+        cout << "\n[✓] Hoàn tất quá trình dọn dẹp!\n";
+        sc.waitEnter();
+    }
 }
 
 static string getXmlTag(const string &xml, const string &tag) {
@@ -624,13 +816,13 @@ void UtilityTools::batteryHealthDiagnostic() {
         }
 
         sc.cls();
-        cout << "--- THÔNG TIN PIN LAPTOP ---\n";
+        cout << "=== THÔNG TIN PIN LAPTOP ===\n";
 
         if (!sysMfg.empty() && sysMfg != "N/A") {
-            cout << "Thiết bị       : " << sysMfg << " " << sysModel << " (BIOS: " << biosVer << ")\n";
+            cout << "  Thiết bị     : " << sysMfg << " " << sysModel << " (BIOS: " << biosVer << ")\n";
         }
         if (!deviceName.empty() && deviceName != "N/A") {
-            cout << "Pin            : " << chemistry << " - " << manufacturer << " [" << deviceName << "]\n";
+            cout << "  Pin          : " << chemistry << " - " << manufacturer << " [" << deviceName << "]\n";
         }
         cout << "----------------------------------------------------------------------\n";
 
@@ -641,55 +833,65 @@ void UtilityTools::batteryHealthDiagnostic() {
             long long lostCap = designCap - fullCap;
             if (lostCap < 0) lostCap = 0;
 
-            cout << "Dung lượng gốc : " << setw(8) << right << formatNumber(designCap) << " mWh\n"
-                 << "Khi nạp đầy    : " << setw(8) << right << formatNumber(fullCap) << " mWh (Hao hụt: " << formatNumber(lostCap) << " mWh)\n"
-                 << "Chu kỳ sạc     : " << setw(8) << right << cycleCount << " lần\n"
-                 << "Sức khỏe Pin   : " << fixed << setprecision(1) << healthPercent << "%  " << renderBar(healthPercent) << "\n"
-                 << "Độ chai Pin    : " << fixed << setprecision(1) << wearPercent << "%  ";
+            string colorCode = "\x1b[32m";
+            string wearLevel = "(Rất tốt)";
+            if (wearPercent < 5.0) {
+                colorCode = "\x1b[32m";
+                wearLevel = "(Như mới)";
+            } else if (wearPercent < 15.0) {
+                colorCode = "\x1b[32m";
+                wearLevel = "(Tốt)";
+            } else if (wearPercent < 30.0) {
+                colorCode = "\x1b[33m";
+                wearLevel = "(Bình thường)";
+            } else if (wearPercent < 50.0) {
+                colorCode = "\x1b[31m";
+                wearLevel = "(Chai đáng kể)";
+            } else {
+                colorCode = "\x1b[31m";
+                wearLevel = "(Chai nặng - Nên thay pin)";
+            }
 
-            if (wearPercent < 5.0) cout << "(Như mới 100%)\n";
-            else if (wearPercent < 15.0) cout << "(Rất tốt)\n";
-            else if (wearPercent < 30.0) cout << "(Bình thường)\n";
-            else if (wearPercent < 50.0) cout << "(Chai đáng kể)\n";
-            else cout << "(Chai nặng - Nên thay pin)\n";
+            cout << "  Dung lượng gốc : " << setw(8) << right << formatNumber(designCap) << " mWh\n"
+                 << "  Khi nạp đầy    : " << setw(8) << right << formatNumber(fullCap) << " mWh (Hao hụt: " << formatNumber(lostCap) << " mWh)\n"
+                 << "  Chu kỳ sạc     : " << setw(8) << right << cycleCount << " lần\n"
+                 << "  Sức khỏe Pin   : " << colorCode << fixed << setprecision(1) << healthPercent << "%\x1b[0m  " << renderBar(healthPercent) << "\n"
+                 << "  Độ chai Pin    : " << colorCode << fixed << setprecision(1) << wearPercent << "%\x1b[0m  " << wearLevel << "\n";
         } else {
-            cout << " [!] Không đọc được ACPI nâng cao.\n";
+            cout << "  [!] Không đọc được ACPI nâng cao.\n";
         }
 
-        cout << "----------------------------------------------------------------------\n";
-
         if (hasSps) {
-            string powerSource = (sps.ACLineStatus == 1) ? "Cắm sạc (AC)" : (sps.ACLineStatus == 0) ? "Dùng Pin (DC)" : "Không rõ";
+            string powerSource = (sps.ACLineStatus == 1) ? "Cắm sạc (AC ⚡)" : (sps.ACLineStatus == 0) ? "Dùng Pin (DC 🔋)" : "Không rõ";
             int batPct = (int)sps.BatteryLifePercent;
-            cout << "Nguồn điện     : " << powerSource << "\n";
+            cout << "  Nguồn điện     : " << powerSource << "\n";
             if (batPct >= 0 && batPct <= 100) {
-                cout << "Mức pin        : " << batPct << "%  " << renderBar(batPct) << "\n";
+                cout << "  Mức sạc hiện tại: " << batPct << "%  " << renderBar(batPct) << "\n";
             }
 
             string chargeStatus = "Bình thường";
-            if (sps.BatteryFlag & 8) chargeStatus = "Đang sạc";
+            if (sps.BatteryFlag & 8) chargeStatus = "Đang sạc ⚡";
             else if (sps.ACLineStatus == 1 && batPct >= 95) chargeStatus = "Đã đầy";
             else if (sps.BatteryFlag & 4) chargeStatus = "Cực yếu";
             else if (sps.BatteryFlag & 2) chargeStatus = "Yếu";
-            cout << "Trạng thái     : " << chargeStatus << "\n";
+            cout << "  Trạng thái sạc : " << chargeStatus << "\n";
 
             if (sps.BatteryLifeTime != (DWORD)-1 && sps.ACLineStatus == 0) {
                 int hours = sps.BatteryLifeTime / 3600;
                 int mins = (sps.BatteryLifeTime % 3600) / 60;
-                cout << "Ước tính còn lại: ~" << hours << " giờ " << mins << " phút\n";
+                cout << "  Thời lượng còn : ~" << hours << " giờ " << mins << " phút\n";
             }
         }
 
         cout << "----------------------------------------------------------------------\n"
-             << " [1] Mở báo cáo HTML (Battery Report)\n"
-             << " [2] Mở cài đặt Pin Windows\n"
-             << " [R] Làm mới | [0] Quay lại\n"
-             << "----------------------------------------------------------------------\n"
+             << " [1] Báo cáo HTML | [2] Cài đặt Pin | [R] Làm mới | [0] Quay lại\n"
              << " Chọn: ";
 
         string opt;
-        cin >> opt;
+        getline(cin, opt);
+        opt = SystemCore::trim(opt);
 
+        if (opt.empty()) continue;
         if (opt == "0") break;
 
         if (opt == "1") {

@@ -1,0 +1,31 @@
+# ==============================================================================
+# DANH SÁCH ỨNG DỤNG TỰ ĐỘNG TẢI CHO CMD BOX
+# Định dạng mỗi dòng: Tên ứng dụng | Link tải trực tiếp | Tên file lưu
+# Các dòng bắt đầu bằng dấu # hoặc để trống sẽ được bỏ qua.
+# ==============================================================================
+
+Google Chrome | https://dl.google.com/tag/s/appname%3DGoogle%2520Chrome/update2/installers/ChromeSetup.exe | ChromeSetup.exe
+Cốc Cốc | https://files.coccoc.com/browser/coccoc_vi.exe | CocCocSetup.exe
+Brave Browser | https://laptop-updates.brave.com/latest/winx64 | BraveSetup.exe
+Mozilla Firefox | https://download.mozilla.org/?product=firefox-latest-ssl&os=win64&lang=vi | FirefoxSetup.exe
+EVKey | https://github.com/lamquangminh/EVKey/releases/download/v5.0.4/EVKey.zip | EVKey.zip
+OpenKey | https://github.com/tphan/openkey/releases/latest/download/OpenKey-Windows-x64.zip | OpenKey.zip
+UniKey | https://www.unikey.org/assets/release/unikey43RC5-200929-win64.zip | UniKey.zip
+Zalo PC | https://zalo.me/download/zalo-pc | ZaloSetup.exe
+Discord | https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64 | DiscordSetup.exe
+Telegram | https://telegram.org/dl/desktop/win64 | TelegramSetup.exe
+Zoom | https://zoom.us/client/latest/ZoomInstaller.exe | ZoomInstaller.exe
+7-Zip | https://www.7-zip.org/a/7z2408-x64.exe | 7zipSetup.exe
+WinRAR | https://www.rarlab.com/rar/winrar-x64-701.exe | WinRARSetup.exe
+WARP 1.1.1.1 | https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-x64.msi | CloudflareWARP.msi
+LocalSend | https://github.com/localsend/localsend/releases/latest/download/LocalSend-1.16.1-windows-x86-64.exe | LocalSendSetup.exe
+Everything Search | https://www.voidtools.com/Everything-1.4.1.1026.x64-Setup.exe | EverythingSetup.exe
+CPU-Z | https://download.cpuid.com/cpu-z/cpu-z_2.11-en.exe | CPUZSetup.exe
+Rufus | https://github.com/pbatard/rufus/releases/download/v4.5/rufus-4.5.exe | Rufus.exe
+VLC Media Player | https://get.videolan.org/vlc/last/win64/vlc-3.0.21-win64.exe | VLCSetup.exe
+OBS Studio | https://cdn-fastly.obsproject.com/downloads/OBS-Studio-30.2.2-Windows-Installer.exe | OBSStudioSetup.exe
+VS Code | https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user | VSCodeSetup.exe
+Notepad++ | https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.6.7/npp.8.6.7.Installer.x64.exe | NotepadPlusPlusSetup.exe
+Git for Windows | https://github.com/git-for-windows/git/releases/download/v2.45.1.windows.1/Git-2.45.1-64-bit.exe | GitSetup.exe
+Node.js LTS | https://nodejs.org/dist/v20.16.0/node-v20.16.0-x64.msi | NodejsSetup.msi
+Python | https://www.python.org/ftp/python/3.12.5/python-3.12.5-amd64.exe | PythonSetup.exe
