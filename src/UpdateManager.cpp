@@ -77,6 +77,13 @@ static string extractJsonField(const string& json, const string& field) {
 }
 
 static string extractCleanVersion(const string& raw) {
+    if (raw.empty()) return "";
+
+    // Nếu chuỗi có dạng cmd_base3 hoặc tương tự
+    string lower = raw;
+    for (char &c : lower) c = (char)tolower((unsigned char)c);
+    
+    // Tìm vị trí chữ số đầu tiên
     size_t start = string::npos;
     for (size_t i = 0; i < raw.length(); ++i) {
         if (isdigit((unsigned char)raw[i])) {
@@ -100,6 +107,15 @@ static string extractCleanVersion(const string& raw) {
 
 static vector<int> parseVersionParts(string v) {
     if (!v.empty() && (v[0] == 'v' || v[0] == 'V')) v = v.substr(1);
+    
+    // Xử lý tiền tố cmd_base nếu còn sót
+    string lower = v;
+    for (char &c : lower) c = (char)tolower((unsigned char)c);
+    size_t basePos = lower.find("cmd_base");
+    if (basePos != string::npos) {
+        v = v.substr(basePos + 8);
+    }
+
     vector<int> parts;
     stringstream ss(v);
     string token;
