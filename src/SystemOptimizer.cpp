@@ -147,31 +147,40 @@ void SystemOptimizer::multiTierDiskClean() {
         long long totalFreed = 0;
 
         if (choice == 1 || choice == 5 || choice == 6) {
-            cout << " [*] Tầng 1: Đang dọn rác tạm & cache bề mặt...\n";
+            cout << " [*] Tầng 1: Đang dọn rác tạm & cache bề mặt...\n"
+                 << "     ├── Dọn Temp, Recent, ShaderCache, Cryptnet, WER Temp...\n"
+                 << "     ├── Xóa sạch Thùng rác (Recycle Bin) & Flush DNS...\n";
             long long f1 = runCleanTier1();
             totalFreed += f1;
-            cout << "     -> [Xong] " << (f1 > 0 ? ("Giải phóng " + SystemCore::formatSize(f1)) : "Đã sạch") << "\n\n";
+            cout << "     └── [✓ Xong] " << (f1 > 0 ? ("Giải phóng " + SystemCore::formatSize(f1)) : "Đã sạch sẽ từ trước") << "\n\n";
         }
 
         if (choice == 2 || choice == 5 || choice == 6) {
-            cout << " [*] Tầng 2: Đang dọn rác Trình duyệt & Ứng dụng...\n";
+            cout << " [*] Tầng 2: Đang dọn rác Trình duyệt & Ứng dụng...\n"
+                 << "     ├── Dọn cache Chrome, Edge, Brave, CocCoc, Opera, Firefox...\n"
+                 << "     ├── Dọn cache Discord, Telegram, NVIDIA GLCache, Thumbnails...\n";
             long long f2 = runCleanTier2();
             totalFreed += f2;
-            cout << "     -> [Xong] " << (f2 > 0 ? ("Giải phóng " + SystemCore::formatSize(f2)) : "Đã sạch") << "\n\n";
+            cout << "     └── [✓ Xong] " << (f2 > 0 ? ("Giải phóng " + SystemCore::formatSize(f2)) : "Đã sạch sẽ từ trước") << "\n\n";
         }
 
         if (choice == 3 || choice == 5 || choice == 6) {
-            cout << " [*] Tầng 3: Đang dọn dẹp Chuyên sâu Hệ thống (DISM WinSxS, Logs)...\n";
+            cout << " [*] Tầng 3: Đang dọn dẹp Chuyên sâu Hệ thống...\n"
+                 << "     ├── Chạy DISM WinSxS ResetBase, dọn Windows Update kẹt...\n"
+                 << "     ├── Xóa Delivery Optimization, CBS Logs, Windows Error Reports...\n"
+                 << "     ├── Xóa toàn bộ Windows Event Logs, giải phóng file ngủ đông...\n";
             long long f3 = runCleanTier3();
             totalFreed += f3;
-            cout << "     -> [Xong] " << (f3 > 0 ? ("Giải phóng " + SystemCore::formatSize(f3)) : "Đã sạch") << "\n\n";
+            cout << "     └── [✓ Xong] " << (f3 > 0 ? ("Giải phóng " + SystemCore::formatSize(f3)) : "Đã sạch sẽ từ trước") << "\n\n";
         }
 
         if (choice == 4 || choice == 6) {
-            cout << " [*] Tầng 4: Đang dọn rác Môi trường lập trình (Dev Caches)...\n";
+            cout << " [*] Tầng 4: Đang dọn rác Môi trường lập trình (Dev Caches)...\n"
+                 << "     ├── Dọn cache npm, yarn, pnpm, pip, nuget, gradle, cargo, go...\n"
+                 << "     ├── Dọn cache VS Code, Cursor workspace storage...\n";
             long long f4 = runCleanTier4();
             totalFreed += f4;
-            cout << "     -> [Xong] " << (f4 > 0 ? ("Giải phóng " + SystemCore::formatSize(f4)) : "Đã sạch") << "\n\n";
+            cout << "     └── [✓ Xong] " << (f4 > 0 ? ("Giải phóng " + SystemCore::formatSize(f4)) : "Đã sạch sẽ từ trước") << "\n\n";
         }
 
         cout << "==============================================================\n";
@@ -823,15 +832,19 @@ void SystemOptimizer::cleanDevCaches(bool interactive) {
 int SystemOptimizer::runOptimizeTier1() {
     vector<StartupAppInfo> appList = scanAllStartupApps();
     int disabledCount = 0;
+    int safeCount = 0;
     for (const auto &app : appList) {
         if (!app.isSafe) {
             if (disableSingleStartupApp(app)) {
-                cout << "  [✓] Đã tắt:  " << left << setw(26) << app.name << " (" << app.locationName << ")\n";
+                cout << "     ├── [Tắt] " << left << setw(24) << app.name << " (" << app.locationName << ")\n";
                 disabledCount++;
             }
         } else {
-            cout << "  [-] Giữ lại: " << left << setw(26) << app.name << " [" << app.category << "]\n";
+            safeCount++;
         }
+    }
+    if (safeCount > 0) {
+        cout << "     ├── [Bảo vệ] " << safeCount << " ứng dụng hệ thống & bộ gõ tiếng Việt\n";
     }
     return disabledCount;
 }
@@ -853,7 +866,7 @@ int SystemOptimizer::runOptimizeTier2() {
     int disabledCount = 0;
     for (const auto &s : svcs) {
         if (ServiceControlAPI(s.name, SERVICE_DISABLED, true)) {
-            cout << "  [✓] Đã tắt dịch vụ: " << left << setw(18) << s.name << " [" << s.desc << "]\n";
+            cout << "     ├── [Tối ưu] " << left << setw(18) << s.name << " (" << s.desc << ")\n";
             disabledCount++;
         }
     }
@@ -898,7 +911,7 @@ bool SystemOptimizer::runOptimizeTier3() {
             }
             if (!alreadySet) {
                 if (RegSetValueExA(hKey, item.valueName.c_str(), 0, REG_DWORD, (const BYTE*)&item.targetValue, sizeof(DWORD)) == ERROR_SUCCESS) {
-                    cout << "  [+] Đã tinh chỉnh: " << item.desc << "\n";
+                    cout << "     ├── [Tinh chỉnh] " << item.desc << "\n";
                     newlyChanged++;
                 }
             }
@@ -906,7 +919,7 @@ bool SystemOptimizer::runOptimizeTier3() {
         } else {
             if (RegCreateKeyExA(HKEY_CURRENT_USER, item.keyPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
                 if (RegSetValueExA(hKey, item.valueName.c_str(), 0, REG_DWORD, (const BYTE*)&item.targetValue, sizeof(DWORD)) == ERROR_SUCCESS) {
-                    cout << "  [+] Đã tinh chỉnh: " << item.desc << "\n";
+                    cout << "     ├── [Tinh chỉnh] " << item.desc << "\n";
                     newlyChanged++;
                 }
                 RegCloseKey(hKey);
@@ -926,7 +939,7 @@ bool SystemOptimizer::runOptimizeTier3() {
         if (!delayIsZero) {
             const char zeroStr[] = "0";
             RegSetValueExA(hDesktop, "MenuShowDelay", 0, REG_SZ, (const BYTE*)zeroStr, 2);
-            cout << "  [+] Đã giảm độ trễ hiển thị Menu chuột phải về 0ms\n";
+            cout << "     ├── [Tinh chỉnh] Giảm độ trễ Menu chuột phải về 0ms\n";
             newlyChanged++;
         }
         RegCloseKey(hDesktop);
@@ -978,22 +991,22 @@ void SystemOptimizer::multiTierPerformanceOptimize() {
         if (choice == 1 || choice == 4) {
             cout << " [*] Tầng 1: Đang quét và tắt ứng dụng khởi động làm chậm máy...\n";
             int count = runOptimizeTier1();
-            cout << "     -> [Xong] " << (count > 0 ? ("Đã tắt " + to_string(count) + " app bên thứ ba (Bảo vệ bộ gõ & driver)") : "Không có app rác khởi động") << "\n\n";
+            cout << "     └── [✓ Xong] " << (count > 0 ? ("Đã tắt " + to_string(count) + " app làm chậm máy") : "Tất cả ứng dụng khởi động đã tối ưu") << "\n\n";
         }
 
         if (choice == 2 || choice == 4) {
             cout << " [*] Tầng 2: Đang vô hiệu hóa các dịch vụ chạy ngầm vô ích...\n";
             int count = runOptimizeTier2();
-            cout << "     -> [Xong] Đã tối ưu " << count << " dịch vụ ngầm (Maps, Wallet, Telemetry, ErrorReporting)\n\n";
+            cout << "     └── [✓ Xong] Đã tối ưu " << count << " dịch vụ ngầm (Maps, Wallet, Telemetry, ErrorReporting)\n\n";
         }
 
         if (choice == 3 || choice == 4) {
             cout << " [*] Tầng 3: Kiểm tra và tối ưu Giao diện & Taskbar...\n";
             bool restarted = runOptimizeTier3();
             if (restarted) {
-                cout << "     -> [Xong] Đã áp dụng tinh chỉnh mới và làm mới Explorer.\n\n";
+                cout << "     └── [✓ Xong] Đã áp dụng tinh chỉnh mới và làm mới Explorer.\n\n";
             } else {
-                cout << "     -> [Xong] Giao diện đã ở trạng thái tối ưu chuẩn (Bỏ qua, không reset Explorer).\n\n";
+                cout << "     └── [✓ Xong] Taskbar & Giao diện đã tinh gọn từ trước (Bỏ qua reset Explorer, tránh chớp màn hình).\n\n";
             }
         }
 
@@ -1024,8 +1037,29 @@ bool SystemOptimizer::ServiceControlAPI(std::string serviceName, DWORD startupTy
     SC_HANDLE scm = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
     if (!scm) return false;
 
-    SC_HANDLE svc = OpenServiceA(scm, serviceName.c_str(), SERVICE_CHANGE_CONFIG | SERVICE_STOP | SERVICE_START);
+    SC_HANDLE svc = OpenServiceA(scm, serviceName.c_str(), SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS | SERVICE_CHANGE_CONFIG | SERVICE_STOP | SERVICE_START);
     if (!svc) { CloseServiceHandle(scm); return false; }
+
+    // Kiểm tra cấu hình hiện tại để tránh can thiệp nếu đã đúng
+    DWORD bytesNeeded = 0;
+    QueryServiceConfigA(svc, NULL, 0, &bytesNeeded);
+    if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+        std::vector<BYTE> buf(bytesNeeded);
+        LPQUERY_SERVICE_CONFIGA pConfig = (LPQUERY_SERVICE_CONFIGA)buf.data();
+        if (QueryServiceConfigA(svc, pConfig, bytesNeeded, &bytesNeeded)) {
+            if (pConfig->dwStartType == startupType) {
+                SERVICE_STATUS_PROCESS ssp;
+                DWORD sspNeeded = 0;
+                if (QueryServiceStatusEx(svc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &sspNeeded)) {
+                    if (!stopService || ssp.dwCurrentState == SERVICE_STOPPED) {
+                        CloseServiceHandle(svc);
+                        CloseServiceHandle(scm);
+                        return true; // Đã chuẩn từ trước, không cần ghi đè
+                    }
+                }
+            }
+        }
+    }
 
     bool configSuccess = ChangeServiceConfigA(svc, SERVICE_NO_CHANGE, startupType, SERVICE_NO_CHANGE, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
