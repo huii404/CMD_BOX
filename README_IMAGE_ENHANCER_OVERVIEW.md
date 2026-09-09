@@ -93,16 +93,18 @@
 
 ---
 
-## IV. ĐỀ XUẤT KIẾN TRÚC TRIỂN KHAI TRONG HỆ THỐNG CMD BOX
+## IV. MÔ HÌNH TRIỂN KHAI TRONG HỆ THỐNG CMD BOX (TỰ ĐỘNG 100%)
 
-Nhằm tối ưu hóa trải nghiệm người dùng trong dự án **CMD BOX**, kiến trúc đề xuất không nên thay thế hoàn toàn Base bằng Pro mà nên kết hợp theo **mô hình tầng bậc (Tiered Architecture)**:
+Nhằm tối ưu hóa trải nghiệm người dùng trong dự án **CMD BOX**, hệ thống **loại bỏ hoàn toàn bước chọn Level thủ công**, chuyển đổi toàn diện sang quy trình **Tự động chấm điểm, Phân tích đa yếu tố và Render trực tiếp**:
 
-1. **Chế độ Mặc định (Standard Mode - Level 1 to 3):** Sử dụng engine **Base (`ImageEnhancer`)** để giữ tốc độ phản hồi tức thì, xử lý nhanh chóng trong vài trăm mili-giây.
-2. **Chế độ Chuyên gia / Studio (Pro Ultra Mode - Level 4 & 5):** Điều hướng sang engine **Pro (`ImageEnhancerPro`)**, kích hoạt SIMD AVX2, chuyển đổi Oklab và 3-Scale Guided Filter để đem lại chất lượng tối đa cho các bức ảnh quan trọng.
-3. **Chế độ Tự động Thích ứng (Auto-Adaptive - Level 0):**
-   * Phân tích sơ bộ bằng `analyzeImageBuffer`.
-   * Nếu phát hiện ảnh có kích thước lớn (> 12MP), ảnh có độ nhiễu cao ($noiseFloor > 6.0$) hoặc dải tương phản rộng ($dynamicRange > 200$) $\implies$ **Tự động kích hoạt luồng xử lý PRO**.
-   * Ngược lại, nếu là ảnh nhỏ, tương phản đều, ít nhiễu $\implies$ **Duy trì luồng xử lý BASE** để tiết kiệm thời gian và tài nguyên máy tính.
+1. **Bản Nâng cao (PRO EDITION) — Chấm điểm 7 yếu tố & Bù thích ứng liên tục:**
+   * Tự động quét và chấm điểm đa chiều: *Clarity Score (độ sắc nét), Noise Score (nhiễu nền MAD & SNR dB), Dynamic Range (dải động & bết tối/cháy sáng), Texture Score (độ phức tạp bề mặt), Thin Feature Ratio (tỷ lệ nét mảnh), Nhận diện đối tượng & Tỷ lệ da mặt*.
+   * Tự động nội suy bù điểm ảnh Lanczos-3 kèm thuật toán chống quầng giả (Anti-Ringing Clamping).
+   * Tự động tính toán bộ tham số bù liên tục (Continuous Compensation Functions) áp dụng chuỗi render cao cấp Oklab/OkLCh.
+2. **Bản Cơ bản (BASE) — Tự động thích ứng thông minh (Auto-Adaptive):**
+   * Tự động phân tích ma trận kích thước (Megapixels), mật độ nén (BPP), độ sắc nét gradient và tỷ lệ da mặt.
+   * Tự động điều chỉnh tỷ lệ phóng đại Lanczos-3 (100% - 150%) và cân bằng tương phản thích ứng CLAHE kết hợp 2-Scale Guided Filter.
+   * Ưu tiên tốc độ cực nhanh cho xử lý ảnh số lượng lớn hoặc môi trường máy tính văn phòng.
 
 ---
 

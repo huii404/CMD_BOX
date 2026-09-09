@@ -10,6 +10,7 @@
 #include <regex>
 #include <mutex>
 #include <fstream>
+#include <iomanip>
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -491,7 +492,10 @@ void MediaProcessor::processMediaEnhancement() {
         std::cout << std::flush;
         system("cls");
 
-        std::cout << "--- LÀM NÉT ẢNH CHUYÊN SÂU ---\n\n"
+        std::cout << "======================================================================\n"
+                  << "                        LÀM NÉT ẢNH TỰ ĐỘNG\n"
+                  << "             [1] Nâng cao (PRO)   |   [2] Cơ bản (BASE)\n"
+                  << "======================================================================\n\n"
                   << "Kéo thả file ảnh (0 để thoát): ";
         string rawInput;
         getline(cin, rawInput);
@@ -499,12 +503,10 @@ void MediaProcessor::processMediaEnhancement() {
         
         if (inputs.empty()) return;
 
-        std::cout << "\nChọn chế độ làm nét ảnh:\n"
-                  << "  [1] PRO Auto-Adaptive (Khuyên dùng: Oklab, 3-Scale, Anti-Halo, MAD Noise)\n"
-                  << "  [2] PRO Ultra HD (Level 4: Nét tối đa, bảo toàn texture studio)\n"
-                  << "  [3] PRO Studio Portrait (Level 5: Chân dung nghệ thuật, mịn da tự nhiên)\n"
-                  << "  [4] BASE Standard (Bản tiêu chuẩn cổ điển - ITU-R BT.601, CLAHE)\n"
-                  << "Lựa chọn của bạn [1]: ";
+        std::cout << "\nChọn chế độ làm nét:\n"
+                  << "  [1] Nâng cao (PRO) - Tự động 100% (Khuyên dùng)\n"
+                  << "  [2] Cơ bản (BASE)  - Tự động 100%\n"
+                  << "Lựa chọn [1]: ";
         string modeStr;
         getline(cin, modeStr);
         int choice = 1;
@@ -512,15 +514,10 @@ void MediaProcessor::processMediaEnhancement() {
             try { choice = stoi(modeStr); } catch (...) { choice = 1; }
         }
 
-        bool usePro = (choice != 4);
-        int level = 0;
-        if (choice == 2) level = 4;
-        else if (choice == 3) level = 5;
-        else level = 0;
+        bool usePro = (choice != 2);
 
         std::vector<EnhanceResult> results;
-        std::cout << "\n[!] Đang xử lý (" << inputs.size() << " ảnh bằng " 
-                  << (usePro ? "ImageEnhancer PRO Engine" : "ImageEnhancer BASE Engine") << ")...\n\n";
+        std::cout << "\n[!] Đang xử lý (" << (usePro ? "PRO" : "BASE") << ") cho " << inputs.size() << " ảnh...\n";
 
         for (size_t i = 0; i < inputs.size(); ++i) {
             fs::path inPath = fs::u8path(inputs[i]);
@@ -533,7 +530,8 @@ void MediaProcessor::processMediaEnhancement() {
             }
 
             uintmax_t oldSize = fs::exists(inPath) ? fs::file_size(inPath) : 0;
-            fs::path outPath = inPath.parent_path() / (inPath.stem().string() + "_enhanced" + ext);
+            std::string suffix = usePro ? "_pro" : "_base";
+            fs::path outPath = inPath.parent_path() / (inPath.stem().string() + suffix + ext);
 
             bool ok = false;
             std::string typeStr = "";
@@ -542,7 +540,7 @@ void MediaProcessor::processMediaEnhancement() {
                 ImageScorePro scorePro;
                 if (ext == ".webp") {
                     std::string tempPng = (fs::temp_directory_path() / ("cmdbox_webp_" + to_string(rand()) + ".png")).string();
-                    ok = ImageEnhancerPro::enhanceImage(inputs[i], tempPng, level, &scorePro);
+                    ok = ImageEnhancerPro::enhanceImage(inputs[i], tempPng, 0, &scorePro);
                     if (ok && fs::exists(tempPng)) {
                         std::string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + tempPng + "\" -map_metadata 0 -q:v 2 \"" + outPath.string() + "\"";
                         SystemCore::runRawCommand(cmd);
@@ -550,23 +548,35 @@ void MediaProcessor::processMediaEnhancement() {
                         ok = fs::exists(outPath);
                     }
                 } else {
-                    ok = ImageEnhancerPro::enhanceImage(inputs[i], outPath.string(), level, &scorePro);
+                    ok = ImageEnhancerPro::enhanceImage(inputs[i], outPath.string(), 0, &scorePro);
 
                     if (!ok && (ext == ".heic" || ext == ".dng") && !ffmpeg.empty()) {
                         std::string tempDecoded = (fs::temp_directory_path() / ("cmdbox_raw_" + to_string(rand()) + ".png")).string();
                         std::string decCmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + inputs[i] + "\" -pix_fmt rgb24 \"" + tempDecoded + "\"";
                         if (SystemCore::runRawCommand(decCmd) && fs::exists(tempDecoded)) {
-                            ok = ImageEnhancerPro::enhanceImage(tempDecoded, outPath.string(), level, &scorePro);
+                            ok = ImageEnhancerPro::enhanceImage(tempDecoded, outPath.string(), 0, &scorePro);
                             try { fs::remove(tempDecoded); } catch (...) {}
                         }
                     }
                 }
-                typeStr = scorePro.detectedType.empty() ? ((scorePro.skinPercent >= 8.0f) ? "Chân dung PRO" : "Phong cảnh PRO") : scorePro.detectedType;
+
+                std::cout << "\n[" << (i + 1) << "/" << inputs.size() << "] " << inPath.filename().string() << " (PRO)\n";
+                if (ok && fs::exists(outPath)) {
+                    std::cout << "  • Đánh giá: " << scorePro.qualityGrade 
+                              << " (" << std::fixed << std::setprecision(1) << scorePro.clarityScore << "/100) | " 
+                              << scorePro.detectedType << " | Scale: " << scorePro.scalePercent << "%\n"
+                              << "  • Xuất file: " << outPath.filename().string() 
+                              << " (" << SystemCore::formatSize(oldSize) << " -> " << SystemCore::formatSize(fs::file_size(outPath)) << ")\n";
+                    typeStr = scorePro.detectedType;
+                } else {
+                    std::cout << "  [X] Xử lý thất bại!\n";
+                    typeStr = "Lỗi";
+                }
             } else {
                 ImageScore score;
                 if (ext == ".webp") {
                     std::string tempPng = (fs::temp_directory_path() / ("cmdbox_webp_" + to_string(rand()) + ".png")).string();
-                    ok = ImageEnhancer::enhanceImage(inputs[i], tempPng, level, &score);
+                    ok = ImageEnhancer::enhanceImage(inputs[i], tempPng, 0, &score);
                     if (ok && fs::exists(tempPng)) {
                         std::string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + tempPng + "\" -map_metadata 0 -q:v 2 \"" + outPath.string() + "\"";
                         SystemCore::runRawCommand(cmd);
@@ -574,13 +584,13 @@ void MediaProcessor::processMediaEnhancement() {
                         ok = fs::exists(outPath);
                     }
                 } else {
-                    ok = ImageEnhancer::enhanceImage(inputs[i], outPath.string(), level, &score);
+                    ok = ImageEnhancer::enhanceImage(inputs[i], outPath.string(), 0, &score);
 
                     if (!ok && (ext == ".heic" || ext == ".dng") && !ffmpeg.empty()) {
                         std::string tempDecoded = (fs::temp_directory_path() / ("cmdbox_raw_" + to_string(rand()) + ".png")).string();
                         std::string decCmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + inputs[i] + "\" -pix_fmt rgb24 \"" + tempDecoded + "\"";
                         if (SystemCore::runRawCommand(decCmd) && fs::exists(tempDecoded)) {
-                            ok = ImageEnhancer::enhanceImage(tempDecoded, outPath.string(), level, &score);
+                            ok = ImageEnhancer::enhanceImage(tempDecoded, outPath.string(), 0, &score);
                             try { fs::remove(tempDecoded); } catch (...) {}
                         }
                     }
@@ -608,7 +618,16 @@ void MediaProcessor::processMediaEnhancement() {
                         }
                     }
                 }
-                typeStr = (score.skinPercent >= 8.0f) ? "Chân dung (Base)" : "Phong cảnh (Base)";
+                typeStr = (score.skinPercent >= 8.0f) ? "Chân dung" : "Phong cảnh";
+                std::cout << "\n[" << (i + 1) << "/" << inputs.size() << "] " << inPath.filename().string() << " (BASE)\n";
+                if (ok && fs::exists(outPath)) {
+                    std::cout << "  • Đánh giá: " << std::fixed << std::setprecision(1) << score.clarityScore << "/100 | " 
+                              << typeStr << " | Scale: " << score.scalePercent << "%\n"
+                              << "  • Xuất file: " << outPath.filename().string() 
+                              << " (" << SystemCore::formatSize(oldSize) << " -> " << SystemCore::formatSize(fs::file_size(outPath)) << ")\n";
+                } else {
+                    std::cout << "  [X] Xử lý thất bại!\n";
+                }
             }
 
             if (ok && fs::exists(outPath)) {
@@ -632,15 +651,16 @@ void MediaProcessor::processMediaEnhancement() {
                 });
             }
         }
-        cout<<"\n\n";
+        cout << "\n\n========================= TỔNG KẾT XỬ LÝ =========================\n";
         for (const auto& res : results) {
             if (res.success) {
-                std::cout << res.index << "| " << res.filename << " | " << res.type << " | " 
+                std::cout << " [" << res.index << "] " << res.filename << " | " << res.type << " | " 
                           << res.oldSizeStr << " --> " << res.newSizeStr << "\n";
             } else {
-                std::cout << res.index << "| " << res.filename << " | " << res.type << "\n";
+                std::cout << " [" << res.index << "] " << res.filename << " | " << res.type << "\n";
             }
         }
+        std::cout << "==================================================================\n";
 
         SystemCore::waitEnter();
     }

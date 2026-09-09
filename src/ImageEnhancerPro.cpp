@@ -142,6 +142,82 @@ EnhanceOptionsPro ImageEnhancerPro::getPresetPro(int level) {
     return opt;
 }
 
+EnhanceOptionsPro ImageEnhancerPro::computeAdaptiveOptions(const ImageScorePro& score) {
+    EnhanceOptionsPro opt;
+
+    // Chuẩn hoá các chỉ số chất lượng độc lập về dải 0.0 - 1.0 (Mục V.1)
+    float clarityScoreNorm = std::clamp(score.clarityScore / 100.0f, 0.0f, 1.0f);
+    float noiseScore = std::clamp(1.0f - score.noiseFloor / 25.0f, 0.0f, 1.0f);
+    float dynamicRangeScore = std::clamp(score.dynamicRange / 220.0f, 0.0f, 1.0f);
+    float textureEnergyScore = std::clamp(score.textureComplexity / 100.0f, 0.0f, 1.0f);
+    float thinFeatureRatio = std::clamp(score.thinFeatureRatio, 0.0f, 1.0f);
+    float shadowClipRatio = std::clamp(score.shadowClipPercent / 100.0f, 0.0f, 1.0f);
+    float highlightClipRatio = std::clamp(score.highlightClipPercent / 100.0f, 0.0f, 1.0f);
+    float skinPercent = std::clamp(score.skinPercent / 100.0f, 0.0f, 1.0f);
+
+    // Mục V.2: Hàm bù điểm liên tục (Compensation Function)
+    // 1. Hệ số suy giảm do nhiễu (noiseAtt)
+    float noiseAtt = std::clamp(0.55f + 0.45f * noiseScore, 0.55f, 1.00f);
+
+    // 2. Cường độ làm nét (amount): ảnh càng mờ càng bù mạnh, giảm nếu nhiễu cao
+    opt.amount = std::clamp(1.00f + 0.85f * std::pow(1.0f - clarityScoreNorm, 1.20f), 1.00f, 1.85f) * noiseAtt;
+
+    // 3. Trọng số 3-Scale Guided Filter (detailBoost)
+    opt.detailBoost = std::clamp(1.20f + 0.70f * (1.0f - clarityScoreNorm), 1.20f, 1.90f);
+    opt.nanoDetailBoost = std::clamp(1.10f + 0.45f * (1.0f - clarityScoreNorm), 1.10f, 1.55f);
+
+    // 4. Local Laplacian Tone Mapping (clarityBoost)
+    opt.clarityBoost = std::clamp(0.10f + 0.45f * (1.0f - dynamicRangeScore), 0.10f, 0.55f);
+
+    // 5. Texture Layer Synthesis (textureBoost)
+    opt.textureBoost = std::clamp(0.05f + 0.50f * (1.0f - textureEnergyScore), 0.05f, 0.55f) * noiseAtt;
+
+    // 6. Highlight/Shadow Local Recovery
+    opt.shadowLift = std::clamp(0.02f + 0.14f * shadowClipRatio, 0.02f, 0.16f);
+    opt.highlightPull = std::clamp(0.02f + 0.12f * highlightClipRatio, 0.02f, 0.14f);
+
+    // 7. Cường độ chống phình nét mảnh (strokeAnisotropy) & Thin-Stroke Gating
+    opt.thinStrokeGate = true;
+    opt.strokeAnisotropy = std::clamp(0.70f + 0.30f * thinFeatureRatio, 0.70f, 1.00f);
+
+    // 8. Chống quầng sáng Halo Suppression (haloTolerance)
+    opt.haloTolerance = std::clamp(1.00f + 0.30f * clarityScoreNorm, 1.00f, 1.30f);
+
+    // 9. Hòa trộn bảo vệ chân dung liên tục (portraitBlend)
+    float portraitBlend = std::clamp((skinPercent - 0.08f) / 0.20f, 0.0f, 1.0f);
+    opt.isPortrait = (portraitBlend > 0.02f);
+    opt.skinSmooth = 0.50f * portraitBlend;
+    opt.skinProbSigma = 0.60f + 0.50f * portraitBlend;
+
+    // 10. Tự động tính toán tỷ lệ nội suy Lanczos-3 (scalePercent)
+    float scaleFromClarity = std::clamp(100.0f + 60.0f * (1.0f - clarityScoreNorm), 100.0f, 160.0f);
+    if (score.megaPixels < 0.40f) {
+        opt.scalePercent = 200; // Ảnh siêu nhỏ (< 0.4 MP) -> nội suy 200% tái tạo pixel
+    } else if (score.megaPixels < 1.0f) {
+        opt.scalePercent = std::max((int)std::round(scaleFromClarity), 150);
+    } else if (score.megaPixels < 2.5f) {
+        opt.scalePercent = std::max((int)std::round(scaleFromClarity), 125);
+    } else if (score.megaPixels >= 5.0f) {
+        opt.scalePercent = 100; // Ảnh độ phân giải cao giữ nguyên 1:1
+    } else {
+        opt.scalePercent = (int)std::round(scaleFromClarity);
+    }
+
+    // Giảm nội suy nếu nhiễu nền quá cao để tránh phóng đại noise grain
+    if (noiseScore < 0.45f) {
+        opt.scalePercent = std::max(100, opt.scalePercent - 15);
+    }
+
+    opt.casStrength = 1.00f;
+    opt.edgeSensitivity = 1.25f;
+    opt.contrast = opt.isPortrait ? 1.03f : 1.06f;
+    opt.vibrance = opt.isPortrait ? 0.05f : 0.07f;
+    opt.noiseAdaptive = true;
+    opt.use16BitPipeline = (score.dynamicRange > 180.0f);
+
+    return opt;
+}
+
 bool ImageEnhancerPro::isSupportedImage(const std::string& filePath) {
     std::string ext = fs::path(filePath).extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
@@ -206,24 +282,45 @@ std::vector<uint8_t> ImageEnhancerPro::lanczos3Resample(
             for (int j = 0; j < 6; ++j) kX[j] *= invSumKX;
 
             float rAcc = 0.0f, gAcc = 0.0f, bAcc = 0.0f, aAcc = 0.0f;
+            float minB = 255.0f, maxB = 0.0f;
+            float minG = 255.0f, maxG = 0.0f;
+            float minR = 255.0f, maxR = 0.0f;
+
             for (int i = 0; i < 6; ++i) {
                 const uint8_t* srcRow = src.data() + idxY[i] * srcStride;
                 float wy = kY[i];
                 for (int j = 0; j < 6; ++j) {
                     float w = wy * kX[j];
                     const uint8_t* pix = srcRow + idxX[j] * 4;
-                    bAcc += pix[0] * w;
-                    gAcc += pix[1] * w;
-                    rAcc += pix[2] * w;
-                    aAcc += pix[3] * w;
+                    float b = pix[0];
+                    float g = pix[1];
+                    float r = pix[2];
+                    float a = pix[3];
+
+                    bAcc += b * w;
+                    gAcc += g * w;
+                    rAcc += r * w;
+                    aAcc += a * w;
+
+                    // Hộp giới hạn lân cận trung tâm 4x4 để kẹp chống quầng sóng (Anti-ringing)
+                    if (i >= 1 && i <= 4 && j >= 1 && j <= 4) {
+                        minB = std::min(minB, b); maxB = std::max(maxB, b);
+                        minG = std::min(minG, g); maxG = std::max(maxG, g);
+                        minR = std::min(minR, r); maxR = std::max(maxR, r);
+                    }
                 }
             }
 
+            // Anti-Ringing Clamping: Kẹp giá trị không vượt quá min-max cục bộ
+            bAcc = std::clamp(bAcc, minB, maxB);
+            gAcc = std::clamp(gAcc, minG, maxG);
+            rAcc = std::clamp(rAcc, minR, maxR);
+
             uint8_t* outPix = dstRow + x * 4;
-            outPix[0] = (uint8_t)std::clamp(rAcc, 0.0f, 255.0f); // B
-            outPix[1] = (uint8_t)std::clamp(gAcc, 0.0f, 255.0f); // G
-            outPix[2] = (uint8_t)std::clamp(bAcc, 0.0f, 255.0f); // R
-            outPix[3] = (uint8_t)std::clamp(aAcc, 0.0f, 255.0f); // A
+            outPix[0] = (uint8_t)std::clamp(bAcc, 0.0f, 255.0f); // B (Blue)
+            outPix[1] = (uint8_t)std::clamp(gAcc, 0.0f, 255.0f); // G (Green)
+            outPix[2] = (uint8_t)std::clamp(rAcc, 0.0f, 255.0f); // R (Red)
+            outPix[3] = (uint8_t)std::clamp(aAcc, 0.0f, 255.0f); // A (Alpha)
         }
     }
     return dst;
@@ -555,12 +652,24 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
     score.bpp = (fileSize > 0) ? ((float)fileSize / (width * height)) : 0.0f;
 
     double gradSum = 0.0;
+    double tenengradSum = 0.0;
+    double lapSum = 0.0;
+    double saturationSum = 0.0;
     int skinPixels = 0;
+    int texturePixels = 0;
+    int shadowClipCount = 0;
+    int highlightClipCount = 0;
     int sampleCount = 0;
     std::vector<int> hist(256, 0);
 
-    // Subsampling step for fast analysis
-    int step = std::max(1, (int)std::sqrt((width * height) / 500000.0f));
+    // Phát hiện vỡ ô vuông nén JPEG (8x8 block boundary vs inner block)
+    double blockBoundaryGrad = 0.0;
+    int blockBoundaryCount = 0;
+    double blockInnerGrad = 0.0;
+    int blockInnerCount = 0;
+
+    // Bước nhảy lấy mẫu cân bằng độ chính xác và tốc độ
+    int step = std::max(1, (int)std::sqrt((width * height) / 600000.0f));
 
     std::vector<float> flatRegionVariances;
 
@@ -575,12 +684,21 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
             float g = pix[1];
             float r = pix[2];
 
-            // Grayscale luma (ITU-R BT.601)
+            // Độ sáng đơn sắc (ITU-R BT.601 luma)
             float Y = 0.299f * r + 0.587f * g + 0.114f * b;
             int yInt = std::clamp((int)std::round(Y), 0, 255);
             hist[yInt]++;
 
-            // Gradient
+            // Kiểm tra clipping sáng/tối
+            if (yInt <= 6) shadowClipCount++;
+            if (yInt >= 248) highlightClipCount++;
+
+            // Độ bão hòa màu
+            float maxC = std::max(r, std::max(g, b));
+            float minC = std::min(r, std::min(g, b));
+            saturationSum += (maxC - minC);
+
+            // Lấy mẫu gradient 4 hướng: Ngang, Dọc, Chéo 45, Chéo 135
             const uint8_t* pixR = rowCur + (x + step) * 4;
             const uint8_t* pixL = rowCur + (x - step) * 4;
             const uint8_t* pixB = rowNext + x * 4;
@@ -591,19 +709,63 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
             float yB = 0.299f * pixB[2] + 0.587f * pixB[1] + 0.114f * pixB[0];
             float yT = 0.299f * pixT[2] + 0.587f * pixT[1] + 0.114f * pixT[0];
 
-            float grad = (std::abs(yR - yL) + std::abs(yB - yT)) / (2.0f * step);
-            gradSum += grad;
+            float dx = (yR - yL) / (2.0f * step);
+            float dy = (yB - yT) / (2.0f * step);
 
-            // Skin tone detection
+            // Đường chéo
+            const uint8_t* pixBR = rowNext + (x + step) * 4;
+            const uint8_t* pixTL = rowPrev + (x - step) * 4;
+            const uint8_t* pixTR = rowPrev + (x + step) * 4;
+            const uint8_t* pixBL = rowNext + (x - step) * 4;
+
+            float yBR = 0.299f * pixBR[2] + 0.587f * pixBR[1] + 0.114f * pixBR[0];
+            float yTL = 0.299f * pixTL[2] + 0.587f * pixTL[1] + 0.114f * pixTL[0];
+            float yTR = 0.299f * pixTR[2] + 0.587f * pixTR[1] + 0.114f * pixTR[0];
+            float yBL = 0.299f * pixBL[2] + 0.587f * pixBL[1] + 0.114f * pixBL[0];
+
+            float dd1 = (yBR - yTL) / (2.828f * step);
+            float dd2 = (yTR - yBL) / (2.828f * step);
+
+            float grad = std::sqrt(dx * dx + dy * dy + dd1 * dd1 + dd2 * dd2);
+            gradSum += grad;
+            tenengradSum += (dx * dx + dy * dy);
+
+            // Tần số vi mô Micro-Laplacian
+            float lap = std::abs(4.0f * Y - yR - yL - yB - yT) / (float)step;
+            lapSum += lap;
+
+            // Kiểm tra ranh giới khối JPEG 8x8
+            if ((x % 8 == 0) || (y % 8 == 0)) {
+                blockBoundaryGrad += grad;
+                blockBoundaryCount++;
+            } else if ((x % 8 == 4) && (y % 8 == 4)) {
+                blockInnerGrad += grad;
+                blockInnerCount++;
+            }
+
+            // Đếm mật độ vân ảnh hữu cơ (Texture)
+            if (grad >= 3.0f && grad <= 30.0f) {
+                texturePixels++;
+            }
+
+            // Đếm tỷ lệ nét mảnh (Thin Feature Ratio: pixel cạnh có laplacian lớn so với bề rộng < 3px)
+            if (grad >= 6.0f) {
+                blockBoundaryCount++; // mượn biến đếm cạnh
+                if (lap > 5.0f) {
+                    blockInnerCount++; // mượn biến đếm nét mảnh
+                }
+            }
+
+            // Nhận diện sắc diện da người trong YCbCr
             float Cb = 128.0f - 0.168736f * r - 0.331264f * g + 0.500000f * b;
             float Cr = 128.0f + 0.500000f * r - 0.418688f * g - 0.081312f * b;
-            if (Cb >= 77.0f && Cb <= 128.0f && Cr >= 133.0f && Cr <= 175.0f) {
+            if (Cb >= 77.0f && Cb <= 128.0f && Cr >= 133.0f && Cr <= 175.0f && (r > g) && (g > b)) {
                 skinPixels++;
             }
 
-            // Estimate flat region variance for noise floor
+            // Thu thập mẫu vùng phẳng để ước tính MAD nhiễu nền
             if (grad < 2.5f) {
-                flatRegionVariances.push_back(grad);
+                flatRegionVariances.push_back(lap);
             }
 
             sampleCount++;
@@ -614,9 +776,17 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
         float avgGrad = (float)(gradSum / sampleCount);
         score.clarityScore = std::clamp(avgGrad * 7.5f, 0.0f, 100.0f);
         score.skinPercent = ((float)skinPixels / sampleCount) * 100.0f;
+        score.edgeSharpness = std::clamp((float)std::sqrt(tenengradSum / sampleCount) * 5.0f, 0.0f, 100.0f);
+        score.highFreqEnergy = std::clamp((float)(lapSum / sampleCount) * 10.0f, 0.0f, 100.0f);
+        score.blurDegree = std::clamp((1.0f - score.clarityScore / 60.0f) * 100.0f, 0.0f, 100.0f);
+        score.shadowClipPercent = ((float)shadowClipCount / sampleCount) * 100.0f;
+        score.highlightClipPercent = ((float)highlightClipCount / sampleCount) * 100.0f;
+        score.colorSaturation = std::clamp(((float)(saturationSum / sampleCount) / 255.0f) * 100.0f, 0.0f, 100.0f);
+        score.textureComplexity = std::clamp(((float)texturePixels / sampleCount) * 180.0f, 0.0f, 100.0f);
+        score.thinFeatureRatio = (blockBoundaryCount > 0) ? std::clamp((float)blockInnerCount / blockBoundaryCount, 0.0f, 1.0f) : 0.25f;
     }
 
-    // Dynamic Range: 1% to 99% percentile
+    // Dynamic Range: 1% đến 99% percentile
     int totalHist = sampleCount;
     int p1 = 0, p99 = 255;
     int acc = 0;
@@ -627,7 +797,7 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
     }
     score.dynamicRange = (float)(p99 - p1);
 
-    // Noise Floor estimation via MAD on flat regions
+    // Ước lượng mức nhiễu nền MAD (Median Absolute Deviation)
     if (!flatRegionVariances.empty()) {
         size_t mid = flatRegionVariances.size() / 2;
         std::nth_element(flatRegionVariances.begin(), flatRegionVariances.begin() + mid, flatRegionVariances.end());
@@ -643,12 +813,43 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
         score.noiseFloor = 2.0f;
     }
 
-    if (score.skinPercent >= 8.0f) {
-        score.detectedType = "Chân dung (Portrait)";
-    } else if (score.clarityScore >= 55.0f) {
-        score.detectedType = "Phong cảnh / Chi tiết cao";
+    // Ước lượng tỷ lệ SNR (Signal-to-Noise Ratio) in dB
+    float signalStd = std::max(5.0f, score.dynamicRange / 4.0f);
+    float noiseSigma = std::max(0.2f, score.noiseFloor);
+    score.snrDb = std::clamp(20.0f * std::log10(signalStd / noiseSigma), 10.0f, 55.0f);
+
+    // Đánh giá mức độ vỡ ô vuông nén JPEG
+    if (blockBoundaryCount > 0 && blockInnerCount > 0) {
+        float avgB = (float)(blockBoundaryGrad / blockBoundaryCount);
+        float avgI = (float)(blockInnerGrad / blockInnerCount);
+        if (avgI > 0.01f && avgB > avgI) {
+            float ratio = (avgB - avgI) / avgI;
+            score.compressionBlockiness = std::clamp(ratio * 50.0f, 0.0f, 100.0f);
+        }
+    }
+
+    // Phân loại ngữ cảnh ảnh (detectedType)
+    if (score.skinPercent >= 7.5f) {
+        score.detectedType = "Chân dung (Portrait Studio)";
+    } else if (score.textureComplexity >= 40.0f && score.clarityScore >= 45.0f) {
+        score.detectedType = "Phong cảnh / Chi tiết cao (Landscape)";
+    } else if (score.blurDegree >= 50.0f || score.clarityScore < 28.0f) {
+        score.detectedType = "Ảnh mờ / Cần phục hồi nét (Blur/Defocus)";
+    } else if (score.compressionBlockiness >= 35.0f || (score.bpp > 0.0f && score.bpp < 0.18f)) {
+        score.detectedType = "Ảnh nén suy hao (Compressed/Web)";
     } else {
-        score.detectedType = "Ảnh thường / Cần phục hồi nét";
+        score.detectedType = "Ảnh thường / Cân bằng (Standard)";
+    }
+
+    // Xếp hạng chất lượng ảnh (qualityGrade)
+    if (score.clarityScore >= 60.0f && score.noiseFloor <= 2.5f) {
+        score.qualityGrade = "Tuyệt vời (Studio Grade)";
+    } else if (score.clarityScore >= 42.0f) {
+        score.qualityGrade = "Sắc nét tốt (Good Clarity)";
+    } else if (score.clarityScore >= 25.0f) {
+        score.qualityGrade = "Hơi mờ / Cần bù nét (Soft / Needs Sharp)";
+    } else {
+        score.qualityGrade = "Mờ nặng / Suy giảm (Heavy Blur / Degraded)";
     }
 
     return score;
@@ -747,7 +948,19 @@ void ImageEnhancerPro::processSharpenOklab(
             float casW = (ampLimit > 1e-5f) ? (opts.casStrength * std::clamp(ampLimit * 3.0f, 0.0f, 1.0f)) : 0.0f;
 
             float diff = (center - blurL[idx]) * opts.amount;
-            float res = center + diff * edgeWeight + diffGuided[idx] * (1.0f + casW);
+
+            // Thin-Stroke Width Preservation & Anisotropic Gating (Mục III.9)
+            float strokeGate = 1.0f;
+            if (opts.thinStrokeGate && grad255 > 6.0f) {
+                float d2_c = 4.0f * center - procL[lIdx] - procL[rIdx] - procL[tIdx] - procL[bIdx];
+                if (std::abs(d2_c) > 0.02f) {
+                    float rEff = std::min((float)opts.radius, 1.2f);
+                    float ampScale = std::pow(rEff / (float)opts.radius, 0.8f);
+                    strokeGate = ampScale * opts.strokeAnisotropy;
+                }
+            }
+
+            float res = center + (diff * edgeWeight + diffGuided[idx] * (1.0f + casW)) * strokeGate;
 
             // 8. Soft Skin Probability Mask
             if (opts.isPortrait) {
@@ -894,59 +1107,8 @@ bool ImageEnhancerPro::enhanceImage(
     EnhanceOptionsPro opts;
 
     if (level <= 0) {
-        // --- CHẾ ĐỘ AUTO-ADAPTIVE PRO ---
-        opts = getPresetPro(0);
-
-        // 1. Phóng đại thích ứng
-        if (score.megaPixels < 0.6f) {
-            opts.scalePercent = 150;
-        } else if (score.megaPixels < 1.8f) {
-            opts.scalePercent = 130;
-        } else if (score.megaPixels < 4.0f) {
-            opts.scalePercent = 115;
-        } else {
-            opts.scalePercent = 100;
-        }
-
-        // 2. Điều chỉnh nét theo clarityScore
-        if (score.clarityScore < 40.0f) {
-            opts.amount = 1.60f;
-            opts.casStrength = 1.15f;
-            opts.detailBoost = 1.65f;
-        } else if (score.clarityScore < 70.0f) {
-            opts.amount = 1.30f;
-            opts.casStrength = 0.95f;
-            opts.detailBoost = 1.50f;
-        } else {
-            opts.amount = 0.95f;
-            opts.casStrength = 0.70f;
-            opts.detailBoost = 1.30f;
-        }
-
-        // 3. Phân loại Chân dung vs Phong cảnh
-        if (score.skinPercent >= 8.0f) {
-            opts.isPortrait = true;
-            opts.skinSmooth = 0.42f;
-            opts.clarityBoost = 0.12f;
-            opts.textureBoost = 0.20f;
-        } else {
-            opts.isPortrait = false;
-            opts.skinSmooth = 0.00f;
-            opts.clarityBoost = 0.25f;
-            opts.textureBoost = 0.35f;
-        }
-
-        // 4. Thích ứng theo Noise Floor
-        if (score.noiseFloor > 6.0f) {
-            opts.noiseAdaptive = true;
-            opts.amount *= 0.85f;
-        }
-
-        // 5. Thích ứng theo Dynamic Range
-        if (score.dynamicRange > 200.0f) {
-            opts.shadowLift = 0.08f;
-            opts.highlightPull = 0.06f;
-        }
+        // --- CHẾ ĐỘ NỘI SUY, TỰ ĐÁNH GIÁ ĐA GÓC ĐỘ & RENDER THÍCH ỨNG ---
+        opts = computeAdaptiveOptions(score);
     } else {
         opts = getPresetPro(level);
     }
@@ -956,7 +1118,7 @@ bool ImageEnhancerPro::enhanceImage(
     UINT procStride = origStride;
     std::vector<uint8_t> scaledPixels;
 
-    // Lanczos-3 Super-Sampling
+    // Lanczos-3 Super-Sampling (Nội suy thích ứng)
     if (opts.scalePercent > 100) {
         procW = (UINT)std::round(origW * (opts.scalePercent / 100.0));
         procH = (UINT)std::round(origH * (opts.scalePercent / 100.0));
@@ -969,6 +1131,8 @@ bool ImageEnhancerPro::enhanceImage(
     score.scalePercent = opts.scalePercent;
     score.procW = procW;
     score.procH = procH;
+    score.renderStrategy = (opts.isPortrait ? "Chân dung Oklab (Mịn da tự nhiên + Nano Layer)" : "Phong cảnh Oklab (3-Scale Guided Filter + Texture Boost)")
+                           + std::string(" | Anti-Halo Clamp | MAD Adaptive");
     if (outScore) *outScore = score;
 
     // Oklab / OkLCh Pro Pipeline Processing

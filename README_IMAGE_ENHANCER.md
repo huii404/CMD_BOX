@@ -176,53 +176,51 @@ Module `ImageEnhancer` được xây dựng thuần C++ trên nền Win32 / WIC 
 
 ---
 
-## IV. BẢNG THAM SỐ CẤU HÌNH & CHẾ ĐỘ PRESETS (BASE)
+## IV. BẢNG THAM SỐ CẤU HÌNH HỆ THỐNG (BASE)
 
 ### 1. Ý nghĩa các tham số trong `EnhanceOptions`
-| Tham số | Kiểu | Ý nghĩa kỹ thuật | Dải khuyến nghị |
+| Tham số | Kiểu | Ý nghĩa kỹ thuật | Dải thích ứng tự động |
 | :--- | :--- | :--- | :--- |
-| `amount` | `float` | Hệ số khuếch đại nét tổng thể | `0.80 - 2.00` |
-| `radius` | `int` | Bán kính mặt nạ mờ Gaussian 3-pass | `1 - 3` (Mặc định: 2) |
-| `threshold` | `float` | Ngưỡng phân tách nhiễu và chi tiết thực | `1.4 - 3.0` |
-| `edgeSensitivity` | `float` | Độ nhạy biên độ của hàm Cauchy | `1.0 - 1.6` |
-| `contrast` | `float` | Hệ số tương phản cục bộ S-Curve | `1.02 - 1.08` |
-| `vibrance` | `float` | Độ tươi màu thông minh (tăng vùng màu nhạt) | `0.03 - 0.10` |
-| `scalePercent` | `int` | Tỷ lệ phóng đại bù điểm ảnh Lanczos-3 | `100% - 150%` |
-| `casStrength` | `float` | Trọng số bộ lọc tương phản thích ứng CAS | `0.70 - 1.40` |
-| `isPortrait` | `bool` | Cờ kích hoạt chế độ bảo vệ da chân dung | `true / false` |
-| `skinSmooth` | `float` | Cường độ làm mịn da mặt | `0.30 - 0.50` |
-| `claheBlend` | `float` | Tỷ lệ hòa trộn tương phản thích ứng CLAHE | `0.10 - 0.40` |
-| `detailBoost` | `float` | Hệ số tăng cường vi chi tiết 2-Scale Guided Filter | `1.20 - 1.80` |
-
-### 2. Bảng so sánh 3 Presets chuẩn
-| Tham số | Level 1: Chân dung (Portrait) | Level 2: Phong cảnh (Landscape) | Level 3: Siêu phục hồi (Ultra) |
-| :--- | :--- | :--- | :--- |
-| `scalePercent` | **125%** | **135%** | **150%** |
-| `amount` | 1.10 | 1.50 | 1.95 |
-| `detailBoost` | 1.35 | **1.55** | **1.70** |
-| `claheBlend` | 0.15 (Nhẹ chống loang da) | 0.25 (Cân bằng mây/cây) | 0.35 (Đẩy tối đa khối) |
-| `isPortrait` | **true** | false | false |
-| `skinSmooth` | **0.45** | 0.00 | 0.00 |
-| `contrast` | 1.03 | 1.06 | 1.08 |
-| `vibrance` | 0.05 | 0.08 | 0.10 |
+| `amount` | `float` | Hệ số khuếch đại nét tổng thể | `0.90 - 1.60` (Tự động theo `clarityScore`) |
+| `radius` | `int` | Bán kính mặt nạ mờ Gaussian 3-pass | `2` (Tối ưu cho vi mô) |
+| `threshold` | `float` | Ngưỡng phân tách nhiễu và chi tiết thực | `1.4 - 2.5` |
+| `edgeSensitivity` | `float` | Độ nhạy biên độ của hàm Cauchy | `1.15 - 1.35` |
+| `contrast` | `float` | Hệ số tương phản cục bộ S-Curve | `1.04 - 1.06` |
+| `vibrance` | `float` | Độ tươi màu thông minh (tăng vùng màu nhạt) | `0.05 - 0.08` |
+| `scalePercent` | `int` | Tỷ lệ phóng đại bù điểm ảnh Lanczos-3 | `100% - 150%` (Tự động theo Megapixels) |
+| `casStrength` | `float` | Trọng số bộ lọc tương phản thích ứng CAS | `0.70 - 1.15` |
+| `isPortrait` | `bool` | Tự động kích hoạt chế độ bảo vệ da chân dung | `true` khi `skinPercent >= 8.0%` |
+| `skinSmooth` | `float` | Cường độ làm mịn da mặt | `0.40 - 0.45` |
+| `claheBlend` | `float` | Tỷ lệ hòa trộn tương phản thích ứng CLAHE | `0.15 - 0.30` |
+| `detailBoost` | `float` | Hệ số tăng cường vi chi tiết 2-Scale Guided Filter | `1.30 - 1.60` |
 
 ---
 
-## V. TỰ ĐỘNG THÍCH ỨNG THÔNG MINH (AUTO ADAPTIVE - LEVEL 0)
+## V. HỆ THỐNG TỰ ĐỘNG CHẤM ĐIỂM & PHÂN TÍCH YẾU TỐ 100% (AUTO-ADAPTIVE PIPELINE)
 
-Khi gọi `ImageEnhancer::enhanceImage(..., level = 0)`, hệ thống tự động tính toán thông số dựa trên ma trận phân tích `analyzeImageBuffer`:
+> **Loại bỏ hoàn toàn cơ chế chọn Level thủ công.** Hệ thống tự động phân tích ma trận điểm ảnh thông qua hàm `analyzeImageBuffer`, tự lượng hóa chất lượng ảnh đầu vào, tự quyết định tỷ lệ nội suy Lanczos-3 và bộ tham số tối ưu, sau đó render xuất file hoàn toàn tự động.
 
-1. **Thích ứng tỷ lệ phóng đại (Tránh loãng pixel):**
-   * $\text{MegaPixels} < 0.6 \implies \text{Scale } 150\%$ (Bù điểm ảnh mạnh cho ảnh nhỏ).
-   * $0.6 \le \text{MegaPixels} < 1.8 \implies \text{Scale } 130\%$.
-   * $1.8 \le \text{MegaPixels} < 4.0 \implies \text{Scale } 115\%$.
-   * $\text{MegaPixels} \ge 4.0 \implies \text{Scale } 100\%$ (Ảnh 4K+ giữ nguyên phân giải gốc).
-2. **Thích ứng cường độ nét theo `clarityScore`:**
-   * $\text{Clarity} < 40/100 \implies amount = 1.60, cas = 1.15$ (Ảnh mờ nén thấp).
-   * $40 \le \text{Clarity} < 70 \implies amount = 1.25, cas = 0.90$ (Ảnh độ nét trung bình).
-   * $\text{Clarity} \ge 70/100 \implies amount = 0.90, cas = 0.70$ (Ảnh đã nét sẵn, chỉ đẩy nhẹ chi tiết).
-3. **Thích ứng Chân dung vs Phong cảnh:**
-   * $\text{skinPercent} \ge 8.0\% \implies$ Tự động chuyển `isPortrait = true`.
-   * $\text{skinPercent} < 8.0\% \implies$ Tự động cấu hình tối ưu gân lá và kiến trúc phong cảnh.
+### 1. Phân tích ma trận đầu vào (`analyzeImageBuffer`)
+1. **Định lượng kích thước & mật độ dữ liệu:**
+   * $\text{MegaPixels} = (\text{Width} \times \text{Height}) / 10^6$
+   * $\text{BPP (Bytes Per Pixel)} = \text{FileSize} / (\text{Width} \times \text{Height})$ — nhận biết mức độ nén của ảnh nguồn.
+2. **Chấm điểm độ sắc nét vi mô (`clarityScore` 0 - 100):**
+   * Tính toán tổng biến thiên gradient cục bộ vi mô: $\text{grad} = |Y(x+1, y) - Y(x-1, y)| + |Y(x, y+1) - Y(x, y-1)|$.
+   * Chuẩn hóa về thang điểm 100: Điểm càng thấp biểu thị ảnh càng nhòe mờ, out-focus hoặc bị nén bệt.
+3. **Phân tích đối tượng & tỷ lệ da người (`skinPercent`):**
+   * Quét phân bố sắc độ không gian ITU-R BT.601 ($Cb \in [77, 128], Cr \in [133, 175]$).
+   * Phân loại tự động: Ảnh Chân dung (`isPortrait = true` khi $\ge 8.0\%$) hoặc Ảnh Phong cảnh / Kiến trúc / Văn bản.
+
+### 2. Tự động ra quyết định nội suy & Bù thông số (Adaptive Decision & Render)
+* **Quyết định tỷ lệ nội suy bù điểm ảnh (Lanczos-3 Resampling):**
+  * $\text{MegaPixels} < 0.6 \implies \text{Scale } 150\%$ (Bù điểm ảnh mạnh mẽ cho ảnh kích thước nhỏ, ảnh icon, avatar).
+  * $0.6 \le \text{MegaPixels} < 1.8 \implies \text{Scale } 130\%$.
+  * $1.8 \le \text{MegaPixels} < 4.0 \implies \text{Scale } 115\%$.
+  * $\text{MegaPixels} \ge 4.0 \implies \text{Scale } 100\%$ (Ảnh 4K+ giữ nguyên phân giải gốc, tránh lãng phí tài nguyên).
+* **Quyết định mức độ làm nét thích ứng theo điểm `clarityScore`:**
+  * $\text{Clarity} < 40/100 \implies amount = 1.60, cas = 1.15, clahe = 0.30$ (Bù nét sâu cho ảnh mờ).
+  * $40 \le \text{Clarity} < 70 \implies amount = 1.25, cas = 0.90, clahe = 0.22$ (Cân bằng tự nhiên).
+  * $\text{Clarity} \ge 70/100 \implies amount = 0.90, cas = 0.70, clahe = 0.15$ (Ảnh đã nét sẵn, chỉ bảo toàn và đẩy chi tiết vi mô).
+* **Kết xuất (Render):** Chạy luồng phân rã 2-Scale Guided Filter, Cauchy Coring, Chroma Tracking và xuất file ra đĩa bằng WIC Encoder chất lượng cao.
 
 
