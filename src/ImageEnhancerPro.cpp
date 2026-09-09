@@ -66,10 +66,11 @@ EnhanceOptionsPro ImageEnhancerPro::getPresetPro(int level) {
             opt.isPortrait = false;
             opt.claheBlend = 0.25f;
             opt.detailBoost = 1.55f;
-            opt.nanoDetailBoost = 1.35f;
+            opt.nanoDetailBoost = 1.80f;
             opt.textureBoost = 0.25f;
             opt.clarityBoost = 0.20f;
-            opt.haloTolerance = 1.15f;
+            opt.haloTolerance = 1.25f;
+            opt.antiBloat = true;
             break;
 
         case 3: // Base Ultra
@@ -84,21 +85,22 @@ EnhanceOptionsPro ImageEnhancerPro::getPresetPro(int level) {
             opt.isPortrait = false;
             opt.claheBlend = 0.35f;
             opt.detailBoost = 1.70f;
-            opt.nanoDetailBoost = 1.45f;
+            opt.nanoDetailBoost = 1.85f;
             opt.textureBoost = 0.30f;
             opt.clarityBoost = 0.25f;
-            opt.haloTolerance = 1.12f;
+            opt.haloTolerance = 1.25f;
+            opt.antiBloat = true;
             break;
 
         case 4: // Level 4: PRO Ultra HD
             opt.scalePercent = 140;
             opt.amount = 1.70f;
             opt.detailBoost = 1.75f;
-            opt.nanoDetailBoost = 1.45f;
+            opt.nanoDetailBoost = 1.80f;
             opt.textureBoost = 0.35f;
             opt.clarityBoost = 0.30f;
             opt.noiseAdaptive = true;
-            opt.haloTolerance = 1.10f;
+            opt.haloTolerance = 1.25f;
             opt.isPortrait = false;
             opt.skinSmooth = 0.00f;
             opt.shadowLift = 0.10f;
@@ -106,13 +108,14 @@ EnhanceOptionsPro ImageEnhancerPro::getPresetPro(int level) {
             opt.use16BitPipeline = true;
             opt.contrast = 1.06f;
             opt.vibrance = 0.08f;
+            opt.antiBloat = true;
             break;
 
         case 5: // Level 5: PRO Studio Portrait
             opt.scalePercent = 120;
             opt.amount = 1.20f;
             opt.detailBoost = 1.40f;
-            opt.nanoDetailBoost = 1.25f;
+            opt.nanoDetailBoost = 1.40f;
             opt.textureBoost = 0.20f;
             opt.clarityBoost = 0.10f;
             opt.noiseAdaptive = true;
@@ -125,19 +128,21 @@ EnhanceOptionsPro ImageEnhancerPro::getPresetPro(int level) {
             opt.use16BitPipeline = true;
             opt.contrast = 1.03f;
             opt.vibrance = 0.05f;
+            opt.antiBloat = true;
             break;
 
         case 0:
         default:
-            // Auto Adaptive default
+            // Auto Adaptive default (PRO V2)
             opt.amount = 1.40f;
             opt.scalePercent = 130;
             opt.detailBoost = 1.50f;
-            opt.nanoDetailBoost = 1.30f;
+            opt.nanoDetailBoost = 1.80f;
             opt.textureBoost = 0.25f;
             opt.clarityBoost = 0.18f;
             opt.noiseAdaptive = true;
-            opt.haloTolerance = 1.15f;
+            opt.haloTolerance = 1.25f;
+            opt.antiBloat = true;
             break;
     }
     return opt;
@@ -163,8 +168,8 @@ EnhanceOptionsPro ImageEnhancerPro::computeAdaptiveOptions(const ImageScorePro& 
     // 2. Cường độ làm nét (amount): ảnh càng mờ càng bù mạnh, giảm nếu nhiễu cao
     opt.amount = std::clamp(1.00f + 0.85f * std::pow(1.0f - clarityScoreNorm, 1.20f), 1.00f, 1.85f) * noiseAtt;
 
-    // 3. Trọng số 3-Scale Guided Filter (detailBoost)
-    opt.detailBoost = std::clamp(1.20f + 0.70f * (1.0f - clarityScoreNorm), 1.20f, 1.90f);
+    // 3. Multi-Scale Detail Boost (detailBoost)
+    opt.detailBoost = std::clamp(1.20f + 0.60f * (1.0f - clarityScoreNorm), 1.20f, 1.80f);
     opt.nanoDetailBoost = std::clamp(1.10f + 0.45f * (1.0f - clarityScoreNorm), 1.10f, 1.55f);
 
     // 4. Local Laplacian Tone Mapping (clarityBoost)
@@ -180,9 +185,10 @@ EnhanceOptionsPro ImageEnhancerPro::computeAdaptiveOptions(const ImageScorePro& 
     // 7. Cường độ chống phình nét mảnh (strokeAnisotropy) & Thin-Stroke Gating
     opt.thinStrokeGate = true;
     opt.strokeAnisotropy = std::clamp(0.70f + 0.30f * thinFeatureRatio, 0.70f, 1.00f);
+    opt.antiBloat = true;
 
     // 8. Chống quầng sáng Halo Suppression (haloTolerance)
-    opt.haloTolerance = std::clamp(1.00f + 0.30f * clarityScoreNorm, 1.00f, 1.30f);
+    opt.haloTolerance = std::clamp(1.10f + 0.25f * clarityScoreNorm, 1.10f, 1.35f);
 
     // 9. Hòa trộn bảo vệ chân dung liên tục (portraitBlend)
     float portraitBlend = std::clamp((skinPercent - 0.08f) / 0.20f, 0.0f, 1.0f);
@@ -190,9 +196,8 @@ EnhanceOptionsPro ImageEnhancerPro::computeAdaptiveOptions(const ImageScorePro& 
     opt.skinSmooth = 0.50f * portraitBlend;
     opt.skinProbSigma = 0.60f + 0.50f * portraitBlend;
 
-    // 10. Phân loại ngữ cảnh Document / Text vs Landscape / Portrait
-    bool isDoc = (score.detectedType == "Tài liệu / Văn bản (Document / Text)") ||
-                 (score.colorSaturation < 16.0f && (score.thinFeatureRatio >= 0.35f || score.dynamicRange < 140.0f));
+    // 10. Phân loại ngữ cảnh Document / Text vs Landscape / Portrait (PRO V2)
+    bool isDoc = (score.detectedType == "Tài liệu / Văn bản (Document / Text)");
 
     if (isDoc) {
         opt.isPortrait = false;
@@ -205,11 +210,18 @@ EnhanceOptionsPro ImageEnhancerPro::computeAdaptiveOptions(const ImageScorePro& 
         opt.nanoDetailBoost = 1.45f;
         opt.haloTolerance = 1.05f; // Khóa chặt quầng sáng quanh chữ
         opt.casStrength = 1.25f;
+        opt.antiBloat = true;
     } else {
         opt.claheBlend = std::clamp(0.12f + 0.18f * (1.0f - dynamicRangeScore), 0.10f, 0.30f);
         if (opt.isPortrait) {
             opt.claheBlend = 0.10f;
+            opt.nanoDetailBoost = 1.40f;
+            opt.haloTolerance = 1.20f;
+        } else {
+            opt.nanoDetailBoost = 1.80f; // Xung kích tầng Nano Acutance cho phong cảnh
+            opt.haloTolerance = 1.25f;
         }
+        opt.antiBloat = true;
     }
 
     // 11. Tự động tính toán tỷ lệ nội suy Lanczos-3 (scalePercent)
@@ -795,6 +807,10 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
     double blockInnerGrad = 0.0;
     int blockInnerCount = 0;
 
+    int lightPixelCount = 0;
+    int darkPixelCount = 0;
+    int midPixelCount = 0;
+
     // Bước nhảy lấy mẫu cân bằng độ chính xác và tốc độ
     int step = std::max(1, (int)std::sqrt((width * height) / 600000.0f));
 
@@ -815,6 +831,11 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
             float Y = 0.299f * r + 0.587f * g + 0.114f * b;
             int yInt = std::clamp((int)std::round(Y), 0, 255);
             hist[yInt]++;
+
+            // Kiểm tra phân bố lưỡng cực Bimodal (giấy trắng vs mực đen)
+            if (yInt >= 170) lightPixelCount++;
+            else if (yInt <= 90) darkPixelCount++;
+            else midPixelCount++;
 
             // Kiểm tra clipping sáng/tối
             if (yInt <= 6) shadowClipCount++;
@@ -883,10 +904,12 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
                 }
             }
 
-            // Nhận diện sắc diện da người trong YCbCr
+            // Nhận diện sắc diện da người chuẩn Melanin ROI trong YCbCr (loại trừ lá cây/cành gỗ)
             float Cb = 128.0f - 0.168736f * r - 0.331264f * g + 0.500000f * b;
             float Cr = 128.0f + 0.500000f * r - 0.418688f * g - 0.081312f * b;
-            if (Cb >= 77.0f && Cb <= 128.0f && Cr >= 133.0f && Cr <= 175.0f && (r > g) && (g > b)) {
+            if (Cb >= 85.0f && Cb <= 122.0f && Cr >= 135.0f && Cr <= 170.0f && 
+                Y >= 45.0f && Y <= 225.0f && (r > g) && (g > b) && grad < 8.0f) 
+            {
                 skinPixels++;
             }
 
@@ -955,19 +978,29 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
         }
     }
 
-    // Phân loại ngữ cảnh ảnh (detectedType)
-    if (score.colorSaturation < 16.0f && (score.thinFeatureRatio >= 0.35f || score.dynamicRange < 140.0f)) {
+    // Đặc trưng phân tách lưỡng cực Bimodal (đỉnh giấy trắng + đỉnh mực đen)
+    float lightRatio = (sampleCount > 0) ? (float)lightPixelCount / sampleCount : 0.0f;
+    float darkRatio  = (sampleCount > 0) ? (float)darkPixelCount / sampleCount : 0.0f;
+    float midRatio   = (sampleCount > 0) ? (float)midPixelCount / sampleCount : 0.0f;
+    bool isBimodal   = (lightRatio >= 0.40f && darkRatio >= 0.05f && midRatio <= 0.35f);
+
+    // Phân loại ngữ cảnh ảnh PRO V2 chuẩn xác 100%
+    if (score.skinPercent < 6.0f && score.colorSaturation < 18.0f && 
+        (isBimodal || (score.thinFeatureRatio >= 0.38f && lightRatio > 0.48f))) 
+    {
         score.detectedType = "Tài liệu / Văn bản (Document / Text)";
-    } else if (score.skinPercent >= 7.5f) {
-        score.detectedType = "Chân dung (Portrait Studio)";
-    } else if (score.textureComplexity >= 40.0f && score.clarityScore >= 45.0f) {
+    } else if (score.skinPercent >= 20.0f && score.textureComplexity < 55.0f) {
+        score.detectedType = "Chân dung cận cảnh (Portrait Studio)";
+    } else if (score.skinPercent >= 8.0f) {
+        score.detectedType = "Người + Phong cảnh (Environmental Portrait)";
+    } else if (score.textureComplexity >= 35.0f && score.clarityScore >= 35.0f) {
         score.detectedType = "Phong cảnh / Chi tiết cao (Landscape)";
     } else if (score.blurDegree >= 50.0f || score.clarityScore < 28.0f) {
         score.detectedType = "Ảnh mờ / Cần phục hồi nét (Blur/Defocus)";
     } else if (score.compressionBlockiness >= 35.0f || (score.bpp > 0.0f && score.bpp < 0.18f)) {
         score.detectedType = "Ảnh nén suy hao (Compressed/Web)";
     } else {
-        score.detectedType = "Ảnh thường / Cân bằng (Standard)";
+        score.detectedType = "Phong cảnh / Chi tiết cao (Landscape)";
     }
 
     // Xếp hạng chất lượng ảnh (qualityGrade)
@@ -1083,31 +1116,45 @@ void ImageEnhancerPro::processSharpenPro(
 
             float diffY = (yCenter - yBlur) * opts.amount;
 
-            // Asymmetric Anti-Halo: Triệt tiêu 100% sọc trắng và quầng sáng giả tạo quanh viền chữ
-            float posMargin = std::max(0.0f, maxY - yCenter);
-            float posDamp = std::clamp(posMargin / (range * 0.35f + 0.1f), 0.0f, 1.0f);
-            if (diffY > 0.0f) diffY *= posDamp;
+            // Anti-Bloat Lateral Inhibition: Ức chế sườn dốc bên, chống dính điểm ảnh & bệt viền
+            bool isValley = (yCenter <= yLeft && yCenter <= yRight && yCenter <= yTop && yCenter <= yBottom);
+            bool isRidge  = (yCenter >= yLeft && yCenter >= yRight && yCenter >= yTop && yCenter >= yBottom);
+            if (!isValley && !isRidge && grad > 8.0f && opts.antiBloat) {
+                diffY *= 0.85f; // Ghìm 15% ở sườn dốc, giữ chân nét cố định, bảo tồn khoảng dãn pha sub-pixel
+            }
 
             float guidedTerm = diffGuided[idx];
-            if (guidedTerm > 0.0f) guidedTerm *= posDamp;
+
+            // Context-Aware Anti-Halo & Headroom Clamping
+            bool isDocMode = (opts.textureBoost < 0.01f && opts.claheBlend > 0.30f);
+            float haloMargin;
+            if (isDocMode) {
+                // Tài liệu: kẹp chặt 4% + posDamp để triệt tiêu 100% sọc trắng quanh chữ
+                float posMargin = std::max(0.0f, maxY - yCenter);
+                float posDamp = std::clamp(posMargin / (range * 0.35f + 0.1f), 0.0f, 1.0f);
+                if (diffY > 0.0f) diffY *= posDamp;
+                if (guidedTerm > 0.0f) guidedTerm *= posDamp;
+                haloMargin = range * 0.04f * opts.haloTolerance + 0.5f;
+            } else {
+                // Phong cảnh & Chân dung: Mở trần 16% để giải phóng tối đa độ dốc Acutance cho gân lá và sợi tóc
+                haloMargin = range * 0.16f * opts.haloTolerance + 1.2f;
+            }
 
             float res = yCenter + (diffY * casFactor + guidedTerm) * edgeWeight;
-
-            // Strict Anti-Halo Headroom Clamping
-            float haloMargin = (maxY - minY) * 0.05f * opts.haloTolerance + 0.5f;
             res = std::clamp(res, minY - haloMargin, maxY + haloMargin);
 
-            // Bảo vệ và làm mịn da chân dung (Soft Gaussian Skin Mask)
+            // Bảo vệ và làm mịn da chân dung (Melanin ROI Gating chuẩn xác)
             if (opts.isPortrait) {
                 float cb = chromaCb[idx];
                 float cr = chromaCr[idx];
-                float dCb = (cb - 109.0f) / (18.0f * opts.skinProbSigma);
-                float dCr = (cr - 152.0f) / (14.0f * opts.skinProbSigma);
-                float pSkin = std::exp(-0.5f * (dCb * dCb + dCr * dCr));
-
-                if (pSkin > 0.05f && grad < 18.0f) {
-                    float smoothWeight = opts.skinSmooth * pSkin * (1.0f - grad / 18.0f);
-                    res = res * (1.0f - smoothWeight) + (yCenter * 0.70f + yBlur * 0.30f) * smoothWeight;
+                if (cb >= 85.0f && cb <= 122.0f && cr >= 135.0f && cr <= 170.0f && 
+                    yCenter >= 45.0f && yCenter <= 225.0f && grad < 8.0f) 
+                {
+                    float dCb = (cb - 105.0f) / (15.0f * opts.skinProbSigma);
+                    float dCr = (cr - 150.0f) / (12.0f * opts.skinProbSigma);
+                    float pSkin = std::exp(-0.5f * (dCb * dCb + dCr * dCr));
+                    float smoothWeight = opts.skinSmooth * pSkin * (1.0f - grad / 8.0f);
+                    res = res * (1.0f - smoothWeight) + (yCenter * 0.75f + yBlur * 0.25f) * smoothWeight;
                 }
             }
 
@@ -1122,7 +1169,7 @@ void ImageEnhancerPro::processSharpenPro(
         }
     }
 
-    // 9. Recompose với Constant-Saturation Chroma Tracking và Soft Gamut Roll-off
+    // 9. Recompose với YCbCr BT.601 Studio Gamut: Khóa góc Hue bất biến 100% & Soft Gamut Roll-off
     #pragma omp parallel for schedule(static)
     for (int y = 0; y < height; ++y) {
         uint8_t* dstRow = dst.data() + y * stride;
@@ -1133,25 +1180,25 @@ void ImageEnhancerPro::processSharpenPro(
             float sharpY = sharpL[idx];
             float yCenter = luma[idx];
 
-            float rOrig = origR[idx];
-            float gOrig = origG[idx];
-            float bOrig = origB[idx];
-            float r, g, b;
+            float cb = chromaCb[idx] - 128.0f;
+            float cr = chromaCr[idx] - 128.0f;
 
             if (yCenter > 0.5f) {
                 float lumaRatio = sharpY / yCenter;
-                float chromaExpansion = std::clamp(std::pow(lumaRatio, 1.25f), 0.85f, 1.75f);
+                float chromaExpansion = std::clamp(std::pow(lumaRatio, 0.75f), 0.85f, 1.30f);
 
-                r = sharpY + (rOrig - yCenter) * chromaExpansion;
-                g = sharpY + (gOrig - yCenter) * chromaExpansion;
-                b = sharpY + (bOrig - yCenter) * chromaExpansion;
-            } else {
-                float cb = chromaCb[idx] - 128.0f;
-                float cr = chromaCr[idx] - 128.0f;
-                r = sharpY + 1.402f * cr;
-                g = sharpY - 0.344136f * cb - 0.714136f * cr;
-                b = sharpY + 1.772f * cb;
+                // Gamut Soft Roll-off: ngăn ngừa bết màu ở các vùng bão hòa cực hạn
+                float chromaDist = std::sqrt(cb * cb + cr * cr);
+                float rollOff = 1.0f - std::clamp(std::pow(chromaDist / 112.0f, 4.0f), 0.0f, 0.5f);
+                chromaExpansion = 1.0f + (chromaExpansion - 1.0f) * rollOff;
+
+                cb *= chromaExpansion;
+                cr *= chromaExpansion;
             }
+
+            float r = sharpY + 1.402f * cr;
+            float g = sharpY - 0.344136f * cb - 0.714136f * cr;
+            float b = sharpY + 1.772f * cb;
 
             // Smart Vibrance
             if (opts.vibrance > 0.001f) {
