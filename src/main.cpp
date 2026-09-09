@@ -190,9 +190,9 @@ public:
                          << " [2] Làm nét Ảnh\n"
                          << " [3] Mp4 -> Mp3\n"
                          << " [4] Tốc độ Video\n"
-                         << " [5] Đổi định dạng Media\n"
-                         << " [6] Chuẩn hóa tên file\n"
-                         << " [7] Ẩn file trong file\n"
+                         << " [5] Đổi định dạng Video/Ảnh\n"
+                         << " [6] Chuẩn hóa tên file Video/Ảnh\n"
+                         << " [7] Ẩn file vào file\n"
                          << " [0] Quay lại\n\n"
                          << " [Chọn]: ";
                     sub = readInt("");
@@ -215,8 +215,6 @@ public:
             case 5:
                 UpdateManager::showUpdateMenu();
                 break;
-
-            
             }
         }
     }

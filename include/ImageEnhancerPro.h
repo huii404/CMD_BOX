@@ -92,7 +92,7 @@ public:
         int width, int height, int stride,
         uintmax_t fileSize);
 
-private:
+public:
     static float lanczos3Kernel(float x);
     static std::vector<uint8_t> lanczos3Resample(
         const std::vector<uint8_t>& src, int srcW, int srcH, int srcStride,
@@ -135,11 +135,22 @@ private:
     static OkLChPixel oklabToOkLCh(const OklabPixel& lab);
     static OklabPixel okLChToOklab(const OkLChPixel& lch);
 
+    static void applyCLAHE(
+        std::vector<float>& luma,
+        int width, int height,
+        float clipLimit, float blendFactor);
+
     static void applyHaloClamp(
         std::vector<float>& sharpLuma,
         const std::vector<float>& origLuma,
         int width, int height,
         float haloTolerance);
+
+    static void processSharpenPro(
+        const std::vector<uint8_t>& src, std::vector<uint8_t>& dst,
+        int width, int height, int stride,
+        const EnhanceOptionsPro& opts,
+        float estimatedNoise);
 
     static void processSharpenOklab(
         const std::vector<uint8_t>& src, std::vector<uint8_t>& dst,

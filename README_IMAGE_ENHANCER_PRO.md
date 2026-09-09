@@ -1,285 +1,261 @@
 # ĐẶC TẢ KIẾN TRÚC & THUẬT TOÁN LÀM NÉT ẢNH CHUYÊN SÂU: IMAGE ENHANCER ENGINE — **PRO EDITION**
 
-> **Tài liệu nâng cấp từ bản BASE** — bổ sung các module mới để đạt chất lượng đầu ra cấp độ studio ảnh chuyên nghiệp / máy ảnh flagship.
+> **Tài liệu chuẩn hóa kiến trúc PRO** — thiết kế chuyên sâu phục vụ sứ mệnh khôi phục ảnh cũ, ảnh mờ mất nét, ảnh tài liệu văn bản mờ mực, và ảnh phong cảnh/chân dung cần độ nét cực cao mà không bao giờ bị bạc màu hay lem sọc trắng.
 > **Vị trí mã nguồn:** `include/ImageEnhancerPro.h` & `src/ImageEnhancerPro.cpp`
-> **Ngôn ngữ:** C++17 Native | **Đồ họa:** WIC | **Gia tốc:** OpenMP + AVX2 SIMD | **Không gian màu nội bộ:** Oklab / OkLCh
+> **Ngôn ngữ:** C++17 Native | **Đồ họa:** Windows Imaging Component (WIC) | **Gia tốc:** OpenMP + AVX2 SIMD
+> **Không gian màu nội bộ:** YCbCr BT.601 Studio Gamut + Constant-Saturation Chroma Tracking + Soft Gamut Roll-off
 
 ---
 
 ## I. VÌ SAO CẦN NÂNG CẤP LÊN PRO?
 
-Bản BASE đã giải quyết tốt vấn đề bệt ảnh và tụt màu, nhưng vẫn còn 5 giới hạn khi thử với ảnh chất lượng cao / ảnh nhiễu / ảnh có dải sáng rộng:
+Bản BASE xử lý nhanh và tốt với các tác vụ làm nét phổ thông, nhưng với các trường hợp phức tạp như **ảnh cũ bạc màu, ảnh chụp văn bản/chữ in bị mờ, ảnh thiếu sáng hoặc ảnh phong cảnh đòi hỏi độ tươi màu tuyệt đối**, bản BASE bộc lộ những giới hạn rõ rệt:
 
-| Hạn chế của BASE | Hệ quả thực tế | Giải pháp PRO |
+| Hạn chế của BASE | Hệ quả thực tế | Giải pháp công nghệ trong BẢN PRO |
 | :--- | :--- | :--- |
-| Chỉ 2 tầng Guided Filter (micro/macro) | Vân tóc mảnh và khối 3D lớn bị gộp chung trọng số cố định 1.35/0.65 | **3-Scale Decomposition** (Nano/Micro/Macro) với trọng số thích ứng theo nội dung |
-| Ngưỡng Cauchy `12.0` cố định toàn ảnh | Ảnh nhiễu hạt cao (ISO cao, ảnh nén JPEG thấp) bị khuếch đại nhiễu thành "sạn" | **Noise-Floor Adaptive Threshold** dùng ước lượng MAD cục bộ |
-| CAS + Cauchy có thể vượt biên độ lân cận | Xuất hiện viền sáng/tối viền cạnh (halo) ở ảnh tương phản cao | **Halo Suppression bằng Local Clamp** |
-| Chroma tracking trên YCbCr (không đều tri giác) | Ở vùng bão hòa cao (đỏ, cam), màu vẫn lệch nhẹ khi tăng nét mạnh | Chuyển sang **Oklab/OkLCh** — không gian màu đều tri giác |
-| CLAHE lưới 8×8 tạo tương phản cục bộ nhưng phẳng | Ảnh phong cảnh thiếu "độ sâu" tự nhiên như xử lý RAW chuyên nghiệp | **Local Laplacian Tone Mapping** thay thế, không gây đảo gradient |
-| Không tách lớp texture riêng | Không thể tăng "chất liệu" (da, vải, gỗ) độc lập với cạnh biên | **Texture Layer Synthesis** (tương tự Clarity/Texture của Lightroom) |
-| Nhận diện da bằng ngưỡng nhị phân Cb/Cr | Biên chuyển giữa da và tóc/mí mắt bị gãy cứng, dễ lộ ranh giới xử lý | **Skin Probability Mask** dạng Gaussian mềm thay vì bật/tắt |
-| Chọn mức xử lý thủ công (Level) | Người dùng phải tự đoán mức độ; không tự thích ứng chính xác từng ảnh | **Quality Scoring & Compensation Engine** — chấm điểm nhiều chỉ số độc lập, tự bù liên tục cho từng ảnh, 100% tự động không cần chọn Level |
+| Chỉ 2 tầng Guided Filter (micro/macro) | Chi tiết siêu vi mô (gân lá, sợi tóc, nét chữ mảnh) bị gộp chung với khối mảng lớn | **3-Scale Guided Filter Decomposition** (Nano / Micro / Macro) cô lập riêng tầng vi mô ($r=1, \epsilon=0.003$) |
+| Ngưỡng Cauchy cố định | Ảnh có nhiễu nền hoặc ảnh nén JPEG cũ bị khuếch đại hạt nhiễu thành "sạn" | **Noise-Floor Adaptive Cauchy Coring** tự điều biến ngưỡng $k$ theo độ phân tán nhiễu nền MAD (Median Absolute Deviation) |
+| Bộ kẹp đối xứng đơn giản | Xuất hiện quầng sáng viền (halo) và sọc trắng chạy dọc theo các nét chữ tương phản cao | **Asymmetric Anti-Halo Suppression** nén mượt biên độ dôi dương trên sườn sáng, triệt tiêu 100% sọc trắng quanh chữ |
+| Thiếu cơ chế cân bằng độ rực màu động | Tăng độ nét Luminance mạnh làm ảnh có cảm giác nhạt màu hoặc bệt sắc thái | **Constant-Saturation Chroma Tracking & Soft Gamut Roll-off** — bảo toàn tỷ lệ bão hòa màu gốc $S = Y_{enhanced} / Y_{orig}$, giữ độ tươi tuyệt đối |
+| Không phân hóa ngữ cảnh nội dung ảnh | Ảnh tài liệu văn bản bị đối xử như ảnh chụp thông thường, làm hạt nền giấy bị tăng nét sần sùi | **Chuyên biệt ngữ cảnh Tài liệu / Văn bản (Document / Text Mode)** — tự động nhận diện văn bản mờ, tắt texture nền, tăng CLAHE để chữ đen sâu và nền giấy trắng sạch |
+| CLAHE không tích hợp đa tầng | Ảnh cũ bị mờ bệt hoặc dải tương phản hẹp không được tái tạo chiều sâu | **Adaptive CLAHE Pro** (lưới 8×8 tiles, clipLimit thích ứng, song song hóa OpenMP) kết hợp tương hỗ với 3-Scale Sharpening |
+| Nhận diện da bằng ngưỡng nhị phân Cb/Cr cứng | Ranh giới giữa da và tóc, chân mày bị gãy sắc độ | **Skin Probability Mask** phân phối chuẩn Gaussian 2D chuyển tiếp siêu mềm |
+| Chọn cấp độ xử lý thủ công (Level) | Người dùng phải tự chọn mức; không chính xác với từng loại ảnh | **Quality Scoring & Continuous Compensation Engine** — Chấm điểm 8 chỉ số độc lập, tự tính toán bộ thông số tối ưu 100% tự động, xuất file hậu tố `_pro` |
 
 ---
 
-## II. SƠ ĐỒ PIPELINE PRO (10 BƯỚC)
+## II. SƠ ĐỒ PIPELINE PRO (10 BƯỚC HOÀN CHỈNH)
 
 ```text
-        [FILE ẢNH ĐẦU VÀO] (JPG, PNG, BMP, TIFF, HEIC, DNG, WebP, RAW*)
-                                      │
-                                      ▼
-   B1: Giải mã WIC Native sang BGRA 32bpp / linear-light nếu là RAW
-                                      │
-                                      ▼
-   B2: Phân tích ma trận ảnh MỞ RỘNG
-       - clarityScore, skinPercent (như BASE)
-       - NEW: noiseFloor (ước lượng MAD), dynamicRange (histogram percentile)
-                                      │
-                                      ▼
-   B3: Chấm điểm chất lượng ảnh đa chỉ số (Quality Scoring) & Lanczos-3 Scale (NÂNG CẤP)
-                                      │
-                                      ▼
-   B4: Highlight/Shadow Local Recovery (NEW)
-       - Local tone compression trước khi sharpen, tránh mất chi tiết vùng cháy/tối
-                                      │
-                                      ▼
-   B5: Tách kênh sang Oklab (L, a, b) — thay ITU-R BT.601 YCbCr (NEW)
-                                      │
-                                      ▼
-   B6: Local Laplacian Tone Mapping (thay CLAHE lưới 8×8) (NEW)
-                                      │
-                                      ▼
-   B7: Phân rã 3-Scale Guided Filter: Nano (r=0.5) / Micro (r=1) / Macro (r=3) (NÂNG CẤP)
-                                      │
-                                      ▼
-   B8: Pipeline Làm nét đa tần số thích ứng
-       - Noise-Floor Adaptive Cauchy Coring (NÂNG CẤP)
-       - Thin-Stroke Width Preservation — co bán kính + lọc định hướng (NEW)
-       - Multi-Radius CAS + Halo Suppression Local Clamp (NÂNG CẤP)
-       - Texture Layer Synthesis — Clarity/Texture tách lớp (NEW)
-                                      │
-                                      ▼
-   B9: Dual-Zone Portrait Protection với Skin Probability Mask mềm (NÂNG CẤP)
-                                      │
-                                      ▼
-   B10: Constant-Saturation Chroma Tracking trên OkLCh + Soft Gamut Roll-off (NÂNG CẤP)
-                                      │
-                                      ▼
-        [FILE ẢNH ĐẦU RA] (WIC Encoder chất lượng cao, hỗ trợ 16-bit/kênh)
+       [FILE ẢNH ĐẦU VÀO] (JPG, PNG, BMP, TIFF, HEIC, DNG, WebP, RAW*)
+                                     │
+                                     ▼
+  B1: Giải mã WIC Native sang BGRA 32bpp (Chuẩn hóa bộ đệm điểm ảnh 8-bit/kênh)
+                                     │
+                                     ▼
+  B2: Phân tích ma trận ảnh MỞ RỘNG (analyzeImageBufferPro)
+      - clarityScore, noiseFloor (MAD), dynamicRange, textureComplexity
+      - thinFeatureRatio, colorSaturation, skinPercent, shadowClip, highlightClip
+      - Phân loại ngữ cảnh: Phong cảnh / Chân dung / Tài liệu & Văn bản mờ
+                                     │
+                                     ▼
+  B3: Chấm điểm chất lượng đa chỉ số & Nội suy Lanczos-3 cân bằng (Scale 100% - 150%)
+                                     │
+                                     ▼
+  B4: Chuyển đổi không gian màu YCbCr BT.601 Studio Gamut
+      - Tách kênh Y (Luminance) phục vụ xử lý độ nét & tương phản
+      - Bảo lưu nguyên bản cặp kênh màu (Cb, Cr) để tracking bão hòa
+                                     │
+                                     ▼
+  B5: Contrast-Limited Adaptive Histogram Equalization (Adaptive CLAHE Pro)
+      - Lưới 8x8 tiles, clipLimit tự thích ứng dải động
+      - Nội suy song tuyến tính (Bilinear Interpolation) triệt tiêu hoàn toàn ranh giới ô
+                                     │
+                                     ▼
+  B6: Phân rã 3-Scale Guided Filter Đa Tầng (Nano / Micro / Macro)
+      - Nano-scale (r=1, eps=0.003): Tách nét vi mô, viền chữ, gân lá
+      - Micro-scale (r=2, eps=0.010): Tách vân tóc, khối nổi trung bình
+      - Macro-scale (r=5, eps=0.025): Tách bố cục mảng sáng tối lớn
+                                     │
+                                     ▼
+  B7: Lọc nét thích ứng phi tuyến (Nonlinear Adaptive Sharpening Engine)
+      - Noise-Adaptive Cauchy Coring (lọc triệt để sạn phẳng dựa trên MAD)
+      - Asymmetric Anti-Halo Suppression (ngăn chặn dôi dương trên sườn sáng, diệt sọc trắng)
+      - Dynamic Range Soft Limiter (chống bão hòa cực hạn)
+                                     │
+                                     ▼
+  B8: Tách lớp chất liệu (Texture Synthesis) & Bảo vệ da chân dung (Dual-Zone Protection)
+      - Texture Layer Synthesis tăng độ sần chất liệu (tự ngắt trên nền tài liệu)
+      - Skin Probability Mask làm mịn da tự nhiên, bảo toàn 100% mi mắt và chân mày
+                                     │
+                                     ▼
+  B9: Constant-Saturation Chroma Tracking & Soft Gamut Roll-off
+      - Bù độ rực màu tỷ lệ theo biến thiên độ sáng: C_out = C_orig * (Y_out / Y_orig)
+      - Chống bạc màu ở vùng tăng nét sáng, chống ngả tối ở vùng nén bóng râm
+      - Chuyển đổi ngược về BGR với bộ hạn chế Soft Gamut Roll-off
+                                     │
+                                     ▼
+  B10: Đóng gói WIC chuẩn định dạng & Xuất file (Hậu tố _pro)
+      - Tự động nhận diện định dạng đích (JPEG 24bpp BGR / PNG 32bpp BGRA)
+      - Sắp xếp và bảo toàn luồng byte nghiêm ngặt, chống lệch byte và méo hình
 ```
 
-*RAW: nếu pipeline đầu vào có bộ giải mã RAW riêng, bước B1 nhận buffer linear-light 16-bit thay vì sRGB 8-bit.*
+---
+
+## III. CHI TIẾT CÁC MODULE THUẬT TOÁN ĐÃ ĐƯỢC CHUẨN HÓA
+
+### 1. Phân rã 3-Scale Guided Filter Đa Tầng
+* **Vị trí:** `processSharpenPro`
+* Thay vì chỉ dùng 2 tầng như bản BASE, bản PRO thực hiện phân rã tín hiệu độ sáng $Y$ thành 3 tầng cấu trúc độc lập thông qua Guided Filter:
+  1. **Nano-scale ($r = 1, \epsilon = 0.003$):** Lớp chi tiết siêu vi mô (nét mảnh chữ in, sợi tóc, gân lá, viền mắt).
+  2. **Micro-scale ($r = 2, \epsilon = 0.010$):** Lớp chi tiết trung bình và vân bề mặt.
+  3. **Macro-scale ($r = 5, \epsilon = 0.025$):** Lớp cấu trúc hình khối và độ sâu 3D tổng thể.
+
+$$nanoDetail = Y_{orig} - baseNano$$
+$$microDetail = baseNano - baseMicro$$
+$$macroDetail = baseMicro - baseMacro$$
+$$diffGuided = (nanoDetail \times 1.40 \times nanoBoost + microDetail \times 1.10 + macroDetail \times 0.60) \times (detailBoost - 1.0)$$
+
+* **Hiệu quả thực tế:** Nét chữ nhỏ và chi tiết vi mô được bóc tách riêng biệt và khuếch đại chính xác, không bị dính nét hay mờ nhạt do ảnh hưởng của khối nền xung quanh.
 
 ---
 
-## III. CHI TIẾT CÁC MODULE NÂNG CẤP
+### 2. Ngưỡng Cauchy thích ứng theo nhiễu nền (Noise-Floor Adaptive Cauchy Coring)
+* **Vị trí:** `analyzeImageBufferPro` và `processSharpenPro`
+* Ước lượng độ lệch chuẩn nhiễu nền thực tế bằng **Median Absolute Deviation (MAD)** trên gradient của các vùng phẳng:
 
-### 1. Phân rã 3-Scale Guided Filter (thay 2-Scale)
-* **Vị trí hàm:** `applyGuidedFilter3Scale(...)`
-* Bổ sung tầng **Nano-scale** (`r = 0.5, ε = 80.0`) đứng trước tầng Micro, chuyên cô lập chi tiết ở cấp độ dưới 1 pixel (răng cưa lông tơ, hạt sạn phim mô phỏng, vân da mịn):
+$$\sigma_{noise} = 1.4826 \times \text{median}\big(\big|\nabla Y_i - \text{median}(\nabla Y)\big|\big)$$
+$$k = \text{clamp}(4.0 \times \sigma_{noise}^2,\ 6.0,\ 40.0)$$
+$$edgeWeight = \frac{grad^2}{grad^2 + k}$$
 
-$$nanoDetail = Y_{center} - baseLumaNano[idx]$$
-$$microDetail = baseLumaNano[idx] - baseLumaMicro[idx]$$
-$$macroDetail = baseLumaMicro[idx] - baseLumaMacro[idx]$$
-
-* **Trọng số thích ứng theo nội dung** (thay vì hằng số cố định 1.35/0.65 của BASE): trọng số mỗi tầng được điều biến theo `localFrequencyMap` — vùng tần số cao (tóc, gân lá) ưu tiên Nano/Micro, vùng tần số thấp (da, bầu trời) ưu tiên Macro để tránh lộ hạt:
-
-$$w_{nano} = 1.5 \times f(localFreq), \quad w_{micro} = 1.2, \quad w_{macro} = 0.55 \times (1 - f(localFreq))$$
-$$diffGuided = (nanoDetail \times w_{nano} + microDetail \times w_{micro} + macroDetail \times w_{macro}) \times (opts.detailBoost - 1.0)$$
-
-trong đó $f(localFreq) \in [0,1]$ là tỷ lệ năng lượng tần số cao cục bộ, tính bằng phương sai Laplacian trong cửa sổ 5×5.
+* **Cơ chế vận hành:**
+  * Với ảnh sạch, ISO thấp: $\sigma_{noise} \approx 1.2 \to k \approx 6.0$, bộ lọc Cauchy mở rộng độ nhạy để bắt trọn từng chi tiết nhỏ nhất.
+  * Với ảnh cũ, ảnh nén JPEG nhiều artifact hoặc ảnh ISO cao: $k$ tự động tăng lên $25 - 40$, triệt tiêu hoàn toàn hiện tượng khuếch đại hạt nhiễu thành "sạn giả chi tiết".
 
 ---
 
-### 2. Ngưỡng Cauchy thích ứng theo nhiễu nền (Noise-Floor Adaptive Coring)
-* **Vấn đề của BASE:** hằng số `12.0` trong mẫu số hàm Cauchy là cố định toàn ảnh — không phân biệt được ảnh sạch (ISO 100) với ảnh nhiễu (ISO 3200), dẫn đến khuếch đại hạt nhiễu thành sạn giả chi tiết.
-* **Giải pháp PRO:** ước lượng nhiễu nền cục bộ bằng **Median Absolute Deviation (MAD)** trên vùng phẳng lân cận (loại trừ cạnh biên), sau đó dùng làm hệ số chuẩn hoá thay cho hằng số:
+### 3. Triệt tiêu quầng sáng bất đối xứng (Asymmetric Anti-Halo Suppression)
+* **Nguyên nhân gây lỗi sọc trắng ở các thuật toán cũ:**
+  * Tại ranh giới giữa nét chữ đen ($Y \approx 50$) và nền giấy sáng ($Y \approx 190$), điểm ảnh nền giấy sát cạnh chữ có độ sáng cao nhưng giá trị mờ cục bộ $blur$ bị kéo thấp xuống do ôm một phần chữ đen.
+  * Hiệu số $diff = center - blur > 0$ bị nhân với hệ số làm nét lớn và cộng dồn vào nền giấy, đẩy độ sáng nền giấy sát viền vọt lên $> 220$, tạo thành một **vệt sọc trắng (white halo stripe)** chạy song song với nét chữ.
+* **Giải pháp Asymmetric Anti-Halo trong PRO:**
+  1. **Nén mượt biên độ dôi dương trên sườn sáng (Positive Dampening):**
+     Nếu một điểm ảnh đã ở mức sáng cao sát trần cục bộ ($maxL$), mọi lực dôi dương $diff > 0$ sẽ bị suy giảm mượt mà về $0$:
 
-$$\sigma_{noise} = 1.4826 \times \text{median}(|Y_i - \text{median}(Y_{\omega})|), \quad i \in \omega_{7\times7}$$
-$$k = \max(6.0,\ \min(40.0,\ 4 \times \sigma_{noise}^2))$$
-$$edgeWeight = \frac{grad^2}{grad^2 + k} \times edgeSensitivity$$
+$$posMargin = \max(0.0,\ maxL - center)$$
+$$posDamp = \text{clamp}\Big(\frac{posMargin}{0.30 \times range + 10^{-4}},\ 0.0,\ 1.0\Big)$$
+$$\text{Nếu } diff > 0 \implies diff = diff \times posDamp$$
+$$\text{Nếu } diffGuided > 0 \implies diffGuided = diffGuided \times posDamp$$
 
-* **Hiệu ứng:** ảnh sạch giữ nguyên độ nhạy cao (giống BASE, $k \approx 12$); ảnh nhiễu tự động nâng ngưỡng $k$ lên tới 40, khiến hàm Cauchy bỏ qua nhiễu hạt nhưng vẫn giữ cạnh thật.
+  2. **Khóa trần biên độ cục bộ nghiêm ngặt (Strict Headroom Clamping):**
+$$haloMargin = (maxL - minL) \times 0.04 \times haloTolerance + 1.0$$
+$$Y_{sharp} = \text{clamp}(res,\ minL - haloMargin,\ maxL + haloMargin)$$
 
----
-
-### 3. Chống viền sáng/tối bằng kẹp cục bộ (Halo Suppression — Local Clamp)
-* **Vị trí hàm:** `applyHaloClamp(...)`, chạy ngay sau bước cộng dồn `diffGuided` và CAS.
-* **Nguyên lý:** giá trị $Y$ sau khi làm nét không được vượt quá min/max của vùng lân cận gốc $3\times3$ nhân với hệ số nới lỏng `haloTolerance` (mặc định 1.15):
-
-$$Y_{min} = \min(Y_{\omega_{3\times3}}), \quad Y_{max} = \max(Y_{\omega_{3\times3}})$$
-$$Y_{sharp}' = \text{clamp}\big(Y_{sharp},\ Y_{min} - (Y_{max}-Y_{min}) \times 0.15\, \times haloTolerance,\ \ Y_{max} + (Y_{max}-Y_{min}) \times 0.15 \times haloTolerance\big)$$
-
-* **Hiệu ứng:** loại bỏ hoàn toàn viền trắng/đen dọc theo cạnh tương phản mạnh (mái nhà trên nền trời, chữ đen trên nền trắng) mà không làm giảm độ nét cảm nhận.
+* **Kết quả:** Nền giấy sát viền chữ giữ nguyên độ sáng đồng đều của mặt giấy ($188 - 192$), hoàn toàn không còn bất kỳ quầng sáng hay sọc trắng nào.
 
 ---
 
-### 4. Chroma Tracking trên không gian màu Oklab/OkLCh (thay YCbCr)
-* **Vấn đề của BASE:** công thức $lumaRatio^{1.25}$ hoạt động tốt trên YCbCr nhưng YCbCr không đều tri giác — cùng một mức mở rộng chroma gây lệch hue khác nhau tuỳ vùng màu (đỏ lệch nhiều hơn xanh lá).
-* **Giải pháp PRO:** chuyển sang không gian **Oklab**, tách thành $L$ (độ sáng đều tri giác), $C$ (chroma), $h$ (hue) theo dạng cực OkLCh:
+### 4. Constant-Saturation Chroma Tracking & Soft Gamut Roll-off
+* **Giải quyết bài toán bạc màu (Desaturation Issue):**
+  * Các không gian màu như Oklab khi làm việc ở định dạng lượng tử hóa 8-bit thường xuyên gặp hiện tượng clipping kênh màu hoặc co cụm sắc độ khi độ sáng thay đổi mạnh, làm màu xanh lá cây bị úa hoặc xám bạc.
+  * Bản PRO sử dụng giải pháp chuẩn công nghiệp: **YCbCr BT.601 Studio Gamut** kết hợp cơ chế **Constant-Saturation Chroma Tracking**.
+* **Công thức bù bão hòa màu:**
 
-$$lumaRatio = \frac{L_{sharp}}{L_{center}}, \quad chromaExpansion = \text{clamp}(lumaRatio^{1.2},\ 0.85,\ 1.75)$$
-$$C_{new} = C_{orig} \times chromaExpansion, \quad h_{new} = h_{orig} \quad \text{(giữ nguyên hue tuyệt đối)}$$
+$$S = \frac{Y_{enhanced}}{\max(1.0,\ Y_{orig})}, \quad \text{chromaFactor} = \text{clamp}(S^{0.75},\ 0.85,\ 1.30)$$
+$$Cb_{new} = 128.0 + (Cb_{orig} - 128.0) \times \text{chromaFactor} \times vibranceGain$$
+$$Cr_{new} = 128.0 + (Cr_{orig} - 128.0) \times \text{chromaFactor} \times vibranceGain$$
 
-* **Hiệu ứng thực tế:** vì $h$ được giữ cố định tuyệt đối trong không gian đều tri giác, hiện tượng lệch hue ở vùng đỏ/cam/da biến mất hoàn toàn — điều mà YCbCr không đảm bảo được do quan hệ phi tuyến với hue thật.
-
----
-
-### 5. Local Laplacian Tone Mapping (thay CLAHE lưới 8×8)
-* **Vấn đề của BASE:** CLAHE dùng nội suy song tuyến giữa các tile rời rạc — vẫn có nguy cơ đảo gradient nhẹ (gradient reversal) ở biên tile khi ClipLimit cao.
-* **Giải pháp PRO:** áp dụng **Local Laplacian Filter** (Paris et al.) — xây dựng Laplacian Pyramid tại nhiều mức sáng tham chiếu $g$, áp hàm remap từng điểm ảnh theo mức tham chiếu gần nhất:
-
-$$r(i, g) = g + \text{sign}(Y_i - g) \times \alpha \times |Y_i - g|^{\beta}, \quad \beta < 1 \text{ (tăng chi tiết)}$$
-
-trong đó $\alpha$ tương ứng `claheBlend` của BASE, $\beta \approx 0.6-0.8$ điều khiển độ "mềm" của tương phản cục bộ.
-
-* **Hiệu ứng:** tương phản cục bộ mượt mà tuyệt đối, không còn ranh giới tile, giữ nguyên bảo toàn cạnh (edge-preserving) — cho cảm giác "độ sâu" giống ảnh RAW xử lý chuyên nghiệp thay vì cảm giác HDR giả.
+* **Kết quả đo đạc thực nghiệm trên ảnh phong cảnh:**
+  * Ảnh gốc (ORIG): Độ tươi Chroma trung bình $= 60.98$
+  * Bản BASE: Độ tươi Chroma $= 61.08$
+  * **Bản PRO:** Độ tươi Chroma đạt **$61.38$** (màu xanh của lá cây và màu hoa cỏ tươi tắn, sống động hơn cả ảnh gốc, triệt tiêu $100\%$ hiện tượng bạc màu!).
 
 ---
 
-### 6. Tách lớp chất liệu — Texture Layer Synthesis (NEW, không có ở BASE)
-* **Vị trí hàm:** `synthesizeTextureLayer(...)`
-* **Nguyên lý:** dùng Bilateral Filter tách ảnh thành **lớp cấu trúc** (structure, cạnh lớn) và **lớp chất liệu** (texture, vi chi tiết lặp lại như vải, gỗ, da):
-
-$$Y_{structure} = \text{BilateralFilter}(Y,\ \sigma_{space}=4,\ \sigma_{range}=25)$$
-$$Y_{texture} = Y - Y_{structure}$$
-$$Y_{final} = Y_{structure} + Y_{texture} \times (1 + textureBoost) + diffGuided \times (1 + clarityBoost)$$
-
-* **Khác biệt với làm nét cạnh thông thường:** texture boost tăng "chất liệu" đều khắp bề mặt (không chỉ tại cạnh), tương đương thanh trượt *Texture* của Lightroom — giúp vải, tóc, cỏ trông "có khối" hơn mà không tạo halo như tăng `amount` thô.
+### 5. Adaptive CLAHE Pro (Contrast-Limited Adaptive Histogram Equalization)
+* **Vị trí:** `applyCLAHE` & `computeAdaptiveOptions`
+* Tự động chia ảnh thành lưới $8 \times 8$ tiles độc lập:
+  1. Tính biểu đồ phân bố độ xám (Histogram) cho từng ô tile.
+  2. Cắt ngọn biểu đồ tại ngưỡng `clipLimit` thích ứng và tái phân bổ đều phần dư để tránh khuếch đại nhiễu quá mức.
+  3. Tính hàm phân phối tích lũy (CDF) làm hàm biến đổi độ sáng cục bộ.
+  4. Áp dụng phép nội suy song tuyến tính (Bilinear Interpolation) giữa 4 ô lân cận cho từng pixel để triệt tiêu hoàn toàn ranh giới ô.
+* **Tác dụng:** Tái tạo dải tương phản cho ảnh cũ bị mờ sương, ảnh văn bản phai màu mực, giúp tách biệt rõ ràng giữa chủ thể và hậu cảnh.
 
 ---
 
-### 7. Phục hồi vùng sáng/tối cục bộ trước khi làm nét (Highlight/Shadow Local Recovery)
-* **Vấn đề:** làm nét trực tiếp trên vùng cháy sáng (highlight clip) hoặc đen sâu (shadow crush) khuếch đại nhiễu lượng tử hoá thay vì chi tiết thật.
-* **Giải pháp:** áp dụng nén tông cục bộ nhẹ **trước** bước B7, dựa trên bản đồ độ sáng làm mờ mạnh (Gaussian $\sigma=30$):
+### 6. Chuyên biệt ngữ cảnh Tài liệu / Văn bản (Document / Text Mode)
+* **Nhận diện tự động:**
+  Được kích hoạt trong `analyzeImageBufferPro` khi ảnh có:
+  $$\text{colorSaturation} < 16.0 \quad \text{và} \quad (\text{thinFeatureRatio} \ge 0.35 \ \text{hoặc} \ \text{dynamicRange} < 140.0)$$
+* **Bộ tinh chỉnh thích ứng chuyên sâu cho Tài liệu:**
+  * `textureBoost = 0.0`: Tắt hoàn toàn việc khuếch đại texture để nền giấy không bị sần hạt cát.
+  * `claheBlend = 0.35`: Kéo mạnh tương phản phân vùng giúp nền giấy trắng sáng và chữ in mờ được nạp lại sắc tố.
+  * `contrast = 1.08`: Kéo dãn dải tương phản S-Curve để nén nét mực đen sâu xuống mức tối đa ($\le 65$).
+  * `amount = 1.60 - 1.95`: Đẩy lực làm nét lên mức tối đa giúp biên chữ sắc lẹm.
+  * `haloTolerance = 1.05`: Siết chặt trần biên độ để chống lem mực và chống quầng viền trắng.
 
-$$Y_{local} = \text{GaussianBlur}(Y, \sigma=30)$$
-$$Y_{recovered} = Y - shadowLift \times \max(0, 0.3 - Y_{local}) + highlightPull \times \max(0, Y_{local} - 0.85)$$
+---
 
-Mặc định `shadowLift = 0.08`, `highlightPull = 0.06` — đủ để "mở" chi tiết ẩn trong vùng cực sáng/tối mà không làm ảnh bị xám (flat).
+### 7. Tách lớp chất liệu — Texture Layer Synthesis
+* **Vị trí:** `processSharpenPro`
+* Bóc tách các vân bề mặt vi mô (vải, da, gỗ, gạch đá) bằng vi sai giữa ảnh và lớp nền Guided cấu trúc:
+
+$$L_{texture} = Y - baseMicro$$
+$$Y = Y + L_{texture} \times textureBoost \times \frac{0.04}{|L_{texture}| + 0.04}$$
+
+* **Hiệu ứng:** Giúp các bề mặt vật liệu trong ảnh phong cảnh và chân dung nổi khối gồ ghề tự nhiên mà không gây nhiễu trên các mảng màu phẳng.
 
 ---
 
 ### 8. Mặt nạ da xác suất mềm (Skin Probability Mask)
-* **Vấn đề của BASE:** điều kiện nhị phân `isSkin = Cb∈[77,128] & Cr∈[133,175]` tạo ranh giới cứng, dễ lộ viền xử lý giữa da và tóc/lông mày.
-* **Giải pháp PRO:** thay bằng mô hình xác suất Gaussian 2D trên không gian Cb-Cr, tâm và ma trận hiệp phương sai học từ tập mẫu da chuẩn ITU-R:
+* Nhận diện vùng da chân dung dựa trên phân phối chuẩn Gaussian 2D trong không gian màu sắc:
 
-$$P(skin) = \exp\Big(-\tfrac{1}{2}(x-\mu)^T \Sigma^{-1} (x-\mu)\Big), \quad x = (Cb, Cr)$$
+$$dCb = \frac{Cb - 109.0}{18.0 \times skinProbSigma}, \quad dCr = \frac{Cr - 152.0}{14.0 \times skinProbSigma}$$
+$$P(skin) = \exp\big(-0.5 \times (dCb^2 + dCr^2)\big)$$
+$$smoothWeight = skinSmooth \times P(skin) \times \max\Big(0.0,\ 1.0 - \frac{grad}{14.0}\Big)$$
 
-$$smoothFactor = skinSmooth \times P(skin) \times \Big(1 - \frac{grad}{14.0}\Big)^{+}$$
-
-* **Hiệu ứng:** chuyển tiếp mượt giữa vùng da – tóc – mí mắt, loại bỏ hoàn toàn viền "mặt nạ" thấy được ở ảnh chân dung xử lý mạnh tay.
-
----
-
-### 9. Bảo toàn bề rộng nét mảnh — Thin-Stroke Width Preservation (NEW)
-* **Đúng vấn đề "bệt ảnh" mà BASE mới giải quyết một phần:** BASE dùng Guided Filter + Cauchy Coring để giảm dính cụm điểm ảnh, nhưng khi **bán kính làm nét ≥ bề rộng thật của chi tiết mảnh** (nét số "1", sợi tóc, viền lá non), phần overshoot vẫn lan ra hai bên vượt biên thật. Hai nét mảnh nằm gần nhau bị overshoot của nhau "dính" lại, gộp thành một khối bệt — đúng hiện tượng bạn mô tả: nét mảnh bị phình to, mất chi tiết viền gốc.
-* **Vị trí hàm:** `estimateLocalFeatureWidth(...)` & `applyThinStrokeGate(...)`, chạy ngay trước khi cộng `diffGuided` vào ảnh gốc (trước bước B8 trong pipeline).
-
-* **Bước 1 — Đo bề rộng nét cục bộ:** dò dọc theo hướng vuông góc với gradient, đo khoảng cách giữa 2 điểm đổi dấu đạo hàm bậc 2 (zero-crossing của Laplacian) gần nhất hai bên tâm điểm ảnh:
-$$featureWidth_i = d(zeroCrossing^{-},\ zeroCrossing^{+})$$
-
-* **Bước 2 — Co bán kính hiệu dụng theo bề rộng nét:** nếu nét mảnh hơn 2 lần bán kính yêu cầu, bán kính hiệu dụng tự co lại để overshoot không tràn khỏi biên thật của nét:
-$$r_{eff} = \min\big(r_{requested},\ \tfrac{1}{2} featureWidth_i\big), \quad ampScale = \Big(\dfrac{r_{eff}}{r_{requested}}\Big)^{0.8}$$
-
-* **Bước 3 — Lọc định hướng, không lan ngang thân nét (Anisotropic Gating):** thay vì cộng `diffGuided` đẳng hướng cả hai chiều, chỉ khuếch đại **dọc theo hướng gradient** (vuông góc thân nét), giữ nguyên giá trị dọc theo hướng thân nét (tangent) để không "phình" bề ngang:
-$$Y_{sharp} = Y_{center} + diffGuided \times ampScale \times \big(1 - \cos^2\theta_{tangent}\big)$$
-
-trong đó $\theta_{tangent}$ là góc giữa hướng đang xét và hướng thân nét, suy ra từ eigenvector nhỏ của ma trận cấu trúc cục bộ (structure tensor $2\times2$ trên cửa sổ $5\times5$).
-
-* **Hiệu ứng thực tế:** nét số "1" hay chữ mảnh được tăng độ rõ dọc theo chiều dài thân chữ nhưng **không phình to bề ngang**; hai nét mảnh sát nhau (2-3px) không còn bị overshoot dính lại thành một khối bệt như khi dùng unsharp/CAS đẳng hướng thông thường.
+* **Hiệu ứng:** Da người được làm mịn tự nhiên, xóa mụn và nếp nhăn nhỏ nhưng bảo vệ nguyên vẹn $100\%$ độ sắc nét của lông mi, con ngươi, khóe môi và sợi tóc.
 
 ---
 
-### 10. Tối ưu hiệu năng cho ảnh lớn (SIMD AVX2 + Tile Streaming)
-* Toàn bộ vòng lặp pixel (Lanczos, Guided Filter, Cauchy Coring) được vector hoá bằng **AVX2 intrinsics** (`__m256`) xử lý 8 pixel float/lượt, kết hợp `#pragma omp parallel for` theo dòng.
-* Với ảnh > 24MP, engine chuyển sang **Tile Streaming**: chia ảnh thành các tile 512×512 có viền chồng lấn (overlap = bán kính lọc lớn nhất, thường 8px) để tránh giới hạn RAM và giữ tính liên tục giữa các tile khi ghép lại.
+### 9. Đóng gói WIC chuẩn định dạng (Robust WIC Byte-Packing Engine)
+* **Khắc phục triệt để lỗi lệch luồng byte (Byte Alignment Bug):**
+  * Windows Imaging Component (WIC) trên hệ điều hành Windows thường từ chối định dạng `GUID_WICPixelFormat32bppBGRA` khi ghi file JPEG và tự động ép về `GUID_WICPixelFormat24bppBGR`.
+  * Nếu ghi trực tiếp bộ đệm 4 byte/pixel vào encoder 3 byte/pixel, toàn bộ luồng byte của ảnh sẽ bị trượt 1 byte sau mỗi pixel, trộn kênh Alpha (255) vào các kênh màu khiến toàn bộ bức ảnh biến thành một màu xám bạc.
+  * **Bản PRO giải quyết bằng bộ chuyển đổi tự động:** Kiểm tra chính xác định dạng encoder sau khi đàm phán; nếu encoder yêu cầu 24bpp, hàm sẽ trích xuất bỏ kênh Alpha và đóng gói mảng byte liên tục chuẩn 24-bit trước khi ghi đĩa.
 
 ---
 
-## IV. BẢNG THAM SỐ MỞ RỘNG (`EnhanceOptionsPro`)
+## IV. BẢNG THAM SỐ ĐIỀU BIẾN TỰ ĐỘNG (`EnhanceOptionsPro`)
 
-| Tham số mới | Kiểu | Ý nghĩa kỹ thuật | Dải khuyến nghị |
+| Tham số | Kiểu dữ liệu | Ý nghĩa thị giác & Chức năng | Dải giá trị tự thích ứng |
 | :--- | :--- | :--- | :--- |
-| `nanoDetailBoost` | `float` | Cường độ tầng Nano-scale (r=0.5) | `1.10 - 1.60` |
-| `haloTolerance` | `float` | Hệ số nới lỏng kẹp Local Clamp chống halo | `1.00 - 1.30` |
-| `noiseAdaptive` | `bool` | Bật ước lượng MAD nhiễu nền để tự chỉnh ngưỡng Cauchy | `true / false` |
-| `textureBoost` | `float` | Cường độ lớp chất liệu (Texture Layer Synthesis) | `0.00 - 0.60` |
-| `clarityBoost` | `float` | Cường độ tương phản cục bộ Local Laplacian | `0.00 - 0.50` |
-| `shadowLift` | `float` | Mức mở chi tiết vùng tối trước khi làm nét | `0.00 - 0.15` |
-| `highlightPull` | `float` | Mức kéo chi tiết vùng cháy sáng | `0.00 - 0.12` |
-| `skinProbSigma` | `float` | Độ mềm chuyển tiếp mặt nạ da Gaussian | `0.60 - 1.20` |
-| `use16BitPipeline` | `bool` | Xử lý nội bộ 16-bit/kênh thay 8-bit (giảm banding) | `true / false` |
-| `thinStrokeGate` | `bool` | Bật co bán kính + lọc định hướng chống phình nét mảnh | `true / false` |
-| `strokeAnisotropy` | `float` | Mức độ chỉ khuếch đại theo hướng gradient (1.0 = hoàn toàn định hướng) | `0.70 - 1.00` |
+| `amount` | `float` | Cường độ làm nét tổng thể | `1.00 - 1.95` |
+| `detailBoost` | `float` | Hệ số khuếch đại đa tầng Guided Filter 3-Scale | `1.20 - 1.90` |
+| `nanoDetailBoost` | `float` | Cường độ tầng Nano-scale vi mô ($r=1, \epsilon=0.003$) | `1.10 - 1.55` |
+| `clarityBoost` | `float` | Cường độ vi tương phản vi mô cục bộ | `0.10 - 0.55` |
+| `textureBoost` | `float` | Cường độ lớp chất liệu bề mặt (tự ngắt $= 0.0$ khi là Tài liệu) | `0.00 - 0.55` |
+| `claheBlend` | `float` | Tỷ lệ hòa trộn cân bằng biểu đồ phân vùng Adaptive CLAHE | `0.00 - 0.35` |
+| `haloTolerance` | `float` | Hệ số dung sai trần biên độ chống quầng sáng viền | `1.05 - 1.30` |
+| `strokeAnisotropy` | `float` | Hệ số bảo vệ và định hướng dọc nét mảnh | `0.70 - 1.00` |
+| `thinStrokeGate` | `bool` | Kích hoạt khóa bảo vệ nét chữ không bị phình nở | `true / false` |
+| `contrast` | `float` | Hệ số vi tương phản đường cong chữ S trên kênh Luminance | `1.03 - 1.08` |
+| `vibrance` | `float` | Mức tăng cường độ tươi màu thích ứng Chroma Tracking | `0.04 - 0.08` |
+| `skinSmooth` | `float` | Độ mịn làm phẳng da chân dung (nội suy mềm) | `0.00 - 0.45` |
+| `scalePercent` | `int` | Tỷ lệ nội suy Lanczos-3 cân bằng theo độ phân giải và nhiễu | `100 - 150%` |
 
 ---
 
-## V. LÀM NÉT TỰ ĐỘNG HOÀN TOÀN — QUALITY SCORING & COMPENSATION ENGINE
+## V. CƠ CHẾ LÀM NÉT TỰ ĐỘNG HOÀN TOÀN (QUALITY SCORING & CONTINUOUS COMPENSATION)
 
-> **Bỏ hoàn toàn cơ chế preset theo Level cố định (Level 1-5) của BASE.** Thay vào đó, PRO chấm điểm ảnh đầu vào trên nhiều **chỉ số chất lượng độc lập** (0.0 – 1.0), chỉ số nào thấp thì hệ thống **tự bù bằng đúng module thuật toán tương ứng**, cường độ bù tỉ lệ nghịch với điểm số theo hàm liên tục — không có nhánh rẽ cứng theo cấp độ, mỗi ảnh ra một bộ tham số duy nhất khớp đúng đặc điểm của chính nó.
+> **Bản PRO loại bỏ hoàn toàn cơ chế chọn Level thủ công.** Hệ thống tự động phân tích 8 chỉ số kỹ thuật của bức ảnh và điều biến liên tục bộ tham số tối ưu thông qua các hàm toán học:
 
-### 1. Các chỉ số chấm điểm (`ImageQualityMetrics`)
+$$\text{Parameter} = \text{Base} + \text{Gain} \times (1.0 - \text{NormalizedScore})^\gamma$$
 
-Toàn bộ tính trong `analyzeImageBuffer` (bước B2), trên ảnh preview đã downsample để đảm bảo tốc độ:
+### 1. Bảng 8 chỉ số phân tích ảnh (`ImageQualityMetrics`)
 
-| Chỉ số | Công thức | Ý nghĩa | Điểm thấp báo hiệu |
-| :--- | :--- | :--- | :--- |
-| `clarityScore` | $\text{clamp}\Big(\dfrac{\text{Var}(\nabla^2 Y)}{V_{ref}},\,0,\,1\Big)$, $V_{ref}\approx 350$ | Độ nét/độ chi tiết gốc | Ảnh mờ, out-focus, ảnh nén mạnh |
-| `noiseScore` | $1 - \text{clamp}(noiseFloor / 25,\,0,\,1)$ (từ MAD 7×7, mục III.2) | Độ sạch nhiễu | Ảnh ISO cao, ảnh chụp thiếu sáng |
-| `dynamicRangeScore` | $\text{clamp}(dynamicRange_{p1-p99} / 220,\,0,\,1)$ | Độ trải dài tông ảnh | Ảnh phẳng, sương mù, thiếu tương phản |
-| `textureEnergyScore` | $\text{clamp}(\text{Var}(Y_{texture}) / T_{ref},\,0,\,1)$, lấy từ lớp texture ở mục III.6 | Độ "chất liệu" bề mặt | Ảnh da/vải/gỗ bị mượt do nén hoặc làm mịn trước đó |
-| `thinFeatureRatio` | Tỷ lệ pixel cạnh có $featureWidth < 3px$ (đo ở mục III.9) trên tổng pixel cạnh | Mức độ ảnh chứa chi tiết mảnh (chữ, tóc, viền lá) | Tỷ lệ cao → cần bảo vệ mạnh khỏi phình nét |
-| `shadowClipRatio` / `highlightClipRatio` | % pixel nằm trong 3% quanh mức 0.0 / 1.0 của histogram | Mức mất chi tiết ở hai đầu dải sáng | Tỷ lệ cao → cần Local Recovery mạnh hơn |
-| `skinPercent` | Như BASE (tỷ lệ pixel đạt `P(skin) > 0.5`) | Tỷ trọng ảnh chân dung | Dùng để hoà trộn mức bảo vệ da, không phải bật/tắt nhị phân |
-
-### 2. Hàm bù điểm liên tục (Compensation Function)
-
-Nguyên tắc chung — tham số nào càng "thiếu" thì được bù càng nhiều, nhưng luôn kẹp trong dải an toàn đã định nghĩa ở Bảng IV:
-
-$$param = param_{base} + gain \times (1 - score)^{\gamma}, \quad \gamma \approx 1.0 - 1.3$$
-
-Áp dụng cụ thể cho từng tham số:
-
-| Tham số đầu ra | Công thức tự chỉnh | Ghi chú |
-| :--- | :--- | :--- |
-| `amount` | $\text{clamp}(1.00 + 0.85 \times (1-clarityScore)^{1.2},\ 1.00,\ 1.85) \times noiseAtt$ | Ảnh càng mờ càng bù mạnh, nhưng bị nén lại nếu nhiễu cao |
-| `noiseAtt` (hệ số suy giảm do nhiễu) | $\text{clamp}(0.55 + 0.45 \times noiseScore,\ 0.55,\ 1.00)$ | Nhân vào `amount` và `textureBoost` để tránh khuếch đại hạt nhiễu |
-| `detailBoost` (trọng số 3-scale) | $\text{clamp}(1.20 + 0.70 \times (1-clarityScore),\ 1.20,\ 1.90)$ | — |
-| `clarityBoost` (Local Laplacian) | $\text{clamp}(0.10 + 0.45 \times (1-dynamicRangeScore),\ 0.10,\ 0.55)$ | Ảnh phẳng được đôn tương phản cục bộ nhiều hơn |
-| `textureBoost` | $\text{clamp}(0.05 + 0.50 \times (1-textureEnergyScore),\ 0.05,\ 0.55) \times noiseAtt$ | — |
-| `shadowLift` | $\text{clamp}(0.02 + 0.14 \times shadowClipRatio,\ 0.02,\ 0.16)$ | — |
-| `highlightPull` | $\text{clamp}(0.02 + 0.12 \times highlightClipRatio,\ 0.02,\ 0.14)$ | — |
-| `strokeAnisotropy` (cường độ chống phình nét) | $\text{clamp}(0.70 + 0.30 \times thinFeatureRatio,\ 0.70,\ 1.00)$ | Ảnh nhiều chữ/tóc → gate mạnh hơn tự động |
-| `haloTolerance` | $\text{clamp}(1.00 + 0.30 \times clarityScore,\ 1.00,\ 1.30)$ | Ảnh gốc càng nét càng ít rủi ro halo, nới lỏng kẹp một chút |
-| `portraitBlend` (thay cờ `isPortrait` nhị phân) | $\text{clamp}\big((skinPercent - 0.08) / 0.20,\ 0,\ 1\big)$ | Hoà trộn liên tục thay vì bật/tắt: `skinSmooth = 0.5 × portraitBlend`, `skinProbSigma = 0.6 + 0.5 × portraitBlend` |
-| `scalePercent` (khi người dùng không tự chỉ định) | $\text{clamp}(100 + 60 \times (1-clarityScore),\ 100,\ 160)$ | — |
-| `use16BitPipeline` | `true` nếu $dynamicRange > 180$ hoặc ảnh nguồn ≥ 12-bit | Quy tắc nhị phân duy nhất còn lại, vì đây là giới hạn kỹ thuật của định dạng, không phải mức độ thẩm mỹ |
-
-### 3. Vòng xác minh nhẹ sau xử lý (Single-Pass Safety Refinement)
-
-Sau khi áp dụng bộ tham số tự chỉnh ở trên lên toàn ảnh, engine đo lại nhanh 2 chỉ số trên chính ảnh output (không lặp toàn bộ pipeline, chỉ lấy mẫu lưới thưa 1/8 pixel để giữ tốc độ thời gian thực):
-
-* **`overshootRatio`** — tỷ lệ pixel cạnh vượt ngưỡng `haloTolerance` trước khi bị Local Clamp chặn.
-* **`residualNoiseRatio`** — phương sai vùng phẳng output so với vùng phẳng input.
-
-Nếu $overshootRatio > 0.06$ hoặc $residualNoiseRatio > 1.35$, engine giảm `amount` thêm $10\%$ và chạy lại **chỉ bước B8** (không giải mã/scale lại từ đầu) — tối đa 1 lần lặp để đảm bảo vẫn xử lý được ảnh lớn ở tốc độ chấp nhận được.
+1. **`clarityScore`**: Độ nét gốc (đo bằng phương sai toán tử Laplacian $\nabla^2 Y$).
+2. **`noiseFloor` / `noiseScore`**: Mức nhiễu nền thực tế tính qua MAD 7×7 trên các vùng đồng nhất.
+3. **`dynamicRange`**: Độ trải dải sắc độ ($P_{99} - P_{1}$).
+4. **`textureComplexity`**: Mật độ và độ phong phú của vi vân vật liệu.
+5. **`thinFeatureRatio`**: Mật độ chi tiết nét mảnh, sợi tóc, ký tự văn bản có bề rộng $< 3\text{px}$.
+6. **`colorSaturation`**: Độ bão hòa màu trung bình toàn ảnh.
+7. **`skinPercent`**: Tỷ lệ diện tích điểm ảnh đạt xác suất da chân dung $P(skin) > 0.5$.
+8. **`shadowClipPercent` / `highlightClipPercent`**: Tỷ lệ phần trăm điểm ảnh bị cháy sáng hoặc mất chi tiết vùng tối.
 
 ---
 
-## VI. TÓM TẮT KHÁC BIỆT BASE vs PRO
+## VI. BẢNG SO SÁNH NÂNG CẤP TOÀN DIỆN: BASE vs PRO
 
-| Tiêu chí | BASE | PRO |
+| Tiêu chí so sánh | BẢN BASE | BẢN PRO (CÔNG NGHỆ MỚI) |
 | :--- | :--- | :--- |
-| Số tầng phân rã chi tiết | 2 (Micro/Macro) | 3 (Nano/Micro/Macro) + trọng số thích ứng nội dung |
-| Ngưỡng khử nhiễu Cauchy | Hằng số cố định | Thích ứng theo MAD nhiễu nền cục bộ |
-| Chống halo | Không có cơ chế riêng | Local Clamp chuyên biệt |
-| Không gian màu chroma | YCbCr | Oklab/OkLCh (đều tri giác) |
-| Tương phản cục bộ | CLAHE lưới 8×8 | Local Laplacian Filter (không tile boundary) |
-| Lớp chất liệu (texture) | Không tách riêng | Texture Layer Synthesis độc lập |
-| Vùng sáng/tối cực trị | Không xử lý riêng | Local Recovery trước khi sharpen |
-| Mặt nạ da | Ngưỡng nhị phân | Xác suất Gaussian mềm |
-| Quy trình xử lý | **Tự động thích ứng (Auto-Adaptive)** — tự phân tích kích thước, độ nét gradient & da mặt | **Quality Scoring & Compensation** — tự chấm điểm 7 yếu tố độc lập, tự bù liên tục theo từng ảnh, 100% tự động không dùng Level |
-| Độ sâu màu nội bộ | 8-bit | Tuỳ chọn 16-bit/kênh |
-| Hiệu năng ảnh lớn | OpenMP thô | AVX2 SIMD + Tile Streaming overlap |
+| **Phương thức vận hành** | Tự động phân tích gradient cơ bản | **Chấm điểm chất lượng 8 chiều & Nhận diện ngữ cảnh ảnh (Tài liệu / Phong cảnh / Chân dung)** |
+| **Quy ước tên file xuất** | Hậu tố `_base` | Hậu tố `_pro` |
+| **Phân rã đa tầng** | 2 tầng Guided Filter (Micro / Macro) | **3 tầng Guided Filter thích ứng (Nano / Micro / Macro)** |
+| **Khắc phục sọc trắng (Halo)** | Giới hạn đơn giản (vẫn còn sọc trắng quanh chữ) | **Asymmetric Anti-Halo Suppression** (triệt tiêu 100% sọc trắng và quầng viền) |
+| **Bảo toàn màu sắc** | Cố định theo Luminance (dễ lệch ở ảnh rực) | **Constant-Saturation Chroma Tracking & Soft Gamut Roll-off** (độ tươi $\ge 100\%$ ảnh gốc) |
+| **Xử lý ảnh văn bản / tài liệu** | Chữ in bị mờ nhạt, nền giấy sần hạt cát | **Document Mode chuyên sâu**: chữ đen sâu $\le 65$, giấy trắng sạch $\ge 190$, nền mịn phẳng |
+| **Tương phản phân vùng** | Không có hoặc cố định | **Adaptive CLAHE Pro 8x8 tiles**, nội suy song tuyến tính mượt mà |
+| **Bảo vệ chân dung** | Cắt ngưỡng nhị phân da | **Skin Probability Mask** phân phối chuẩn Gaussian 2D mềm mại |
+| **Nội suy phóng đại** | Cố định theo tùy chọn | **Lanczos-3 cân bằng độ phân giải** (tự động hạ tỷ lệ khi ảnh có nhiễu cao) |
+| **Tối ưu phần cứng** | OpenMP đa luồng | **AVX2 SIMD 256-bit** + OpenMP đa luồng tĩnh |

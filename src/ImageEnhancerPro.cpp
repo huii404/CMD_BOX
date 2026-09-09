@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <vector>
 #include <numeric>
+#include <iostream>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -189,18 +190,37 @@ EnhanceOptionsPro ImageEnhancerPro::computeAdaptiveOptions(const ImageScorePro& 
     opt.skinSmooth = 0.50f * portraitBlend;
     opt.skinProbSigma = 0.60f + 0.50f * portraitBlend;
 
-    // 10. Tự động tính toán tỷ lệ nội suy Lanczos-3 (scalePercent)
-    float scaleFromClarity = std::clamp(100.0f + 60.0f * (1.0f - clarityScoreNorm), 100.0f, 160.0f);
-    if (score.megaPixels < 0.40f) {
-        opt.scalePercent = 200; // Ảnh siêu nhỏ (< 0.4 MP) -> nội suy 200% tái tạo pixel
-    } else if (score.megaPixels < 1.0f) {
-        opt.scalePercent = std::max((int)std::round(scaleFromClarity), 150);
-    } else if (score.megaPixels < 2.5f) {
-        opt.scalePercent = std::max((int)std::round(scaleFromClarity), 125);
-    } else if (score.megaPixels >= 5.0f) {
-        opt.scalePercent = 100; // Ảnh độ phân giải cao giữ nguyên 1:1
+    // 10. Phân loại ngữ cảnh Document / Text vs Landscape / Portrait
+    bool isDoc = (score.detectedType == "Tài liệu / Văn bản (Document / Text)") ||
+                 (score.colorSaturation < 16.0f && (score.thinFeatureRatio >= 0.35f || score.dynamicRange < 140.0f));
+
+    if (isDoc) {
+        opt.isPortrait = false;
+        opt.skinSmooth = 0.0f;
+        opt.textureBoost = 0.0f; // Triệt tiêu bơm hạt vào nền giấy
+        opt.claheBlend = 0.35f;  // Kéo tương phản cao tách chữ đen khỏi giấy
+        opt.contrast = 1.08f;    // Nén sâu mực đen
+        opt.amount = std::clamp(opt.amount * 1.15f, 1.60f, 1.95f); // Nét chữ sắc lẹm
+        opt.detailBoost = std::clamp(opt.detailBoost, 1.60f, 1.90f);
+        opt.nanoDetailBoost = 1.45f;
+        opt.haloTolerance = 1.05f; // Khóa chặt quầng sáng quanh chữ
+        opt.casStrength = 1.25f;
     } else {
-        opt.scalePercent = (int)std::round(scaleFromClarity);
+        opt.claheBlend = std::clamp(0.12f + 0.18f * (1.0f - dynamicRangeScore), 0.10f, 0.30f);
+        if (opt.isPortrait) {
+            opt.claheBlend = 0.10f;
+        }
+    }
+
+    // 11. Tự động tính toán tỷ lệ nội suy Lanczos-3 (scalePercent)
+    if (score.megaPixels < 0.60f) {
+        opt.scalePercent = 150; // Ảnh nhỏ: bù tối đa 150%
+    } else if (score.megaPixels < 1.80f) {
+        opt.scalePercent = 130; // Ảnh vừa: bù 130%
+    } else if (score.megaPixels < 4.00f) {
+        opt.scalePercent = 115; // Ảnh lớn: bù nhẹ 115%
+    } else {
+        opt.scalePercent = 100; // Ảnh độ phân giải cao giữ nguyên tỷ lệ 100%
     }
 
     // Giảm nội suy nếu nhiễu nền quá cao để tránh phóng đại noise grain
@@ -208,9 +228,9 @@ EnhanceOptionsPro ImageEnhancerPro::computeAdaptiveOptions(const ImageScorePro& 
         opt.scalePercent = std::max(100, opt.scalePercent - 15);
     }
 
-    opt.casStrength = 1.00f;
-    opt.edgeSensitivity = 1.25f;
-    opt.contrast = opt.isPortrait ? 1.03f : 1.06f;
+    opt.casStrength = isDoc ? 1.25f : 1.00f;
+    opt.edgeSensitivity = isDoc ? 1.35f : 1.25f;
+    opt.contrast = isDoc ? 1.08f : (opt.isPortrait ? 1.03f : 1.06f);
     opt.vibrance = opt.isPortrait ? 0.05f : 0.07f;
     opt.noiseAdaptive = true;
     opt.use16BitPipeline = (score.dynamicRange > 180.0f);
@@ -327,46 +347,91 @@ std::vector<uint8_t> ImageEnhancerPro::lanczos3Resample(
 }
 
 std::vector<float> ImageEnhancerPro::fastBoxFilter(const std::vector<float>& src, int width, int height, int radius) {
-    std::vector<float> temp(width * height);
-    std::vector<float> dst(width * height);
-    float invW = 1.0f / (2 * radius + 1);
+    if (radius <= 0) return src;
+    int total = width * height;
+    std::vector<float> temp(total);
+    std::vector<float> dst(total);
 
+    // Lượt quét ngang O(N) với sliding window
     #pragma omp parallel for schedule(static)
     for (int y = 0; y < height; ++y) {
-        int rowIdx = y * width;
-        float sum = src[rowIdx] * radius;
-        for (int x = 0; x <= radius; ++x) {
-            sum += src[rowIdx + std::min(x, width - 1)];
+        int rowOffset = y * width;
+        float sum = 0.0f;
+        for (int i = -radius; i <= radius; ++i) {
+            int cx = std::clamp(i, 0, width - 1);
+            sum += src[rowOffset + cx];
         }
         for (int x = 0; x < width; ++x) {
-            int left = std::max(0, x - radius - 1);
-            int right = std::min(width - 1, x + radius);
-            sum += src[rowIdx + right] - src[rowIdx + left];
-            temp[rowIdx + x] = sum * invW;
+            temp[rowOffset + x] = sum;
+            int leftX = std::clamp(x - radius, 0, width - 1);
+            int rightX = std::clamp(x + radius + 1, 0, width - 1);
+            sum += src[rowOffset + rightX] - src[rowOffset + leftX];
         }
     }
+
+    // Lượt quét dọc O(N) với sliding window và chuẩn hóa
+    float invArea = 1.0f / ((2 * radius + 1) * (2 * radius + 1));
 
     #pragma omp parallel for schedule(static)
     for (int x = 0; x < width; ++x) {
-        float sum = temp[x] * radius;
-        for (int y = 0; y <= radius; ++y) {
-            sum += temp[std::min(y, height - 1) * width + x];
+        float sum = 0.0f;
+        for (int i = -radius; i <= radius; ++i) {
+            int cy = std::clamp(i, 0, height - 1);
+            sum += temp[cy * width + x];
         }
         for (int y = 0; y < height; ++y) {
-            int top = std::max(0, y - radius - 1);
-            int bottom = std::min(height - 1, y + radius);
-            sum += temp[bottom * width + x] - temp[top * width + x];
-            dst[y * width + x] = sum * invW;
+            dst[y * width + x] = sum * invArea;
+            int topY = std::clamp(y - radius, 0, height - 1);
+            int botY = std::clamp(y + radius + 1, 0, height - 1);
+            sum += temp[botY * width + x] - temp[topY * width + x];
         }
     }
+
     return dst;
 }
 
 std::vector<float> ImageEnhancerPro::fastBlur(const std::vector<float>& src, int width, int height, int radius) {
-    if (radius <= 0) return src;
-    std::vector<float> b1 = fastBoxFilter(src, width, height, radius);
-    std::vector<float> b2 = fastBoxFilter(b1, width, height, radius);
-    return fastBoxFilter(b2, width, height, radius);
+    if (radius < 1) radius = 1;
+    std::vector<float> buffer1 = src;
+    std::vector<float> buffer2(src.size());
+    int div = radius * 2 + 1;
+
+    for (int pass = 0; pass < 3; ++pass) {
+        // Lượt quét ngang (Horizontal)
+        #pragma omp parallel for schedule(static)
+        for (int y = 0; y < height; ++y) {
+            int rowOffset = y * width;
+            float sum = 0.0f;
+            for (int i = -radius; i <= radius; ++i) {
+                int cx = std::clamp(i, 0, width - 1);
+                sum += buffer1[rowOffset + cx];
+            }
+            for (int x = 0; x < width; ++x) {
+                buffer2[rowOffset + x] = sum / div;
+                int leftX = std::clamp(x - radius, 0, width - 1);
+                int rightX = std::clamp(x + radius + 1, 0, width - 1);
+                sum += buffer1[rowOffset + rightX] - buffer1[rowOffset + leftX];
+            }
+        }
+
+        // Lượt quét dọc (Vertical)
+        #pragma omp parallel for schedule(static)
+        for (int x = 0; x < width; ++x) {
+            float sum = 0.0f;
+            for (int i = -radius; i <= radius; ++i) {
+                int cy = std::clamp(i, 0, height - 1);
+                sum += buffer2[(cy * width) + x];
+            }
+            for (int y = 0; y < height; ++y) {
+                buffer1[(y * width) + x] = sum / div;
+                int topY = std::clamp(y - radius, 0, height - 1);
+                int botY = std::clamp(y + radius + 1, 0, height - 1);
+                sum += buffer2[(botY * width) + x] - buffer2[(topY * width) + x];
+            }
+        }
+    }
+
+    return buffer1;
 }
 
 // -------------------------------------------------------------
@@ -438,6 +503,111 @@ ImageEnhancerPro::OklabPixel ImageEnhancerPro::okLChToOklab(const OkLChPixel& lc
 }
 
 // -------------------------------------------------------------
+// Contrast Limited Adaptive Histogram Equalization (CLAHE)
+// -------------------------------------------------------------
+void ImageEnhancerPro::applyCLAHE(
+    std::vector<float>& luma, int width, int height,
+    float clipLimit, float blendFactor)
+{
+    if (blendFactor <= 0.001f) return;
+
+    const int GRID_X = 8;
+    const int GRID_Y = 8;
+    int tileW = (width + GRID_X - 1) / GRID_X;
+    int tileH = (height + GRID_Y - 1) / GRID_Y;
+
+    std::vector<std::vector<std::vector<float>>> mappings(
+        GRID_Y, std::vector<std::vector<float>>(GRID_X, std::vector<float>(256, 0.0f))
+    );
+
+    // 1. Tính toán Histogram và CDF phân phối tích lũy cho từng tile 8x8
+    for (int ty = 0; ty < GRID_Y; ++ty) {
+        int yStart = ty * tileH;
+        int yEnd = std::min(yStart + tileH, height);
+        int currentTileH = yEnd - yStart;
+
+        for (int tx = 0; tx < GRID_X; ++tx) {
+            int xStart = tx * tileW;
+            int xEnd = std::min(xStart + tileW, width);
+            int currentTileW = xEnd - xStart;
+            int tileArea = currentTileW * currentTileH;
+            if (tileArea <= 0) continue;
+
+            std::vector<int> hist(256, 0);
+            for (int y = yStart; y < yEnd; ++y) {
+                int row = y * width;
+                for (int x = xStart; x < xEnd; ++x) {
+                    int bin = std::clamp((int)std::round(luma[row + x]), 0, 255);
+                    hist[bin]++;
+                }
+            }
+
+            int clipVal = (int)std::max(1.0f, (clipLimit * tileArea) / 256.0f);
+            int excess = 0;
+            for (int i = 0; i < 256; ++i) {
+                if (hist[i] > clipVal) {
+                    excess += hist[i] - clipVal;
+                    hist[i] = clipVal;
+                }
+            }
+
+            int bonus = excess / 256;
+            int remainder = excess % 256;
+            for (int i = 0; i < 256; ++i) {
+                hist[i] += bonus;
+                if (i < remainder) hist[i]++;
+            }
+
+            int cdf = 0;
+            for (int i = 0; i < 256; ++i) {
+                cdf += hist[i];
+                mappings[ty][tx][i] = ((float)cdf / (float)tileArea) * 255.0f;
+            }
+        }
+    }
+
+    // 2. Nội suy song tuyến tính (Bilinear Interpolation) giữa các tile lân cận
+    std::vector<float> claheOut = luma;
+
+    #pragma omp parallel for schedule(static)
+    for (int y = 0; y < height; ++y) {
+        float gy = (y - tileH * 0.5f) / (float)tileH;
+        int ty0 = (int)std::floor(gy);
+        int ty1 = ty0 + 1;
+        float dy = gy - ty0;
+
+        int ty0_c = std::clamp(ty0, 0, GRID_Y - 1);
+        int ty1_c = std::clamp(ty1, 0, GRID_Y - 1);
+
+        int row = y * width;
+        for (int x = 0; x < width; ++x) {
+            float gx = (x - tileW * 0.5f) / (float)tileW;
+            int tx0 = (int)std::floor(gx);
+            int tx1 = tx0 + 1;
+            float dx = gx - tx0;
+
+            int tx0_c = std::clamp(tx0, 0, GRID_X - 1);
+            int tx1_c = std::clamp(tx1, 0, GRID_X - 1);
+
+            int val = std::clamp((int)std::round(luma[row + x]), 0, 255);
+
+            float v00 = mappings[ty0_c][tx0_c][val];
+            float v10 = mappings[ty0_c][tx1_c][val];
+            float v01 = mappings[ty1_c][tx0_c][val];
+            float v11 = mappings[ty1_c][tx1_c][val];
+
+            float top = v00 * (1.0f - dx) + v10 * dx;
+            float bot = v01 * (1.0f - dx) + v11 * dx;
+            float eqVal = top * (1.0f - dy) + bot * dy;
+
+            claheOut[row + x] = (1.0f - blendFactor) * luma[row + x] + blendFactor * eqVal;
+        }
+    }
+
+    luma = std::move(claheOut);
+}
+
+// -------------------------------------------------------------
 // Highlight & Shadow Local Recovery (B4)
 // -------------------------------------------------------------
 void ImageEnhancerPro::applyHighlightShadowRecovery(
@@ -446,8 +616,7 @@ void ImageEnhancerPro::applyHighlightShadowRecovery(
 {
     if (shadowLift <= 0.001f && highlightPull <= 0.001f) return;
 
-    // Gaussian approximation via large-radius box filter
-    int r = std::clamp(std::min(width, height) / 32, 10, 40);
+    int r = std::clamp(std::min(width, height) / 32, 8, 32);
     std::vector<float> localMean = fastBlur(luma, width, height, r);
 
     #pragma omp parallel for schedule(static)
@@ -455,10 +624,14 @@ void ImageEnhancerPro::applyHighlightShadowRecovery(
         float loc = localMean[i];
         float orig = luma[i];
 
-        float lift = shadowLift * std::max(0.0f, 0.30f - loc);
-        float pull = highlightPull * std::max(0.0f, loc - 0.82f);
-
-        luma[i] = std::clamp(orig + lift - pull, 0.0f, 1.0f);
+        if (loc < 22.0f && orig < 22.0f && shadowLift > 0.02f) {
+            float lift = shadowLift * (22.0f - orig);
+            luma[i] = std::clamp(orig + lift, 0.0f, 255.0f);
+        }
+        if (loc > 235.0f && orig > 235.0f && highlightPull > 0.02f) {
+            float pull = highlightPull * (orig - 235.0f);
+            luma[i] = std::clamp(orig - pull, 0.0f, 255.0f);
+        }
     }
 }
 
@@ -471,23 +644,14 @@ void ImageEnhancerPro::applyLocalLaplacianToneMapping(
 {
     if (clarityBoost <= 0.001f) return;
 
-    // 2-level Laplacian decomposition
-    int r = std::clamp(std::min(width, height) / 64, 4, 16);
+    int r = std::clamp(std::min(width, height) / 48, 3, 12);
     std::vector<float> base = fastBlur(luma, width, height, r);
-
-    const float alpha = clarityBoost * 1.4f;
-    const float beta = 0.70f; // Compression power for micro-contrast
 
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < width * height; ++i) {
-        float y = luma[i];
-        float g = base[i];
-        float diff = y - g;
-        float sign = (diff >= 0.0f) ? 1.0f : -1.0f;
-        float absDiff = std::abs(diff);
-
-        float remapped = g + sign * alpha * std::pow(absDiff, beta);
-        luma[i] = std::clamp(remapped, 0.0f, 1.0f);
+        float diff = luma[i] - base[i];
+        float damp = 12.0f / (std::abs(diff) + 12.0f);
+        luma[i] = std::clamp(luma[i] + diff * clarityBoost * damp, 0.0f, 255.0f);
     }
 }
 
@@ -549,35 +713,19 @@ void ImageEnhancerPro::applyGuidedFilter3Scale(
     int nPixels = width * height;
     diffGuided.assign(nPixels, 0.0f);
 
-    // 1. Nano scale (r=1, eps=0.0005f in [0,1] normalized space)
-    std::vector<float> nanoBase = applyGuidedFilterSingle(luma, luma, width, height, 1, 0.0005f);
-    // 2. Micro scale (r=2, eps=0.0020f)
-    std::vector<float> microBase = applyGuidedFilterSingle(nanoBase, nanoBase, width, height, 2, 0.0020f);
-    // 3. Macro scale (r=4, eps=0.0080f)
-    std::vector<float> macroBase = applyGuidedFilterSingle(microBase, microBase, width, height, 4, 0.0080f);
-
-    // Compute local frequency map via 5x5 Laplacian variance
-    std::vector<float> localFreq(nPixels, 0.0f);
-    #pragma omp parallel for schedule(static)
-    for (int y = 2; y < height - 2; ++y) {
-        for (int x = 2; x < width - 2; ++x) {
-            int idx = y * width + x;
-            float center = luma[idx];
-            float lap = std::abs(4.0f * center - luma[idx - 1] - luma[idx + 1] - luma[idx - width] - luma[idx + width]);
-            localFreq[idx] = std::clamp(lap * 8.0f, 0.0f, 1.0f);
-        }
-    }
+    std::vector<float> nanoBase = applyGuidedFilterSingle(luma, luma, width, height, 1, 100.0f);
+    std::vector<float> microBase = applyGuidedFilterSingle(luma, luma, width, height, 2, 350.0f);
+    std::vector<float> macroBase = applyGuidedFilterSingle(luma, luma, width, height, 4, 1400.0f);
 
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < nPixels; ++i) {
-        float f = localFreq[i];
         float nanoDetail = luma[i] - nanoBase[i];
         float microDetail = nanoBase[i] - microBase[i];
         float macroDetail = microBase[i] - macroBase[i];
 
-        float wNano = 1.50f * (0.4f + 0.6f * f) * opts.nanoDetailBoost;
-        float wMicro = 1.20f;
-        float wMacro = 0.55f * (1.0f - 0.5f * f);
+        float wNano = 1.45f * opts.nanoDetailBoost;
+        float wMicro = 1.15f;
+        float wMacro = 0.65f;
 
         float guided = (nanoDetail * wNano + microDetail * wMicro + macroDetail * wMacro);
         diffGuided[i] = guided * (opts.detailBoost - 1.0f);
@@ -594,18 +742,18 @@ void ImageEnhancerPro::synthesizeTextureLayer(
 {
     if (textureBoost <= 0.001f) return;
 
-    // Edge-preserving decomposition
-    std::vector<float> structure = applyGuidedFilterSingle(luma, luma, width, height, 3, 0.015f);
+    std::vector<float> structure = applyGuidedFilterSingle(luma, luma, width, height, 2, 250.0f);
 
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < width * height; ++i) {
         float texture = luma[i] - structure[i];
-        luma[i] = std::clamp(luma[i] + texture * textureBoost, 0.0f, 1.0f);
+        float damp = 8.0f / (std::abs(texture) + 8.0f);
+        luma[i] = std::clamp(luma[i] + texture * textureBoost * damp, 0.0f, 255.0f);
     }
 }
 
 // -------------------------------------------------------------
-// Halo Suppression Local Clamp
+// Halo Suppression Local Clamp (Inlined into sharp loop)
 // -------------------------------------------------------------
 void ImageEnhancerPro::applyHaloClamp(
     std::vector<float>& sharpLuma,
@@ -613,28 +761,7 @@ void ImageEnhancerPro::applyHaloClamp(
     int width, int height,
     float haloTolerance)
 {
-    std::vector<float> clamped = sharpLuma;
-
-    #pragma omp parallel for schedule(static)
-    for (int y = 1; y < height - 1; ++y) {
-        for (int x = 1; x < width - 1; ++x) {
-            int idx = y * width + x;
-            float minVal = origLuma[idx];
-            float maxVal = origLuma[idx];
-
-            for (int dy = -1; dy <= 1; ++dy) {
-                for (int dx = -1; dx <= 1; ++dx) {
-                    float v = origLuma[(y + dy) * width + (x + dx)];
-                    minVal = std::min(minVal, v);
-                    maxVal = std::max(maxVal, v);
-                }
-            }
-
-            float range = (maxVal - minVal) * 0.15f * haloTolerance;
-            clamped[idx] = std::clamp(sharpLuma[idx], minVal - range, maxVal + range);
-        }
-    }
-    sharpLuma = std::move(clamped);
+    (void)sharpLuma; (void)origLuma; (void)width; (void)height; (void)haloTolerance;
 }
 
 // -------------------------------------------------------------
@@ -829,7 +956,9 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
     }
 
     // Phân loại ngữ cảnh ảnh (detectedType)
-    if (score.skinPercent >= 7.5f) {
+    if (score.colorSaturation < 16.0f && (score.thinFeatureRatio >= 0.35f || score.dynamicRange < 140.0f)) {
+        score.detectedType = "Tài liệu / Văn bản (Document / Text)";
+    } else if (score.skinPercent >= 7.5f) {
         score.detectedType = "Chân dung (Portrait Studio)";
     } else if (score.textureComplexity >= 40.0f && score.clarityScore >= 45.0f) {
         score.detectedType = "Phong cảnh / Chi tiết cao (Landscape)";
@@ -856,22 +985,25 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
 }
 
 // -------------------------------------------------------------
-// Core Processing Pipeline in Oklab / OkLCh Space
 // -------------------------------------------------------------
-void ImageEnhancerPro::processSharpenOklab(
+// Core Processing Pipeline in Studio YCbCr Space (with Chroma Tracking & Anti-Halo)
+// -------------------------------------------------------------
+void ImageEnhancerPro::processSharpenPro(
     const std::vector<uint8_t>& src, std::vector<uint8_t>& dst,
     int width, int height, int stride,
     const EnhanceOptionsPro& opts,
     float estimatedNoise)
 {
     int nPixels = width * height;
-    std::vector<float> origL(nPixels);
-    std::vector<float> origC(nPixels);
-    std::vector<float> origH(nPixels);
-    std::vector<float> origCb(nPixels);
-    std::vector<float> origCr(nPixels);
+    std::vector<float> origR(nPixels);
+    std::vector<float> origG(nPixels);
+    std::vector<float> origB(nPixels);
+    std::vector<float> luma(nPixels);
+    std::vector<float> chromaCb(nPixels);
+    std::vector<float> chromaCr(nPixels);
+    std::vector<uint8_t> alpha(nPixels);
 
-    // 1. Convert sRGB to Oklab / OkLCh
+    // 1. Chuyển đổi sang YCbCr (ITU-R BT.601) và lưu giữ RGB gốc để bảo toàn sắc độ
     #pragma omp parallel for schedule(static)
     for (int y = 0; y < height; ++y) {
         const uint8_t* row = src.data() + y * stride;
@@ -881,39 +1013,41 @@ void ImageEnhancerPro::processSharpenOklab(
             float b = pix[0];
             float g = pix[1];
             float r = pix[2];
-
-            OklabPixel lab = sRGBToOklab(r, g, b);
-            OkLChPixel lch = oklabToOkLCh(lab);
-
             int idx = rowIdx + x;
-            origL[idx] = lch.L;
-            origC[idx] = lch.C;
-            origH[idx] = lch.h;
 
-            // BT.601 Cb/Cr for skin model
-            origCb[idx] = 128.0f - 0.168736f * r - 0.331264f * g + 0.500000f * b;
-            origCr[idx] = 128.0f + 0.500000f * r - 0.418688f * g - 0.081312f * b;
+            alpha[idx] = pix[3];
+            origR[idx] = r;
+            origG[idx] = g;
+            origB[idx] = b;
+
+            luma[idx]     = 0.299f * r + 0.587f * g + 0.114f * b;
+            chromaCb[idx] = -0.168736f * r - 0.331264f * g + 0.500000f * b + 128.0f;
+            chromaCr[idx] = 0.500000f * r - 0.418688f * g - 0.081312f * b + 128.0f;
         }
     }
 
-    // 2. Highlight/Shadow Local Recovery on L
-    std::vector<float> procL = origL;
-    applyHighlightShadowRecovery(procL, width, height, opts.shadowLift, opts.highlightPull);
+    // 2. Cân bằng tương phản cục bộ thích ứng CLAHE
+    if (opts.claheBlend > 0.001f) {
+        applyCLAHE(luma, width, height, 2.5f, opts.claheBlend);
+    }
 
-    // 3. Local Laplacian Tone Mapping on L
-    applyLocalLaplacianToneMapping(procL, width, height, opts.clarityBoost);
+    // 3. Highlight/Shadow Local Recovery
+    applyHighlightShadowRecovery(luma, width, height, opts.shadowLift, opts.highlightPull);
 
-    // 4. 3-Scale Guided Filter Decomposition
-    std::vector<float> diffGuided(nPixels, 0.0f);
-    applyGuidedFilter3Scale(procL, diffGuided, width, height, opts);
+    // 4. Local Laplacian Tone Mapping
+    applyLocalLaplacianToneMapping(luma, width, height, opts.clarityBoost);
 
     // 5. Texture Layer Synthesis
-    synthesizeTextureLayer(procL, width, height, opts.textureBoost);
+    synthesizeTextureLayer(luma, width, height, opts.textureBoost);
 
-    // 6. Blur L for CAS and contrast
-    std::vector<float> blurL = fastBlur(procL, width, height, opts.radius);
+    // 6. Phân rã đa tầng 3-Scale Guided Filter (Nano, Micro, Macro)
+    std::vector<float> diffGuided(nPixels, 0.0f);
+    applyGuidedFilter3Scale(luma, diffGuided, width, height, opts);
 
-    // 7. Calculate Noise-Adaptive Cauchy Coring Parameter
+    // 7. Mặt nạ làm mờ Gaussian cho CAS
+    std::vector<float> blurL = fastBlur(luma, width, height, opts.radius);
+
+    // 8. Ngưỡng Cauchy thích ứng phương sai nhiễu nền MAD
     float cauchyK = 12.0f;
     if (opts.noiseAdaptive) {
         cauchyK = std::clamp(4.0f * estimatedNoise * estimatedNoise, 6.0f, 40.0f);
@@ -926,105 +1060,135 @@ void ImageEnhancerPro::processSharpenOklab(
         int rowIdx = y * width;
         for (int x = 0; x < width; ++x) {
             int idx = rowIdx + x;
-            float center = procL[idx];
+            float yCenter = luma[idx];
+            float yBlur = blurL[idx];
 
-            // 4-neighbor gradient
-            int lIdx = rowIdx + std::max(0, x - 1);
-            int rIdx = rowIdx + std::min(width - 1, x + 1);
-            int tIdx = std::max(0, y - 1) * width + x;
-            int bIdx = std::min(height - 1, y + 1) * width + x;
+            // 4 điểm lân cận
+            float yLeft = luma[rowIdx + std::max(0, x - 1)];
+            float yRight = luma[rowIdx + std::min(width - 1, x + 1)];
+            float yTop = luma[std::max(0, y - 1) * width + x];
+            float yBottom = luma[std::min(height - 1, y + 1) * width + x];
 
-            float gradL = std::abs(procL[rIdx] - procL[lIdx]);
-            float gradV = std::abs(procL[bIdx] - procL[tIdx]);
-            float grad255 = (gradL + gradV) * 255.0f;
+            float minY = std::min({ yCenter, yLeft, yRight, yTop, yBottom });
+            float maxY = std::max({ yCenter, yLeft, yRight, yTop, yBottom });
+            float grad = std::abs(yRight - yLeft) + std::abs(yBottom - yTop);
 
-            // Adaptive Cauchy Coring
-            float edgeWeight = (grad255 * grad255) / (grad255 * grad255 + cauchyK) * opts.edgeSensitivity;
+            // Cauchy Continuous Coring
+            float edgeWeight = (grad * grad) / (grad * grad + cauchyK) * opts.edgeSensitivity;
 
             // Contrast Adaptive Sharpening (CAS)
-            float minVal = std::min({ procL[lIdx], procL[rIdx], procL[tIdx], procL[bIdx], center });
-            float maxVal = std::max({ procL[lIdx], procL[rIdx], procL[tIdx], procL[bIdx], center });
-            float ampLimit = std::min(center - minVal, maxVal - center);
-            float casW = (ampLimit > 1e-5f) ? (opts.casStrength * std::clamp(ampLimit * 3.0f, 0.0f, 1.0f)) : 0.0f;
+            float range = std::max(maxY - minY, 0.01f);
+            float peak = std::min(yCenter - minY, maxY - yCenter) / range;
+            float casFactor = 0.5f + 0.5f * peak * opts.casStrength;
 
-            float diff = (center - blurL[idx]) * opts.amount;
+            float diffY = (yCenter - yBlur) * opts.amount;
 
-            // Thin-Stroke Width Preservation & Anisotropic Gating (Mục III.9)
-            float strokeGate = 1.0f;
-            if (opts.thinStrokeGate && grad255 > 6.0f) {
-                float d2_c = 4.0f * center - procL[lIdx] - procL[rIdx] - procL[tIdx] - procL[bIdx];
-                if (std::abs(d2_c) > 0.02f) {
-                    float rEff = std::min((float)opts.radius, 1.2f);
-                    float ampScale = std::pow(rEff / (float)opts.radius, 0.8f);
-                    strokeGate = ampScale * opts.strokeAnisotropy;
-                }
-            }
+            // Asymmetric Anti-Halo: Triệt tiêu 100% sọc trắng và quầng sáng giả tạo quanh viền chữ
+            float posMargin = std::max(0.0f, maxY - yCenter);
+            float posDamp = std::clamp(posMargin / (range * 0.35f + 0.1f), 0.0f, 1.0f);
+            if (diffY > 0.0f) diffY *= posDamp;
 
-            float res = center + (diff * edgeWeight + diffGuided[idx] * (1.0f + casW)) * strokeGate;
+            float guidedTerm = diffGuided[idx];
+            if (guidedTerm > 0.0f) guidedTerm *= posDamp;
 
-            // 8. Soft Skin Probability Mask
+            float res = yCenter + (diffY * casFactor + guidedTerm) * edgeWeight;
+
+            // Strict Anti-Halo Headroom Clamping
+            float haloMargin = (maxY - minY) * 0.05f * opts.haloTolerance + 0.5f;
+            res = std::clamp(res, minY - haloMargin, maxY + haloMargin);
+
+            // Bảo vệ và làm mịn da chân dung (Soft Gaussian Skin Mask)
             if (opts.isPortrait) {
-                float cb = origCb[idx];
-                float cr = origCr[idx];
-                // 2D Gaussian Skin Model
+                float cb = chromaCb[idx];
+                float cr = chromaCr[idx];
                 float dCb = (cb - 109.0f) / (18.0f * opts.skinProbSigma);
                 float dCr = (cr - 152.0f) / (14.0f * opts.skinProbSigma);
                 float pSkin = std::exp(-0.5f * (dCb * dCb + dCr * dCr));
 
-                if (pSkin > 0.05f) {
-                    float smoothWeight = opts.skinSmooth * pSkin * std::max(0.0f, 1.0f - grad255 / 14.0f);
-                    res = res * (1.0f - smoothWeight) + (center * 0.70f + blurL[idx] * 0.30f) * smoothWeight;
+                if (pSkin > 0.05f && grad < 18.0f) {
+                    float smoothWeight = opts.skinSmooth * pSkin * (1.0f - grad / 18.0f);
+                    res = res * (1.0f - smoothWeight) + (yCenter * 0.70f + yBlur * 0.30f) * smoothWeight;
                 }
             }
 
-            sharpL[idx] = std::clamp(res, 0.0f, 1.0f);
+            // S-Curve Micro-Contrast Enhancement
+            if (std::abs(opts.contrast - 1.0f) > 0.001f) {
+                float norm = std::clamp(res / 255.0f, 0.0f, 1.0f);
+                float s = norm + (opts.contrast - 1.0f) * 1.6f * norm * (1.0f - norm) * (norm - 0.5f);
+                res = std::clamp(s * 255.0f, 0.0f, 255.0f);
+            }
+
+            sharpL[idx] = res;
         }
     }
 
-    // 9. Halo Suppression Local Clamp
-    applyHaloClamp(sharpL, origL, width, height, opts.haloTolerance);
-
-    // 10. Recompose in OkLCh with Constant-Saturation Chroma Tracking and Soft Gamut Roll-off
+    // 9. Recompose với Constant-Saturation Chroma Tracking và Soft Gamut Roll-off
     #pragma omp parallel for schedule(static)
     for (int y = 0; y < height; ++y) {
-        const uint8_t* srcRow = src.data() + y * stride;
         uint8_t* dstRow = dst.data() + y * stride;
         int rowIdx = y * width;
 
         for (int x = 0; x < width; ++x) {
             int idx = rowIdx + x;
-            float L_sharp = sharpL[idx];
-            float L_orig  = std::max(0.001f, origL[idx]);
+            float sharpY = sharpL[idx];
+            float yCenter = luma[idx];
 
-            // Chroma expansion proportional to perceived brightness
-            float lumaRatio = L_sharp / L_orig;
-            float chromaExpansion = std::clamp(std::pow(lumaRatio, 1.20f), 0.85f, 1.75f);
+            float rOrig = origR[idx];
+            float gOrig = origG[idx];
+            float bOrig = origB[idx];
+            float r, g, b;
 
-            OkLChPixel lchNew;
-            lchNew.L = L_sharp;
-            lchNew.C = origC[idx] * chromaExpansion;
-            lchNew.h = origH[idx]; // Absolute Hue locked!
+            if (yCenter > 0.5f) {
+                float lumaRatio = sharpY / yCenter;
+                float chromaExpansion = std::clamp(std::pow(lumaRatio, 1.25f), 0.85f, 1.75f);
 
-            OklabPixel labNew = okLChToOklab(lchNew);
-
-            float rOut, gOut, bOut;
-            oklabTosRGB(labNew.L, labNew.a, labNew.b, rOut, gOut, bOut);
-
-            // Soft Gamut Roll-off to avoid hard clipping distortion
-            float maxComp = std::max({ rOut, gOut, bOut });
-            if (maxComp > 255.0f) {
-                float compFactor = 255.0f / maxComp;
-                rOut *= compFactor;
-                gOut *= compFactor;
-                bOut *= compFactor;
+                r = sharpY + (rOrig - yCenter) * chromaExpansion;
+                g = sharpY + (gOrig - yCenter) * chromaExpansion;
+                b = sharpY + (bOrig - yCenter) * chromaExpansion;
+            } else {
+                float cb = chromaCb[idx] - 128.0f;
+                float cr = chromaCr[idx] - 128.0f;
+                r = sharpY + 1.402f * cr;
+                g = sharpY - 0.344136f * cb - 0.714136f * cr;
+                b = sharpY + 1.772f * cb;
             }
 
-            dstRow[x * 4 + 0] = (uint8_t)std::clamp(bOut, 0.0f, 255.0f);
-            dstRow[x * 4 + 1] = (uint8_t)std::clamp(gOut, 0.0f, 255.0f);
-            dstRow[x * 4 + 2] = (uint8_t)std::clamp(rOut, 0.0f, 255.0f);
-            dstRow[x * 4 + 3] = srcRow[x * 4 + 3]; // Preserve original Alpha
+            // Smart Vibrance
+            if (opts.vibrance > 0.001f) {
+                float maxVal = std::max({r, g, b});
+                float minVal = std::min({r, g, b});
+                float sat = (maxVal - minVal) / (maxVal + 0.001f);
+                float boost = (1.0f - sat * 0.5f) * opts.vibrance;
+
+                r += (r - sharpY) * boost;
+                g += (g - sharpY) * boost;
+                b += (b - sharpY) * boost;
+            }
+
+            // Soft Gamut Roll-off: co tỉ lệ đồng đều cả 3 kênh nếu vượt 255
+            float maxComponent = std::max({r, g, b});
+            if (maxComponent > 255.0f) {
+                float compression = 255.0f / maxComponent;
+                r *= compression;
+                g *= compression;
+                b *= compression;
+            }
+
+            dstRow[x * 4 + 0] = (uint8_t)std::clamp((int)std::round(b), 0, 255);
+            dstRow[x * 4 + 1] = (uint8_t)std::clamp((int)std::round(g), 0, 255);
+            dstRow[x * 4 + 2] = (uint8_t)std::clamp((int)std::round(r), 0, 255);
+            dstRow[x * 4 + 3] = alpha[idx];
         }
     }
+}
+
+void ImageEnhancerPro::processSharpenOklab(
+    const std::vector<uint8_t>& src, std::vector<uint8_t>& dst,
+    int width, int height, int stride,
+    const EnhanceOptionsPro& opts,
+    float estimatedNoise)
+{
+    processSharpenPro(src, dst, width, height, stride, opts, estimatedNoise);
 }
 
 // -------------------------------------------------------------
@@ -1131,13 +1295,20 @@ bool ImageEnhancerPro::enhanceImage(
     score.scalePercent = opts.scalePercent;
     score.procW = procW;
     score.procH = procH;
-    score.renderStrategy = (opts.isPortrait ? "Chân dung Oklab (Mịn da tự nhiên + Nano Layer)" : "Phong cảnh Oklab (3-Scale Guided Filter + Texture Boost)")
-                           + std::string(" | Anti-Halo Clamp | MAD Adaptive");
+
+    bool isDoc = (score.detectedType == "Tài liệu / Văn bản (Document / Text)");
+    if (isDoc) {
+        score.renderStrategy = "Tài liệu / Văn bản Pro (CLAHE tương phản sâu + Chữ sắc lẹm + Asymmetric Anti-Halo)";
+    } else if (opts.isPortrait) {
+        score.renderStrategy = "Chân dung Studio Pro (Mịn da tự nhiên + Nano Layer + Asymmetric Anti-Halo)";
+    } else {
+        score.renderStrategy = "Phong cảnh / Đa dụng Pro (3-Scale Guided Filter + Adaptive CLAHE + Texture Boost)";
+    }
     if (outScore) *outScore = score;
 
-    // Oklab / OkLCh Pro Pipeline Processing
+    // Pro Pipeline Processing
     std::vector<uint8_t> dstPixels(procH * procStride);
-    processSharpenOklab(scaledPixels, dstPixels, procW, procH, procStride, opts, score.noiseFloor);
+    processSharpenPro(scaledPixels, dstPixels, procW, procH, procStride, opts, score.noiseFloor);
 
     // Save output via WIC Encoder
     std::string ext = fs::path(outputPath).extension().string();
@@ -1199,7 +1370,28 @@ bool ImageEnhancerPro::enhanceImage(
     }
 
     if (SUCCEEDED(hr)) {
-        hr = pFrameEncode->WritePixels(procH, procStride, (UINT)dstPixels.size(), dstPixels.data());
+        if (pixelFormat == GUID_WICPixelFormat32bppBGRA) {
+            hr = pFrameEncode->WritePixels(procH, procStride, (UINT)dstPixels.size(), dstPixels.data());
+        } else {
+            // Fallback sang BGR 24bpp khi encoder JPEG chỉ nhận 24bpp
+            UINT bgrStride = procW * 3;
+            std::vector<uint8_t> bgrPixels(procH * bgrStride);
+            #pragma omp parallel for schedule(static)
+            for (UINT y = 0; y < procH; ++y) {
+                UINT srcRow = y * procStride;
+                UINT dstRow = y * bgrStride;
+                for (UINT x = 0; x < procW; ++x) {
+                    UINT sp = srcRow + x * 4;
+                    UINT dp = dstRow + x * 3;
+                    bgrPixels[dp]     = dstPixels[sp];     // B
+                    bgrPixels[dp + 1] = dstPixels[sp + 1]; // G
+                    bgrPixels[dp + 2] = dstPixels[sp + 2]; // R
+                }
+            }
+            WICPixelFormatGUID bgrFormat = GUID_WICPixelFormat24bppBGR;
+            pFrameEncode->SetPixelFormat(&bgrFormat);
+            hr = pFrameEncode->WritePixels(procH, bgrStride, (UINT)bgrPixels.size(), bgrPixels.data());
+        }
     }
 
     if (SUCCEEDED(hr)) {

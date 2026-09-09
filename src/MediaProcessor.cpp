@@ -492,21 +492,16 @@ void MediaProcessor::processMediaEnhancement() {
         std::cout << std::flush;
         system("cls");
 
-        std::cout << "======================================================================\n"
-                  << "                        LÀM NÉT ẢNH TỰ ĐỘNG\n"
-                  << "             [1] Nâng cao (PRO)   |   [2] Cơ bản (BASE)\n"
-                  << "======================================================================\n\n"
-                  << "Kéo thả file ảnh (0 để thoát): ";
+        cout<< "\nKéo thả file ảnh (0 để thoát): ";
         string rawInput;
         getline(cin, rawInput);
         std::vector<std::string> inputs = SystemCore::parsePaths(rawInput);
         
         if (inputs.empty()) return;
 
-        std::cout << "\nChọn chế độ làm nét:\n"
-                  << "  [1] Nâng cao (PRO) - Tự động 100% (Khuyên dùng)\n"
-                  << "  [2] Cơ bản (BASE)  - Tự động 100%\n"
-                  << "Lựa chọn [1]: ";
+        cout << "\nChọn chế độ làm nét:\n"
+             << "  [1] Nâng cao (PRO)    [2] Cơ bản (BASE)\n"
+             << "Lựa chọn: ";
         string modeStr;
         getline(cin, modeStr);
         int choice = 1;
