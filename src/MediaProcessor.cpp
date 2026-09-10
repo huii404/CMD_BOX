@@ -11,6 +11,7 @@
 #include <mutex>
 #include <fstream>
 #include <iomanip>
+#include <sstream>
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -483,6 +484,8 @@ void MediaProcessor::processMediaEnhancement() {
         int index;
         std::string filename;
         std::string type;
+        uintmax_t oldSizeBytes;
+        uintmax_t newSizeBytes;
         std::string oldSizeStr;
         std::string newSizeStr;
         bool success;
@@ -520,7 +523,7 @@ void MediaProcessor::processMediaEnhancement() {
             transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
             if (find(imageExts.begin(), imageExts.end(), ext) == imageExts.end()) {
-                results.push_back({ (int)i + 1, inPath.filename().string(), "Bỏ qua (Sai định dạng)", "0 B", "0 B", false });
+                results.push_back({ (int)i + 1, inPath.filename().string(), "Bỏ qua (Sai định dạng)", 0, 0, "0 B", "0 B", false });
                 continue;
             }
 
@@ -631,6 +634,8 @@ void MediaProcessor::processMediaEnhancement() {
                     (int)i + 1,
                     inPath.filename().string(),
                     typeStr,
+                    oldSize,
+                    newSize,
                     SystemCore::formatSize(oldSize),
                     SystemCore::formatSize(newSize),
                     true
@@ -640,22 +645,63 @@ void MediaProcessor::processMediaEnhancement() {
                     (int)i + 1,
                     inPath.filename().string(),
                     "Lỗi",
+                    oldSize,
+                    0,
                     SystemCore::formatSize(oldSize),
                     "0 B",
                     false
                 });
             }
         }
-        cout << "\n\n========================= TỔNG KẾT XỬ LÝ =========================\n";
+
+        // Xóa sạch tiến trình render trước đó theo yêu cầu
+        system("cls");
+
+        size_t maxNameLen = 12;
         for (const auto& res : results) {
-            if (res.success) {
-                std::cout << " [" << res.index << "] " << res.filename << " | " << res.type << " | " 
-                          << res.oldSizeStr << " --> " << res.newSizeStr << "\n";
-            } else {
-                std::cout << " [" << res.index << "] " << res.filename << " | " << res.type << "\n";
-            }
+            if (res.filename.length() > maxNameLen) maxNameLen = res.filename.length();
         }
-        std::cout << "==================================================================\n";
+        if (maxNameLen > 36) maxNameLen = 36;
+        if (maxNameLen < 20) maxNameLen = 20;
+
+        cout << "\nKẾT QUẢ LÀM NÉT ẢNH (" << (usePro ? "PRO" : "BASE") << ")\n\n";
+
+        cout << " STT | " 
+             << left << setw(maxNameLen) << "Tên file" << " | "
+             << "Dung lượng gốc --> Mới (+tăng %)\n";
+
+        string sep = "-----+-" + string(maxNameLen, '-') + "-+---------------------------------------------------";
+        cout << sep << "\n";
+
+        for (const auto& res : results) {
+            string displayName = res.filename;
+            if (displayName.length() > maxNameLen) {
+                displayName = displayName.substr(0, maxNameLen - 3) + "...";
+            }
+
+            string sizeStr;
+            if (res.success) {
+                float diffPercent = 0.0f;
+                if (res.oldSizeBytes > 0) {
+                    diffPercent = ((float)res.newSizeBytes - (float)res.oldSizeBytes) / (float)res.oldSizeBytes * 100.0f;
+                }
+                ostringstream oss;
+                oss << res.oldSizeStr << " --> " << res.newSizeStr;
+                if (diffPercent >= 0.0f) {
+                    oss << " (+tăng " << fixed << setprecision(1) << diffPercent << "%)";
+                } else {
+                    oss << " (-giảm " << fixed << setprecision(1) << abs(diffPercent) << "%)";
+                }
+                sizeStr = oss.str();
+            } else {
+                sizeStr = res.oldSizeStr + " --> Thất bại";
+            }
+
+            cout << " " << setw(3) << right << res.index << " | "
+                 << left << setw(maxNameLen) << displayName << " | "
+                 << sizeStr << "\n";
+        }
+        cout << sep << "\n\n";
 
         SystemCore::waitEnter();
     }
