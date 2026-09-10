@@ -27,7 +27,6 @@ public:
     void wifiAudit();
     void checkSecurityStatus();
     void fullSecurityShield();
-    void checkHostsFileSecurity();
     void scanConnectedDevices();
 };
 

@@ -125,35 +125,12 @@ public:
         int width, int height,
         float textureBoost);
 
-    struct OklabPixel {
-        float L, a, b;
-    };
-    struct OkLChPixel {
-        float L, C, h;
-    };
-    static OklabPixel sRGBToOklab(float r, float g, float b);
-    static void oklabTosRGB(float L, float a, float b, float& r, float& g, float& bOut);
-    static OkLChPixel oklabToOkLCh(const OklabPixel& lab);
-    static OklabPixel okLChToOklab(const OkLChPixel& lch);
-
     static void applyCLAHE(
         std::vector<float>& luma,
         int width, int height,
         float clipLimit, float blendFactor);
 
-    static void applyHaloClamp(
-        std::vector<float>& sharpLuma,
-        const std::vector<float>& origLuma,
-        int width, int height,
-        float haloTolerance);
-
     static void processSharpenPro(
-        const std::vector<uint8_t>& src, std::vector<uint8_t>& dst,
-        int width, int height, int stride,
-        const EnhanceOptionsPro& opts,
-        float estimatedNoise);
-
-    static void processSharpenOklab(
         const std::vector<uint8_t>& src, std::vector<uint8_t>& dst,
         int width, int height, int stride,
         const EnhanceOptionsPro& opts,

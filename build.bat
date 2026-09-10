@@ -23,11 +23,10 @@ set "BG_RED=%ESC%[41;97m"
 cls
 echo.
 echo %C_PINK%%C_BOLD%  ======================================================%C_RESET%
-echo %C_CYAN%%C_BOLD%       ____ __  __ ____       ____   ______  __%C_RESET%
-echo %C_CYAN%%C_BOLD%      / ___]  \/  ]  _ \     ] __ ) / _ \ \/ /%C_RESET%
-echo %C_GREEN%%C_BOLD%     [ [   ] [\/] [ ] ] ]    ]  _ \[ [ ] ]\  / %C_RESET%
-echo %C_GREEN%%C_BOLD%     [ [___] [  ] [ ]_] ]    ] ]_) ] [_] ]/  \ %C_RESET%
-echo %C_YELLOW%%C_BOLD%      \____]_]  [_]____/     ]____/ \___//_/\_\%C_RESET%
+echo %C_CYAN%%C_BOLD%         /\_/\   %C_YELLOW%[ CMD BOX - PRO BUILDER ]%C_RESET%
+echo %C_PINK%%C_BOLD%        ( o.o )  %C_GREEN%Mèo coder: "Bật mode gánh team!"%C_RESET%
+echo %C_YELLOW%%C_BOLD%        /     \ %C_CYAN%Quạt CPU bắt đầu hú, đừng manh động...%C_RESET%
+echo %C_GREEN%%C_BOLD%       [_______] %C_YELLOW%(bàn phím bốc khói)%C_RESET%
 echo %C_PINK%%C_BOLD%  ======================================================%C_RESET%
 echo       %BG_PURPLE%  * TOOLKIT PRO BUILDER - CHẠY LÀ MƯỢT *  %C_RESET%
 echo.
@@ -57,9 +56,12 @@ echo %C_GREEN%  [v] Compiler: %C_YELLOW%!GXX! %C_GREEN%[Uy tín]%C_RESET%
 :: 2. Thu muc bin
 if not exist "bin" mkdir "bin"
 
-:: 3. Bien dich voi loading thoi gian thuc tai cho (so thay doi, chu dung im)
+:: 3. Bien dich voi loading thoi gian thuc tai cho (1 file duy nhat, chu dung im so nhay)
 echo.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\build_loader.ps1" "!GXX!"
+if exist "%TEMP%\cmd_build_err.log" del /f /q "%TEMP%\cmd_build_err.log" 2>nul
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$e=[string][char]27; $sw=[System.Diagnostics.Stopwatch]::StartNew(); $p=Start-Process -FilePath '!GXX!' -ArgumentList '-std=c++17 -O3 -fopenmp -mavx2 -mfma -Iinclude src\*.cpp -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -static-libgcc -static-libstdc++ -static -s' -NoNewWindow -PassThru -RedirectStandardError $env:TEMP\cmd_build_err.log; $frames=@('|','/','-','\'); $i=0; Write-Host -NoNewline ('  ' + $e + '[96m[☕] Đang nấu code:' + $e + '[0m ' + $e + '[s'); while(-not $p.HasExited){ $s=$sw.Elapsed.TotalSeconds.ToString('0.0'); $f=$frames[$i%%4]; $disp=$e+'[u'+$e+'[95m['+$f+']'+$e+'[0m '+$e+'[93m'+$s+'s'+$e+'[0m'+$e+'[K'; Write-Host -NoNewline $disp; Start-Sleep -Milliseconds 80; $i++ }; $p.WaitForExit(); $tot=$sw.Elapsed.TotalSeconds.ToString('0.0'); if($p.ExitCode -eq 0){ Write-Host ($e+'[u'+$e+'[42;30m [OK] '+$tot+'s! SIÊU MƯỢT '+$e+'[0m'+$e+'[K') } else { Write-Host ($e+'[u'+$e+'[41;97m [X] TOANG! ('+$tot+'s) '+$e+'[0m'+$e+'[K') }; exit $p.ExitCode"
+
 set BUILD_RET=%errorlevel%
 
 if not "!BUILD_RET!"=="0" (

@@ -101,7 +101,7 @@ long long SystemOptimizer::runCleanTier3() {
     batContent += "cleanmgr /sagerun:1\n";
     batContent += "rmdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
 
-    SystemCore::runBatchAsAdmin(batContent, "Dọn dẹp hệ thống chuyên sâu Tầng 3");
+    SystemCore::runBatchAsAdmin(batContent, "Dọn dẹp hệ thống chuyên sâu");
 
     try { after = fs::space("C:\\").available; } catch (...) {}
     return (after > before) ? (after - before) : 0;
@@ -130,12 +130,12 @@ void SystemOptimizer::multiTierDiskClean() {
     while (true) {
         sc.cls();
         cout << "\n\n"
-             << " [1] Tầng 1: Dọn rác bề mặt\n"
-             << " [2] Tầng 2: Dọn rác Trình duyệt & Ứng dụng\n"
-             << " [3] Tầng 3: Dọn dẹp Chuyên sâu Hệ thống\n"
-             << " [4] Tầng 4: Dọn rác Môi trường lập trình\n"
+             << " [1] Dọn rác bề mặt\n"
+             << " [2] Dọn rác Trình duyệt & Ứng dụng\n"
+             << " [3] Dọn dẹp Chuyên sâu Hệ thống\n"
+             << " [4] Dọn rác Môi trường lập trình\n"
              << " [5] [⚡] Dọn liên hoàn Tầng 1 + 2 + 3\n"
-             << " [6] [🚀] Dọn toàn bộ cả 4 Tầng\n"
+             << " [6] [🚀] Dọn toàn bộ cả 4\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
 
@@ -195,7 +195,7 @@ void SystemOptimizer::multiTierDiskClean() {
 
 void SystemOptimizer::cleanDiskQuick() {
     sc.cls();
-    cout << "Đang dọn rác nhanh (Tầng 1)\n";
+    cout << "Đang dọn rác nhanh\n";
     long long freed = runCleanTier1();
     cout << "\n[✓] Đã xong!";
     if (freed > 0) cout << " (Giải phóng: " << SystemCore::formatSize(freed) << ")";
@@ -205,7 +205,7 @@ void SystemOptimizer::cleanDiskQuick() {
 
 void SystemOptimizer::cleanDiskPro() {
     sc.cls();
-    cout << "Đang dọn rác chuyên sâu (Tầng 1 + 2 + 3)\n";
+    cout << "Đang dọn rác chuyên sâu\n";
     long long freed = runCleanTier1() + runCleanTier2() + runCleanTier3();
     cout << "\n[✓] Đã xong!";
     if (freed > 0) cout << " (Giải phóng: " << SystemCore::formatSize(freed) << ")";
@@ -968,11 +968,11 @@ bool SystemOptimizer::runOptimizeTier3() {
 void SystemOptimizer::multiTierPerformanceOptimize() {
     while (true) {
         sc.cls();
-        cout << "HỆ THỐNG TĂNG TỐC & TỐI ƯU ĐA TẦNG\n\n"
-             << " [1] Tầng 1: Tối ưu Khởi động (Tắt app làm chậm máy, bảo vệ Bộ gõ & Driver)\n"
-             << " [2] Tầng 2: Tối ưu Dịch vụ ngầm (Tắt Maps, Ví điện tử, Telemetry, Demo...)\n"
-             << " [3] Tầng 3: Tối ưu Giao diện & Độ nhạy Windows (Taskbar, bỏ độ trễ UI)\n"
-             << " [4] Tối ưu liên hoàn cả 3 Tầng\n"
+         
+        cout << " [1] Tối ưu Khởi động (Tắt app làm chậm máy, bảo vệ Bộ gõ & Driver)\n"
+             << " [2] Tối ưu Dịch vụ ngầm\n"
+             << " [3] Tối ưu Giao diện & Độ nhạy Windows (Taskbar, bỏ độ trễ UI)\n"
+             << " [4] Tối ưu liên hoàn cả 3\n"
              << " [5] Quản lý dịch vụ Windows nâng cao\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
