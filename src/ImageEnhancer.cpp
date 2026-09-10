@@ -1,6 +1,7 @@
 #include "ImageEnhancer.h"
 #include <windows.h>
 #include <wincodec.h>
+#include <wincodecsdk.h>
 #include <cmath>
 #include <algorithm>
 #include <filesystem>
@@ -875,6 +876,18 @@ bool ImageEnhancer::enhanceImage(
         hr = pFrameEncode->Initialize(pPropertyBag);
     }
 
+    // Sao chép nguyên vẹn khối Metadata (EXIF, GPS, Giờ chụp, Model máy ảnh, XMP) từ ảnh gốc
+    if (SUCCEEDED(hr)) {
+        IWICMetadataBlockReader* pBlockReader = NULL;
+        IWICMetadataBlockWriter* pBlockWriter = NULL;
+        if (SUCCEEDED(pFrame->QueryInterface(IID_PPV_ARGS(&pBlockReader))) &&
+            SUCCEEDED(pFrameEncode->QueryInterface(IID_PPV_ARGS(&pBlockWriter)))) {
+            pBlockWriter->InitializeFromBlockReader(pBlockReader);
+        }
+        if (pBlockReader) pBlockReader->Release();
+        if (pBlockWriter) pBlockWriter->Release();
+    }
+
     if (SUCCEEDED(hr)) {
         hr = pFrameEncode->SetSize(procW, procH);
         float scaleFactor = opts.scalePercent / 100.0f;
@@ -920,6 +933,15 @@ bool ImageEnhancer::enhanceImage(
     pDecoder->Release();
     pFactory->Release();
     CoUninitialize();
+
+    // Đồng bộ ngày giờ tạo/sửa đổi tệp tin trên hệ điều hành trùng khớp ảnh gốc
+    if (SUCCEEDED(hr)) {
+        try {
+            if (fs::exists(inputPath) && fs::exists(outputPath)) {
+                fs::last_write_time(outputPath, fs::last_write_time(inputPath));
+            }
+        } catch (...) {}
+    }
 
     return SUCCEEDED(hr) && fs::exists(outputPath) && fs::file_size(outputPath) > 0;
 }

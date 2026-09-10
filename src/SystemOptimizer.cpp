@@ -1143,7 +1143,7 @@ void SystemOptimizer::turnOffServicesMenu() {
         // --- CẤU HÌNH HÀNG LOẠT TẤT CẢ DỊCH VỤ ---
         if (input == "A" || input == "a") {
             std::cout << "\nCấu hình tất cả dịch vụ:\n"
-                      << " [1] Manual   (Chỉ chạy khi cần)\n"
+                      << " [1] Manual   (Chỉ khi cần)\n"
                       << " [2] Disabled (Tắt hoàn toàn)\n"
                       << " [0] Hủy\n\n";
             int action = sc.readInt("Chọn: ");
@@ -1177,7 +1177,7 @@ void SystemOptimizer::turnOffServicesMenu() {
                 if (idx >= 0 && idx < (int)targetSvcs.size()) {
                     sc.cls();
                     std::cout << "Dịch vụ: " << targetSvcs[idx].desc << " [" << targetSvcs[idx].name << "]\n\n"
-                              << " [1] Manual   (Chỉ chạy khi cần)\n"
+                              << " [1] Manual   (Chỉ khi cần)\n"
                               << " [2] Disabled (Tắt hẳn)\n"
                               << " [0] Hủy\n\n";
                     int action = sc.readInt("Chọn: ");
@@ -1226,12 +1226,12 @@ void SystemOptimizer::turnOffServicesMenu() {
  */
 void SystemOptimizer::optimizeTaskbar() {
     sc.cls();
-    cout << "Đang kiểm tra và tối ưu Taskbar & Giao diện...\n\n";
+    cout << "Đang kiểm tra-tối ưu Taskbar & Giao diện\n\n";
     bool changed = runOptimizeTier3();
     if (changed) {
-        cout << "\n[✓] Đã áp dụng tinh chỉnh mới và làm mới Taskbar thành công.\n\n";
+        cout << "\n[✓] Làm mới Taskbar thành công\n\n";
     } else {
-        cout << "\n[✓] Taskbar & Giao diện đã ở trạng thái tối ưu chuẩn từ trước (Bỏ qua, không reset Explorer).\n\n";
+        cout << "\n[✓] Taskbar đã ở trạng thái tối ưu chuẩn từ trước\n\n";
     }
     sc.waitEnter();
 }
