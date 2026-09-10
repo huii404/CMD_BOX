@@ -246,7 +246,7 @@ bool Internet::isServiceRunningNative(const std::string &serviceName) {
 void Internet::fullSecurityShield() {
     while (true) {
         sc.cls();
-        cout << "=== LÁ CHẮN BẢO MẬT HỆ THỐNG & MẠNG ===\n\n"
+        cout << "LÁ CHẮN BẢO MẬT HỆ THỐNG & MẠNG\n\n"
              << " [1] Bật lá chắn (Defender, Firewall, Chặn Port Telnet/RPC)\n"
              << "     * Thông suốt 100% truyền file Media, Smart View, LAN\n"
              << " [2] Khôi phục mặc định\n"
@@ -258,7 +258,7 @@ void Internet::fullSecurityShield() {
 
         if (choice == 1) {
             sc.cls();
-            cout << "=== ĐANG KÍCH HOẠT LÁ CHẮN BẢO MẬT ===\n\n"
+            cout << "Đang kích hoạt lá chắn bảo mật...\n\n"
                  << "Đang tổng hợp quy tắc an toàn trong cửa sổ quản trị...\n";
 
             std::string batContent = 
@@ -293,7 +293,7 @@ void Internet::fullSecurityShield() {
         } 
         else if (choice == 2) {
             sc.cls();
-            cout << "=== ĐANG KHÔI PHỤC THIẾT LẬP MẠNG MẶC ĐỊNH ===\n\n"
+            cout << "Đang khôi phục thiết lập mạng mặc định...\n\n"
                  << "Đang khởi chạy quy trình trong cửa sổ quản trị...\n";
 
             std::string batContent = 
@@ -325,7 +325,7 @@ void Internet::fullSecurityShield() {
 // ----------------------------------------------------------------------------------
 void Internet::checkHostsFileSecurity() {
     sc.cls();
-    cout << "=== QUÉT & BẢO VỆ TẬP TIN HOSTS ===\n\n";
+    cout << "QUÉT & BẢO VỆ TẬP TIN HOSTS\n\n";
 
     std::string hostsPath = "C:\\Windows\\System32\\drivers\\etc\\hosts";
     if (!fs::exists(hostsPath)) {
@@ -371,11 +371,11 @@ void Internet::checkHostsFileSecurity() {
          << "Quy tắc kích hoạt: " << activeRules.size() << "\n\n";
 
     if (!activeRules.empty()) {
-        cout << "--- Danh sách dòng điều hướng ---\n";
+        cout << "Danh sách dòng điều hướng:\n";
         for (const auto &r : activeRules) {
             cout << "  -> " << r << "\n";
         }
-        cout << "---------------------------------\n\n";
+        cout << "\n";
     }
 
     if (!suspiciousRules.empty()) {
@@ -420,7 +420,7 @@ void Internet::checkHostsFileSecurity() {
 // ----------------------------------------------------------------------------------
 void Internet::checkSecurityStatus() {
     sc.cls();
-    cout << "=== BÁO CÁO TRẠNG THÁI BẢO MẬT HỆ THỐNG ===\n\n";
+    cout << "TRẠNG THÁI BẢO MẬT HỆ THỐNG\n\n";
 
     // 1. Windows Defender Real-time
     cout << " 1. Windows Defender:\n";
@@ -476,7 +476,7 @@ void Internet::checkSecurityStatus() {
     // 5. Ghi chú bảo toàn Media
     cout << "\n * Lưu ý: Cổng chia sẻ Media (445, 137-139) được giữ mở để truyền file.\n";
 
-    cout << "\n============================================\n";
+    cout << "\n";
     SystemCore::waitEnter();
 }
 

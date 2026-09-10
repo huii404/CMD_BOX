@@ -147,7 +147,7 @@ void MediaProcessor::compressImage(const string& inputPath, const string& output
         // JPG nén chất lượng cao (-q:v 2 tương đương 93-95% quality, hạn chế bệt và giữ chi tiết vi mô)
         cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + inputPath + "\" -map_metadata 0 -movflags +faststart -q:v " + to_string(quality) + " \"" + outputPath + "\"";
     }
-    cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu dung lượng ảnh (Bảo toàn độ nét & Metadata)...";
+    cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu dung lượng ảnh...";
     if (SystemCore::runRawCommand(cmd)) cout << "\n Thành công: " << outputPath << "\n";
     else cout << "\n Xử lý thất bại hoặc sai đường dẫn!\n";
 }
@@ -286,11 +286,11 @@ void MediaProcessor::processMediaAuto() {
                 if (finalOutPath.extension() == ".png") {
                     // PNG Lossless compression: giữ nguyên 100% pixel, không mất nét, bảo toàn metadata
                     cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + input + "\" -map_metadata 0 -c:v png -compression_level 9 -pred mixed \"" + tempOutPath.string() + "\"";
-                    cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu dung lượng PNG (Lossless 100% nét & Metadata)...";
+                    cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu PNG...";
                 } else {
                     // JPG chất lượng cao (-q:v 2 tương đương 93-95% quality, bảo toàn chi tiết vi mô, giữ trọn vẹn EXIF/Metadata)
                     cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + input + "\" -map_metadata 0 -movflags +faststart -q:v 2 \"" + tempOutPath.string() + "\"";
-                    cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu dung lượng ảnh JPG (Bảo toàn chi tiết nét & Metadata)...";
+                    cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu JPG...";
                 }
                 renderSuccess = SystemCore::runRawCommand(cmd) && fs::exists(tempOutPath);
                 
@@ -312,7 +312,7 @@ void MediaProcessor::processMediaAuto() {
                 // Bảo toàn toàn bộ metadata gốc (-map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0)
                 // Xuất chuẩn MP4
                 string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + input + "\" -map_metadata 0 -map_metadata:s:a 0 -map_metadata:s:v 0 -vf \"unsharp=3:3:0.5:3:3:0.0\" " + gpu.compressParams + " -c:a aac -b:a 160k -movflags +faststart \"" + tempOutPath.string() + "\"";
-                cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu Video MP4 (" << gpu.encoder << ", bảo toàn độ nét & Metadata)...";
+                cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu Video (" << gpu.encoder << ")...";
                 renderSuccess = SystemCore::runRawCommand(cmd) && fs::exists(tempOutPath);
             }
 

@@ -451,8 +451,8 @@ void SystemOptimizer::disableAllStartupApps() {
         }
     }
 
-    cout << "\n--------------------------------------------------------------\n";
-    cout << "[✓] Hoàn tất! Đã tắt " << disabledCount << " ứng dụng làm chậm máy (Bảo vệ " << keptCount << " ứng dụng hệ thống & bộ gõ).\n";
+    cout << "\n";
+    cout << "[✓] Hoàn tất: Đã tắt " << disabledCount << " ứng dụng làm chậm máy (Bảo vệ " << keptCount << " ứng dụng hệ thống & bộ gõ).\n";
     sc.waitEnter();
 }
 
@@ -986,7 +986,7 @@ void SystemOptimizer::multiTierPerformanceOptimize() {
         }
 
         sc.cls();
-        cout << "=== TIẾN TRÌNH TĂNG TỐC & TỐI ƯU ĐA TẦNG ===\n\n";
+        cout << "\n\n";
 
         if (choice == 1 || choice == 4) {
             cout << " [*] Tầng 1: Đang quét và tắt ứng dụng khởi động làm chậm máy...\n";
@@ -1010,8 +1010,8 @@ void SystemOptimizer::multiTierPerformanceOptimize() {
             }
         }
 
-        cout << "==============================================================\n";
-        cout << "[✓] Hoàn tất quy trình tối ưu! Hệ thống đã sẵn sàng với hiệu năng tối đa.\n\n";
+        cout << "\n\n";
+        cout << "[✓] Hoàn tất: Hệ thống đã sẵn sàng với hiệu năng tối đa.\n\n";
         sc.waitEnter();
     }
 }
