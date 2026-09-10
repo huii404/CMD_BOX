@@ -519,6 +519,7 @@ void MediaProcessor::processMediaEnhancement() {
 
         for (size_t i = 0; i < inputs.size(); ++i) {
             fs::path inPath = fs::u8path(inputs[i]);
+            std::cout << "\rĐang xử lý: [" << (i + 1) << "/" << inputs.size() << "] " << inPath.filename().string() << "        " << std::flush;
             std::string ext = inPath.extension().string();
             transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
@@ -558,16 +559,7 @@ void MediaProcessor::processMediaEnhancement() {
                     }
                 }
 
-                std::cout << "\n[" << (i + 1) << "/" << inputs.size() << "] " << inPath.filename().string() << " (PRO)\n";
-                if (ok && fs::exists(outPath)) {
-                    std::cout << "  • Đánh giá: " << scorePro.qualityGrade 
-                              << " (" << std::fixed << std::setprecision(1) << scorePro.clarityScore << "/100) | " 
-                              << scorePro.detectedType << " | Scale: " << scorePro.scalePercent << "%\n"
-                              << "  • Xuất file: " << outPath.filename().string() 
-                              << " (" << SystemCore::formatSize(oldSize) << " -> " << SystemCore::formatSize(fs::file_size(outPath)) << ")\n";
-                    typeStr = scorePro.detectedType;
-                } else {
-                    std::cout << "  [X] Xử lý thất bại!\n";
+                if (!ok) {
                     typeStr = "Lỗi";
                 }
             } else {
@@ -616,16 +608,6 @@ void MediaProcessor::processMediaEnhancement() {
                         }
                     }
                 }
-                typeStr = (score.skinPercent >= 8.0f) ? "Chân dung" : "Phong cảnh";
-                std::cout << "\n[" << (i + 1) << "/" << inputs.size() << "] " << inPath.filename().string() << " (BASE)\n";
-                if (ok && fs::exists(outPath)) {
-                    std::cout << "  • Đánh giá: " << std::fixed << std::setprecision(1) << score.clarityScore << "/100 | " 
-                              << typeStr << " | Scale: " << score.scalePercent << "%\n"
-                              << "  • Xuất file: " << outPath.filename().string() 
-                              << " (" << SystemCore::formatSize(oldSize) << " -> " << SystemCore::formatSize(fs::file_size(outPath)) << ")\n";
-                } else {
-                    std::cout << "  [X] Xử lý thất bại!\n";
-                }
             }
 
             if (ok && fs::exists(outPath)) {
@@ -654,54 +636,34 @@ void MediaProcessor::processMediaEnhancement() {
             }
         }
 
-        // Xóa sạch tiến trình render trước đó theo yêu cầu
+        // Xóa hoàn toàn toàn bộ log tiến trình trước đó
         system("cls");
+        std::cout << "\033[2J\033[H\033[3J" << std::flush;
 
-        size_t maxNameLen = 12;
-        for (const auto& res : results) {
-            if (res.filename.length() > maxNameLen) maxNameLen = res.filename.length();
-        }
-        if (maxNameLen > 36) maxNameLen = 36;
-        if (maxNameLen < 20) maxNameLen = 20;
-
-        cout << "\nKẾT QUẢ LÀM NÉT ẢNH (" << (usePro ? "PRO" : "BASE") << ")\n\n";
-
-        cout << " STT | " 
-             << left << setw(maxNameLen) << "Tên file" << " | "
-             << "Dung lượng gốc --> Mới (+tăng %)\n";
-
-        string sep = "-----+-" + string(maxNameLen, '-') + "-+---------------------------------------------------";
-        cout << sep << "\n";
+        std::cout << "\nSTT | Tên file | Dung lượng gốc --> Mới (+tăng %)\n";
 
         for (const auto& res : results) {
-            string displayName = res.filename;
-            if (displayName.length() > maxNameLen) {
-                displayName = displayName.substr(0, maxNameLen - 3) + "...";
-            }
-
-            string sizeStr;
+            std::string sizeStr;
             if (res.success) {
                 float diffPercent = 0.0f;
                 if (res.oldSizeBytes > 0) {
                     diffPercent = ((float)res.newSizeBytes - (float)res.oldSizeBytes) / (float)res.oldSizeBytes * 100.0f;
                 }
-                ostringstream oss;
+                std::ostringstream oss;
                 oss << res.oldSizeStr << " --> " << res.newSizeStr;
                 if (diffPercent >= 0.0f) {
-                    oss << " (+tăng " << fixed << setprecision(1) << diffPercent << "%)";
+                    oss << " (+tăng " << std::fixed << std::setprecision(1) << diffPercent << "%)";
                 } else {
-                    oss << " (-giảm " << fixed << setprecision(1) << abs(diffPercent) << "%)";
+                    oss << " (-giảm " << std::fixed << std::setprecision(1) << std::abs(diffPercent) << "%)";
                 }
                 sizeStr = oss.str();
             } else {
                 sizeStr = res.oldSizeStr + " --> Thất bại";
             }
 
-            cout << " " << setw(3) << right << res.index << " | "
-                 << left << setw(maxNameLen) << displayName << " | "
-                 << sizeStr << "\n";
+            std::cout << res.index << " | " << res.filename << " | " << sizeStr << "\n";
         }
-        cout << sep << "\n\n";
+        std::cout << "\n";
 
         SystemCore::waitEnter();
     }
