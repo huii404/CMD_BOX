@@ -111,8 +111,8 @@ public:
             case 1:
                 while (true) {
                     cls();
-                    cout << " [1] Dọn rác Đa Tầng (Nhanh -> Trình duyệt -> Hệ thống -> Dev)\n"
-                         << " [2] Tăng tốc & Tối ưu Đa Tầng (Khởi động -> Dịch vụ -> Taskbar/UI)\n"
+                    cout << " [1] Dọn rác Đa Tầng\n"
+                         << " [2] Tăng tốc & Tối ưu Đa Tầng\n"
                          << " [3] Sửa lỗi kẹt Windows Update\n"
                          << " [0] Quay lại\n\n"
                          << " [Chọn]: ";
@@ -162,7 +162,7 @@ public:
                     cout << " [1] Auto Click\n"
                          << " [2] Spam Text\n"
                          << " [3] Auto Paste\n"
-                         << " [4] Tải & Cài đặt phần mềm\n"
+                         << " [4] Cài đặt phần mềm\n"
                          << " [5] Gỡ bỏ ứng dụng rác\n"
                          << " [6] Kiểm tra Pin Laptop\n"
                          << " [0] Quay lại\n\n"
