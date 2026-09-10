@@ -129,13 +129,13 @@ long long SystemOptimizer::runCleanTier4(const std::string &customPath) {
 void SystemOptimizer::multiTierDiskClean() {
     while (true) {
         sc.cls();
-        cout << "=== HỆ THỐNG DỌN RÁC ĐA TẦNG ===\n\n"
-             << " [1] Tầng 1: Dọn rác bề mặt (Temp, Recent, Thùng rác, DNS - Siêu tốc 1s)\n"
-             << " [2] Tầng 2: Dọn rác Trình duyệt & Ứng dụng (Chrome, Edge, Discord...)\n"
-             << " [3] Tầng 3: Dọn dẹp Chuyên sâu Hệ thống (DISM, WinSxS, Update kẹt, Logs)\n"
-             << " [4] Tầng 4: Dọn rác Môi trường lập trình (node_modules, pip, gradle...)\n"
-             << " [5] [⚡] Dọn liên hoàn Tầng 1 + 2 + 3 (Dọn sạch toàn diện ổ C)\n"
-             << " [6] [🚀] Dọn toàn bộ cả 4 Tầng (Dành cho Lập trình viên)\n"
+        cout << "\n\n"
+             << " [1] Tầng 1: Dọn rác bề mặt\n"
+             << " [2] Tầng 2: Dọn rác Trình duyệt & Ứng dụng\n"
+             << " [3] Tầng 3: Dọn dẹp Chuyên sâu Hệ thống\n"
+             << " [4] Tầng 4: Dọn rác Môi trường lập trình\n"
+             << " [5] [⚡] Dọn liên hoàn Tầng 1 + 2 + 3\n"
+             << " [6] [🚀] Dọn toàn bộ cả 4 Tầng\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
 
@@ -143,7 +143,7 @@ void SystemOptimizer::multiTierDiskClean() {
         if (choice == 0) break;
 
         sc.cls();
-        cout << "=== TIẾN TRÌNH DỌN RÁC ĐA TẦNG ===\n\n";
+        cout << "\n\n";
         long long totalFreed = 0;
 
         if (choice == 1 || choice == 5 || choice == 6) {
@@ -183,11 +183,11 @@ void SystemOptimizer::multiTierDiskClean() {
             cout << "     └── [✓ Xong] " << (f4 > 0 ? ("Giải phóng " + SystemCore::formatSize(f4)) : "Đã sạch sẽ từ trước") << "\n\n";
         }
 
-        cout << "==============================================================\n";
+        cout << "\n\n";
         if (totalFreed > 0) {
-            cout << "[✓] Hoàn tất! Tổng dung lượng đã giải phóng: " << SystemCore::formatSize(totalFreed) << "\n\n";
+            cout << "[✓] Đã giải phóng: " << SystemCore::formatSize(totalFreed) << "\n\n";
         } else {
-            cout << "[✓] Hoàn tất! Hệ thống đã rất sạch sẽ.\n\n";
+            cout << "[✓] Hệ thống đã rất sạch sẽ.\n\n";
         }
         sc.waitEnter();
     }
@@ -195,9 +195,9 @@ void SystemOptimizer::multiTierDiskClean() {
 
 void SystemOptimizer::cleanDiskQuick() {
     sc.cls();
-    cout << "Đang dọn rác nhanh (Tầng 1)...\n";
+    cout << "Đang dọn rác nhanh (Tầng 1)\n";
     long long freed = runCleanTier1();
-    cout << "\n[✓] Đã dọn xong!";
+    cout << "\n[✓] Đã xong!";
     if (freed > 0) cout << " (Giải phóng: " << SystemCore::formatSize(freed) << ")";
     cout << "\n\n";
     sc.waitEnter();
@@ -205,9 +205,9 @@ void SystemOptimizer::cleanDiskQuick() {
 
 void SystemOptimizer::cleanDiskPro() {
     sc.cls();
-    cout << "Đang dọn rác chuyên sâu (Tầng 1 + 2 + 3)...\n";
+    cout << "Đang dọn rác chuyên sâu (Tầng 1 + 2 + 3)\n";
     long long freed = runCleanTier1() + runCleanTier2() + runCleanTier3();
-    cout << "\n[✓] Đã hoàn tất!";
+    cout << "\n[✓] Đã xong!";
     if (freed > 0) cout << " (Giải phóng: " << SystemCore::formatSize(freed) << ")";
     cout << "\n\n";
     sc.waitEnter();
@@ -721,7 +721,7 @@ void SystemOptimizer::cleanDevCaches(bool interactive) {
 
     if (interactive) {
         sc.cls();
-        cout << "--- DỌN RÁC MÔI TRƯỜNG DEV ---\n"
+        cout << "DỌN RÁC MÔI TRƯỜNG DEV\n"
              << "Mục tiêu quét: " << scanRoot.string() << "\n\n";
     } else {
         cout << "Đang dọn rác Dev Caches...\n";
@@ -968,12 +968,12 @@ bool SystemOptimizer::runOptimizeTier3() {
 void SystemOptimizer::multiTierPerformanceOptimize() {
     while (true) {
         sc.cls();
-        cout << "=== HỆ THỐNG TĂNG TỐC & TỐI ƯU ĐA TẦNG ===\n\n"
+        cout << "HỆ THỐNG TĂNG TỐC & TỐI ƯU ĐA TẦNG\n\n"
              << " [1] Tầng 1: Tối ưu Khởi động (Tắt app làm chậm máy, bảo vệ Bộ gõ & Driver)\n"
              << " [2] Tầng 2: Tối ưu Dịch vụ ngầm (Tắt Maps, Ví điện tử, Telemetry, Demo...)\n"
              << " [3] Tầng 3: Tối ưu Giao diện & Độ nhạy Windows (Taskbar, bỏ độ trễ UI)\n"
-             << " [4] [⚡] Tối ưu liên hoàn cả 3 Tầng (Tối ưu hóa toàn diện 1-Click)\n"
-             << " [5] Quản lý dịch vụ Windows nâng cao (Cấu hình chi tiết từng service)\n"
+             << " [4] Tối ưu liên hoàn cả 3 Tầng\n"
+             << " [5] Quản lý dịch vụ Windows nâng cao\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
 
