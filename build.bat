@@ -5,8 +5,7 @@ setlocal enabledelayedexpansion
 :: ========================================================
 :: MA MAU ANSI NEON
 :: ========================================================
-for /f %%a in ('echo prompt $e ^| cmd') do set "ESC=%%a"
-for /f %%a in ('copy /z "%~dpf0" nul') do set "CR=%%a"
+for /f %%a in ('powershell -nop -c [char]27') do set "ESC=%%a"
 set "C_RESET=%ESC%[0m"
 set "C_BOLD=%ESC%[1m"
 set "C_RED=%ESC%[91m"
@@ -58,55 +57,25 @@ echo %C_GREEN%  [v] Compiler: %C_YELLOW%!GXX! %C_GREEN%[Uy tín]%C_RESET%
 :: 2. Thu muc bin
 if not exist "bin" mkdir "bin"
 
-:: 3. Bien dich voi hieu ung loading thoi gian thuc
+:: 3. Bien dich voi loading thoi gian thuc tai cho (so thay doi, chu dung im)
 echo.
-echo %C_PINK%  [☕] Bắt đầu nấu code (-O3, AVX2, FMA, OpenMP)...%C_RESET%
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\build_loader.ps1" "!GXX!"
+set BUILD_RET=%errorlevel%
 
-del /f /q "%TEMP%\cmd_build_done.txt" "%TEMP%\cmd_build_err.log" 2>nul
-
-start /b "" cmd /c ""!GXX!" -std=c++17 -O3 -fopenmp -mavx2 -mfma -Iinclude src\*.cpp -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -static-libgcc -static-libstdc++ -static -s > "%TEMP%\cmd_build_err.log" 2>&1 & echo %%errorlevel%% > "%TEMP%\cmd_build_done.txt""
-
-set /a STEP=0
-set "SPIN_CHARS=/-\|"
-
-:WAIT_LOOP
-if exist "%TEMP%\cmd_build_done.txt" goto DONE_BUILD
-
-set /a "IDX=STEP %% 4"
-set "CH=!SPIN_CHARS:~%IDX%,1!"
-set /a "T_SEC=STEP / 10"
-set /a "T_DEC=STEP %% 10"
-
-<nul set /p "=!CR!%C_PINK%  [!CH!] %C_CYAN%Đang nấu code... %C_YELLOW%!T_SEC!.!T_DEC!s%C_RESET%   "
-
-powershell -nop -c "Start-Sleep -m 100" >nul 2>nul
-set /a STEP+=1
-goto WAIT_LOOP
-
-:DONE_BUILD
-set /a "T_SEC=STEP / 10"
-set /a "T_DEC=STEP %% 10"
-set /p BUILD_STATUS=<"%TEMP%\cmd_build_done.txt"
-set "BUILD_STATUS=!BUILD_STATUS: =!"
-
-if not "!BUILD_STATUS!"=="0" (
+if not "!BUILD_RET!"=="0" (
     echo.
-    echo.
-    echo %BG_RED%  [X] BÙMM! TOANG RỒI BU EM ƠI!  %C_RESET%
     echo %C_RED%%C_BOLD%  Lỗi biên dịch trong code kia kìa:%C_RESET%
     echo %C_YELLOW%
     if exist "%TEMP%\cmd_build_err.log" type "%TEMP%\cmd_build_err.log"
     echo %C_RESET%
-    del /f /q "%TEMP%\cmd_build_done.txt" "%TEMP%\cmd_build_err.log" 2>nul
+    del /f /q "%TEMP%\cmd_build_err.log" 2>nul
     pause
     exit /b 1
 )
 
-del /f /q "%TEMP%\cmd_build_done.txt" "%TEMP%\cmd_build_err.log" 2>nul
+del /f /q "%TEMP%\cmd_build_err.log" 2>nul
 if exist "src\apps.txt" copy /y "src\apps.txt" "bin\apps.txt" >nul
 
-echo.
-echo !CR!%BG_GREEN%  [OK] BUILD XONG TRONG !T_SEC!.!T_DEC!s! SIÊU MƯỢT  %C_RESET%           
 echo %C_GREEN%  [+] Ra lò: %C_YELLOW%bin\main.exe %C_GREEN%[Chạy là bay]%C_RESET%
 echo.
 
