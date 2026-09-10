@@ -136,8 +136,7 @@ public:
                          << " [2] Kích hoạt Lá chắn bảo mật toàn diện\n"
                          << " [3] Kiểm tra trạng thái bảo mật hệ thống\n"
                          << " [4] Xem danh sách mật khẩu Wi-Fi đã lưu\n"
-                         << " [5] Quét & Bảo vệ tập tin Hosts\n"
-                         << " [6] Quét thiết bị kết nối Wi-Fi / LAN\n"
+                         << " [5] Quét thiết bị kết nối Wi-Fi / LAN\n"
                          << " [0] Quay lại\n\n"
                          << " [Chọn]: ";
                     sub = readInt("");
@@ -148,8 +147,7 @@ public:
                     case 2:  getInternet().fullSecurityShield(); break;
                     case 3:  getInternet().checkSecurityStatus(); break;
                     case 4:  getInternet().wifiAudit(); break;
-                    case 5:  getInternet().checkHostsFileSecurity(); break;
-                    case 6:  getInternet().scanConnectedDevices(); break;
+                    case 5:  getInternet().scanConnectedDevices(); break;
                     default: Sleep(300); break;
                     }
                 }

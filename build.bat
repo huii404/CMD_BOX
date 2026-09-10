@@ -23,11 +23,10 @@ set "BG_RED=%ESC%[41;97m"
 cls
 echo.
 echo %C_PINK%%C_BOLD%  ======================================================%C_RESET%
-echo %C_CYAN%%C_BOLD%       ____ __  __ ____       ____   ______  __%C_RESET%
-echo %C_CYAN%%C_BOLD%      / ___]  \/  ]  _ \     ] __ ) / _ \ \/ /%C_RESET%
-echo %C_GREEN%%C_BOLD%     [ [   ] [\/] [ ] ] ]    ]  _ \[ [ ] ]\  / %C_RESET%
-echo %C_GREEN%%C_BOLD%     [ [___] [  ] [ ]_] ]    ] ]_) ] [_] ]/  \ %C_RESET%
-echo %C_YELLOW%%C_BOLD%      \____]_]  [_]____/     ]____/ \___//_/\_\%C_RESET%
+echo %C_CYAN%%C_BOLD%         /\_/\   %C_YELLOW%[ CMD BOX - PRO BUILDER ]%C_RESET%
+echo %C_PINK%%C_BOLD%        ( o.o )  %C_GREEN%Mèo coder: "Bật mode gánh team!"%C_RESET%
+echo %C_YELLOW%%C_BOLD%        /     \ %C_CYAN%Quạt CPU bắt đầu hú, đừng manh động...%C_RESET%
+echo %C_GREEN%%C_BOLD%       [_______] %C_YELLOW%(bàn phím bốc khói)%C_RESET%
 echo %C_PINK%%C_BOLD%  ======================================================%C_RESET%
 echo       %BG_PURPLE%  * TOOLKIT PRO BUILDER - CHẠY LÀ MƯỢT *  %C_RESET%
 echo.

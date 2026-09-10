@@ -1,5 +1,6 @@
 #include "../include/Internet.h"
 #include <iphlpapi.h>
+#include <icmpapi.h>
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
 #include "../include/SystemCore.h"
@@ -16,6 +17,8 @@
 #include <mutex>
 #include <omp.h>
 #include <iomanip>
+#include <unordered_map>
+#include <chrono>
 
 namespace fs = std::filesystem;
 using namespace std;
@@ -319,102 +322,6 @@ void Internet::fullSecurityShield() {
 }
 
 // ----------------------------------------------------------------------------------
-// BƯỚC 5: QUÉT & BẢO VỆ TẬP TIN HOSTS
-// Cơ chế: Đọc C:\Windows\System32\drivers\etc\hosts phát hiện các dòng điều hướng DNS
-// bất thường (malware thường chuyển hướng tên miền ngân hàng/Google/Facebook về máy chủ ảo).
-// ----------------------------------------------------------------------------------
-void Internet::checkHostsFileSecurity() {
-    sc.cls();
-    cout << "QUÉT & BẢO VỆ TẬP TIN HOSTS\n\n";
-
-    std::string hostsPath = "C:\\Windows\\System32\\drivers\\etc\\hosts";
-    if (!fs::exists(hostsPath)) {
-        cout << "[!] Không tìm thấy tập tin hosts: " << hostsPath << "\n";
-        SystemCore::waitEnter();
-        return;
-    }
-
-    std::ifstream hf(hostsPath);
-    if (!hf) {
-        cout << "[!] Không thể đọc tập tin hosts (Cần quyền Admin).\n";
-        SystemCore::waitEnter();
-        return;
-    }
-
-    std::vector<std::string> activeRules;
-    std::vector<std::string> suspiciousRules;
-    std::string line;
-
-    std::vector<std::string> sensitiveDomains = {
-        "google", "facebook", "youtube", "microsoft", "windowsupdate", 
-        "bank", "paypal", "kaspersky", "bitdefender", "virustotal", "avast"
-    };
-
-    while (std::getline(hf, line)) {
-        std::string trimmed = sc.trim(line);
-        if (trimmed.empty() || trimmed[0] == '#') continue;
-
-        activeRules.push_back(trimmed);
-
-        std::string lowerLine = trimmed;
-        std::transform(lowerLine.begin(), lowerLine.end(), lowerLine.begin(), ::tolower);
-        for (const auto &domain : sensitiveDomains) {
-            if (lowerLine.find(domain) != std::string::npos) {
-                suspiciousRules.push_back(trimmed);
-                break;
-            }
-        }
-    }
-    hf.close();
-
-    cout << "Tập tin: " << hostsPath << "\n"
-         << "Quy tắc kích hoạt: " << activeRules.size() << "\n\n";
-
-    if (!activeRules.empty()) {
-        cout << "Danh sách dòng điều hướng:\n";
-        for (const auto &r : activeRules) {
-            cout << "  -> " << r << "\n";
-        }
-        cout << "\n";
-    }
-
-    if (!suspiciousRules.empty()) {
-        cout << "[!] CẢNH BÁO: Phát hiện " << suspiciousRules.size() << " quy tắc điều hướng đáng ngờ:\n";
-        for (const auto &sr : suspiciousRules) {
-            cout << "  [Nghi vấn] " << sr << "\n";
-        }
-        cout << "\n";
-    } else {
-        cout << "[✓] Tập tin hosts an toàn (Không có điều hướng độc hại).\n\n";
-    }
-
-    cout << " [1] Khôi phục hosts sạch gốc Microsoft\n"
-         << " [0] Quay lại\n\n"
-         << " [Chọn]: ";
-
-    int choice = sc.readInt("");
-    if (choice == 1) {
-        std::string defaultHosts = 
-            "# Copyright (c) 1993-2009 Microsoft Corp.\n"
-            "# This is a sample HOSTS file used by Microsoft TCP/IP for Windows.\n"
-            "#\n"
-            "# 127.0.0.1       localhost\n"
-            "# ::1             localhost\n";
-
-        std::string tempBat = "@echo off\n";
-        tempBat += "attrib -r -s -h \"C:\\Windows\\System32\\drivers\\etc\\hosts\" >nul 2>&1\n";
-        tempBat += "(echo # Clean Hosts File & echo 127.0.0.1 localhost & echo ::1 localhost) > \"C:\\Windows\\System32\\drivers\\etc\\hosts\"\n";
-
-        if (SystemCore::runBatchAsAdmin(tempBat, "Khôi phục tập tin hosts")) {
-            cout << "\n[✓] Đã khôi phục hosts sạch gốc thành công!\n";
-        } else {
-            cout << "\n[!] Thất bại (Cần quyền Administrator).\n";
-        }
-        SystemCore::waitEnter();
-    }
-}
-
-// ----------------------------------------------------------------------------------
 // BƯỚC 6: KIỂM TRA TRẠNG THÁI BẢO MẬT HỆ THỐNG THIẾT YẾU
 // Cơ chế: Kiểm tra 4 yếu tố cốt lõi (Defender Realtime, Firewall, Spyware Proxy, Port hiểm)
 // ----------------------------------------------------------------------------------
@@ -480,13 +387,610 @@ void Internet::checkSecurityStatus() {
     SystemCore::waitEnter();
 }
 
-// --- TÍNH NĂNG QUÉT THIẾT BỊ ĐANG DÙNG WI-FI / LAN (THEO CHUẨN C# NETWORK SERVICE) ---
+// --- TÍNH NĂNG QUÉT THIẾT BỊ ĐANG DÙNG WI-FI / LAN (PHIÊN BẢN TỐI ƯU SIÊU TỐC & CHUẨN XÁC) ---
 
 static bool isRandomizedPrivateMac(const string& mac) {
     if (mac.length() < 2) return false;
     char secondHex = (char)toupper((unsigned char)mac[1]);
-    // Chuẩn IEEE: Bit thứ 2 của byte đầu = 1 (2, 6, A, E) -> Private / Randomized MAC (iOS 14+, Android 10+)
+    // Chuẩn IEEE 802: Bit thứ 2 của byte đầu tiên = 1 (2, 6, A, E) -> Địa chỉ MAC ngẫu nhiên / riêng tư
+    // (Tính năng Private Wi-Fi Address trên iOS 14+ và MAC Randomization trên Android 10+)
     return (secondHex == '2' || secondHex == '6' || secondHex == 'A' || secondHex == 'E');
+}
+
+// Bảng tra cứu Vendor OUI (Hash Map O(1) tốc độ cực cao, đầy đủ các hãng phổ biến tại VN & quốc tế)
+static const unordered_map<string, pair<string, string>>& getOuiDatabase() {
+    static const unordered_map<string, pair<string, string>> ouiMap = {
+        // Apple (iPhone, iPad, Mac, Apple Watch, Apple TV)
+        {"A0BD1D", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"F01898", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"ACBC32", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"F8FFC2", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"0017F2", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"001CB3", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"0026BB", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"040CCE", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"087045", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"0CBC9F", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"1093E9", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"14109F", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"147DC5", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"20EE28", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"24A2E1", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"286ABA", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"2CF0EE", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"3090AB", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"3408BC", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"38F9D3", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"3C0754", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"3C22FB", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"3CD0F8", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"406C8F", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"40B395", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"48605F", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"50BC96", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"542696", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"5C95AE", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"60F81D", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"64B0A6", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"68AE20", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"6C4008", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"701124", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"70ECE4", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"74B587", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"784F43", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"7C6D62", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"80BE05", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"8489AD", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"88665A", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"8C8590", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"90DD5D", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"9801A7", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"9C207B", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"A483E7", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"A85B78", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"B418D1", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"B817C2", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"B8782E", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"BCD074", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"C09AD0", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"C4B301", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"C869CD", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"CC08FB", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"D0034B", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"D4909C", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"D89695", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"DCA904", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"E0B55F", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"E498D6", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"E8802E", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+        {"F4F15A", {"Apple Device", "Apple iPhone / iPad / Mac"}},
+
+        // Samsung (Galaxy S, A, Note, Z Fold/Flip, Smart TV Samsung)
+        {"503275", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"A4C494", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"342387", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"88329B", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"CC07AB", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"E458E7", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"784B87", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"404E36", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"0007AB", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"001247", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"001599", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"001D25", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"0023D7", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"08373D", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"103047", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"1449E0", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"18227E", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"20D390", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"286D97", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"30CDA7", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"380B40", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"40163B", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"444E1A", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"4844F7", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"508569", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"549B12", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"5CF8A1", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"60AF6D", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"68EBAE", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"70288B", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"7840E4", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"805B65", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"842519", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"8C7712", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"90F1AA", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"94652D", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"9852B1", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"A0821F", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"AC5F3E", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"B072BF", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"B479A7", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"BC4486", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"C0BDD1", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"C4731E", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"C81479", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"D0B128", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"D487D8", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"D857EF", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"DC7144", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"E09971", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"E47CF9", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"E8508B", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"F0728C", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"F409D8", {"Samsung Galaxy", "Samsung (Android)"}},
+        {"F8042E", {"Samsung Galaxy", "Samsung (Android)"}},
+
+        // Xiaomi / Redmi / POCO
+        {"54AF97", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"640980", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"502B73", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"7C49EB", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"9C99A0", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"3480B3", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"186590", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"009EC8", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"04CF8C", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"14F65A", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"185936", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"286C07", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"38A4ED", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"40313C", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"50642B", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"584498", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"64CE00", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"742344", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"74A34A", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"8CBEBE", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"98FAE3", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"A4C361", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"ACC1EE", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"ACF6F7", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"B0E235", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"C40BCB", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"D4970B", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"E446DA", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"F460E2", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+        {"F8A2D6", {"Xiaomi / Redmi", "Điện thoại / Thiết bị Xiaomi"}},
+
+        // Oppo / Vivo / Realme / OnePlus / iQOO
+        {"8090D0", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"E0191D", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"9C7142", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"600CB8", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"C0B5D5", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"1C521D", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"244BFE", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"2C598A", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"307512", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"347E5C", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"48137E", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"508F4C", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"646E97", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"902BD2", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"982CBC", {"OnePlus Phone", "Điện thoại OnePlus"}},
+        {"A45B3D", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"B40B44", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"D4619D", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"F013C3", {"Oppo / Realme", "Điện thoại Oppo / Realme"}},
+        {"102A97", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"18F0E4", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"205D49", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"3859F9", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"440444", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"54369B", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"64DB43", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"74AC5F", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"84DBAC", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"981DFA", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"B0D59D", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"C83DD4", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"D022BE", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"E89E09", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+        {"F8E903", {"Vivo / iQOO", "Điện thoại Vivo / iQOO"}},
+
+        // Huawei / Honor
+        {"001E10", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"042528", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"0819A6", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"104780", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"1C1D67", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"24DF6A", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"342EB6", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"40B034", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"4846FB", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"548998", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"60E327", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"70723C", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"786A89", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"84A8E4", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"8853D4", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"9C2840", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"A4C7DE", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"AC853D", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"B4CD27", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"C07009", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"D8490B", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"E0247F", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+        {"F8E811", {"Huawei / Honor", "Thiết bị Huawei / Honor"}},
+
+        // Google (Pixel Phone, Nest, Chromecast, Home)
+        {"001A11", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+        {"18D6C7", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+        {"20DFB9", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+        {"3C5AB4", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+        {"48D6D5", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+        {"546009", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+        {"703EAC", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+        {"94EBCD", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+        {"A47733", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+        {"B827EB", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+        {"D8EB97", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+        {"E4F042", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+        {"F4F5DB", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+        {"F80FF9", {"Google Device", "Google Pixel / Nest / Chromecast"}},
+
+        // TP-Link / Mercusys
+        {"F81A67", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"3C8CF8", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"74DA88", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"C0C9E3", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"50C7BF", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"000AEB", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"001478", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"001D0F", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"002586", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"002719", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"14CC20", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"1C3BF3", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"30DE4B", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"3C846A", {"TP-Link Device", "Bộ phát Wi-Fi / Camera Tapo"}},
+        {"50D4F7", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"6032B1", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"6CA6B4", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"704F57", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"8416F9", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"984827", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"98DAC4", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"A0F3C1", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"B04E26", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"B09575", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"B4B024", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"C006C3", {"TP-Link Tapo", "Camera / Smart Plug Tapo"}},
+        {"C025E9", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"C04A00", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"D807B6", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"D80D17", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"D84732", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"E4C32A", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"EC086B", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"F48CEB", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+        {"F4F26D", {"TP-Link Device", "Bộ phát Wi-Fi / Router TP-Link"}},
+
+        // Tenda / Totolink
+        {"00B00C", {"Tenda Device", "Bộ phát Wi-Fi Tenda"}},
+        {"0495E6", {"Tenda Device", "Bộ phát Wi-Fi Tenda"}},
+        {"0840F3", {"Tenda Device", "Bộ phát Wi-Fi Tenda"}},
+        {"58D9D5", {"Tenda Device", "Bộ phát Wi-Fi Tenda"}},
+        {"946C65", {"Tenda Device", "Bộ phát Wi-Fi Tenda"}},
+        {"C83A35", {"Tenda Device", "Bộ phát Wi-Fi Tenda"}},
+        {"CC3429", {"Tenda Device", "Bộ phát Wi-Fi Tenda"}},
+        {"E865D4", {"Tenda Device", "Bộ phát Wi-Fi Tenda"}},
+        {"784476", {"Totolink Device", "Bộ phát Wi-Fi Totolink"}},
+        {"D8FEE3", {"Totolink Device", "Bộ phát Wi-Fi Totolink"}},
+        {"00085C", {"Totolink Device", "Bộ phát Wi-Fi Totolink"}},
+        {"F0B429", {"Totolink Device", "Bộ phát Wi-Fi Totolink"}},
+
+        // Thiết bị mạng Viettel / VNPT / FPT / Doanh nghiệp
+        {"0017C2", {"VNPT iGate / Dasan", "Modem cáp quang VNPT / Dasan"}},
+        {"002534", {"VNPT iGate", "Modem cáp quang VNPT iGate"}},
+        {"48EE0C", {"VNPT iGate", "Modem cáp quang VNPT iGate"}},
+        {"A06518", {"VNPT Technology", "Modem / Mesh Wi-Fi VNPT"}},
+        {"B0C554", {"VNPT Technology", "Modem / Switch VNPT"}},
+        {"40F201", {"VNPT Technology", "Modem cáp quang VNPT"}},
+        {"282CB2", {"VNPT Technology", "Modem / Mesh Wi-Fi VNPT"}},
+        {"58971E", {"VNPT Technology", "Modem / Mesh Wi-Fi VNPT"}},
+        {"A41242", {"Viettel Telecom", "Modem Cáp quang Viettel"}},
+        {"68DB54", {"Viettel Telecom", "Modem Cáp quang Viettel"}},
+        {"786A1F", {"Viettel Telecom", "Modem Cáp quang Viettel"}},
+        {"A8F94B", {"Viettel VHT", "Modem / Mesh Wi-Fi Viettel"}},
+        {"C4B8B4", {"Viettel VHT", "Modem / Mesh Wi-Fi Viettel"}},
+        {"38437D", {"Viettel VHT", "Modem / Mesh Wi-Fi Viettel"}},
+        {"EC388F", {"Viettel VHT", "Modem / Mesh Wi-Fi Viettel"}},
+        {"001E73", {"ZTE Modem", "Modem nhà mạng ZTE (Viettel/FPT)"}},
+        {"200889", {"ZTE Modem", "Modem nhà mạng ZTE (Viettel/FPT)"}},
+        {"34E0CF", {"ZTE Modem", "Modem nhà mạng ZTE (Viettel/FPT)"}},
+        {"908D78", {"ZTE Modem", "Modem nhà mạng ZTE (Viettel/FPT)"}},
+        {"B49842", {"ZTE Modem", "Modem nhà mạng ZTE (Viettel/FPT)"}},
+        {"002293", {"ZTE Modem", "Modem nhà mạng ZTE (Viettel/FPT)"}},
+        {"284153", {"ZTE Modem", "Modem nhà mạng ZTE (Viettel/FPT)"}},
+        {"681AB2", {"ZTE Modem", "Modem nhà mạng ZTE (Viettel/FPT)"}},
+        {"708A09", {"ZTE Modem", "Modem nhà mạng ZTE (Viettel/FPT)"}},
+        {"8CE081", {"ZTE Modem", "Modem nhà mạng ZTE (Viettel/FPT)"}},
+        {"C87B5B", {"ZTE Modem", "Modem nhà mạng ZTE (Viettel/FPT)"}},
+        {"DC028E", {"ZTE Modem", "Modem nhà mạng ZTE (Viettel/FPT)"}},
+        {"F47960", {"ZTE Modem", "Modem nhà mạng ZTE (Viettel/FPT)"}},
+        {"00271C", {"Dasan Zhone", "Modem mạng Dasan"}},
+        {"60F189", {"Dasan Zhone", "Modem mạng Dasan"}},
+        {"001DAA", {"DrayTek Vigor", "Router doanh nghiệp DrayTek"}},
+        {"00507F", {"DrayTek Vigor", "Router doanh nghiệp DrayTek"}},
+        {"000C42", {"MikroTik Router", "Router MikroTik RouterBOARD"}},
+        {"488F5A", {"MikroTik Router", "Router MikroTik RouterBOARD"}},
+        {"64D154", {"MikroTik Router", "Router MikroTik RouterBOARD"}},
+        {"744D28", {"MikroTik Router", "Router MikroTik RouterBOARD"}},
+        {"B869F4", {"MikroTik Router", "Router MikroTik RouterBOARD"}},
+        {"C4AD34", {"MikroTik Router", "Router MikroTik RouterBOARD"}},
+        {"CC2DE0", {"MikroTik Router", "Router MikroTik RouterBOARD"}},
+        {"D4CA6D", {"MikroTik Router", "Router MikroTik RouterBOARD"}},
+        {"E48D8C", {"MikroTik Router", "Router MikroTik RouterBOARD"}},
+        {"00156D", {"Ubiquiti UniFi", "Bộ phát UniFi / EdgeRouter"}},
+        {"002722", {"Ubiquiti UniFi", "Bộ phát UniFi / EdgeRouter"}},
+        {"24A43C", {"Ubiquiti UniFi", "Bộ phát UniFi / EdgeRouter"}},
+        {"68D79A", {"Ubiquiti UniFi", "Bộ phát UniFi / EdgeRouter"}},
+        {"70A741", {"Ubiquiti UniFi", "Bộ phát UniFi / EdgeRouter"}},
+        {"7483C2", {"Ubiquiti UniFi", "Bộ phát UniFi / EdgeRouter"}},
+        {"788A20", {"Ubiquiti UniFi", "Bộ phát UniFi / EdgeRouter"}},
+        {"B4FBE4", {"Ubiquiti UniFi", "Bộ phát UniFi / EdgeRouter"}},
+        {"DC9FDB", {"Ubiquiti UniFi", "Bộ phát UniFi / EdgeRouter"}},
+        {"F09FC2", {"Ubiquiti UniFi", "Bộ phát UniFi / EdgeRouter"}},
+        {"001AA9", {"Ruijie / Reyee", "Bộ phát Wi-Fi Ruijie / Reyee"}},
+        {"00D0F8", {"Ruijie / Reyee", "Bộ phát Wi-Fi Ruijie / Reyee"}},
+        {"14144B", {"Ruijie / Reyee", "Bộ phát Wi-Fi Ruijie / Reyee"}},
+        {"34CE00", {"Ruijie / Reyee", "Bộ phát Wi-Fi Ruijie / Reyee"}},
+        {"70AF6A", {"Ruijie / Reyee", "Bộ phát Wi-Fi Ruijie / Reyee"}},
+        {"84D81B", {"Ruijie / Reyee", "Bộ phát Wi-Fi Ruijie / Reyee"}},
+        {"F8A742", {"Ruijie / Reyee", "Bộ phát Wi-Fi Ruijie / Reyee"}},
+
+        // Camera An ninh (Hikvision, Dahua, Ezviz, Imou, Yoosee)
+        {"38AF29", {"Hikvision / Ezviz", "Camera IP an ninh Ezviz"}},
+        {"4419B6", {"Hikvision / Ezviz", "Camera IP an ninh Ezviz"}},
+        {"48EA63", {"Hikvision / Ezviz", "Camera IP an ninh Ezviz"}},
+        {"600308", {"Hikvision / Ezviz", "Camera IP an ninh Ezviz"}},
+        {"64DB8B", {"Hikvision / Ezviz", "Camera IP an ninh Ezviz"}},
+        {"8CE748", {"Hikvision / Ezviz", "Camera IP an ninh Ezviz"}},
+        {"A0BDCD", {"Hikvision / Ezviz", "Camera IP an ninh Ezviz"}},
+        {"AC83F3", {"Hikvision / Ezviz", "Camera IP an ninh Ezviz"}},
+        {"B0F963", {"Hikvision / Ezviz", "Camera IP an ninh Ezviz"}},
+        {"C42F90", {"Hikvision / Ezviz", "Camera IP an ninh Ezviz"}},
+        {"BC1401", {"Hikvision / Ezviz", "Camera IP an ninh Ezviz"}},
+        {"D46E5C", {"Hikvision / Ezviz", "Camera IP an ninh Ezviz"}},
+        {"F84D89", {"Hikvision / Ezviz", "Camera IP an ninh Ezviz"}},
+        {"001A07", {"Dahua / Imou", "Camera IP an ninh Imou"}},
+        {"3CEF8C", {"Dahua / Imou", "Camera IP an ninh Imou"}},
+        {"402C76", {"Dahua / Imou", "Camera IP an ninh Imou"}},
+        {"54C415", {"Dahua / Imou", "Camera IP an ninh Imou"}},
+        {"686DBC", {"Dahua / Imou", "Camera IP an ninh Imou"}},
+        {"9002A9", {"Dahua / Imou", "Camera IP an ninh Imou"}},
+        {"B0C559", {"Dahua / Imou", "Camera IP an ninh Imou"}},
+        {"E0508B", {"Dahua / Imou", "Camera IP an ninh Imou"}},
+        {"F4F5E8", {"Dahua / Imou", "Camera IP an ninh Imou"}},
+        {"001212", {"Yoosee Camera", "Camera IP giá rẻ Yoosee"}},
+        {"001215", {"Yoosee Camera", "Camera IP giá rẻ Yoosee"}},
+        {"001216", {"Yoosee Camera", "Camera IP giá rẻ Yoosee"}},
+        {"001217", {"Yoosee Camera", "Camera IP giá rẻ Yoosee"}},
+        {"34BA9D", {"Yoosee Camera", "Camera IP giá rẻ Yoosee"}},
+        {"58639A", {"Yoosee Camera", "Camera IP giá rẻ Yoosee"}},
+
+        // Smart TV & Media Box & Máy chơi game
+        {"00014A", {"Sony Bravia / PS", "Smart TV Sony / PlayStation"}},
+        {"00041F", {"Sony Bravia / PS", "Smart TV Sony / PlayStation"}},
+        {"001315", {"Sony Bravia / PS", "Smart TV Sony / PlayStation"}},
+        {"001DBA", {"Sony Bravia / PS", "Smart TV Sony / PlayStation"}},
+        {"00248D", {"Sony Bravia / PS", "Smart TV Sony / PlayStation"}},
+        {"10F96F", {"Sony Bravia / PS", "Smart TV Sony / PlayStation"}},
+        {"30074D", {"Sony Bravia / PS", "Smart TV Sony / PlayStation"}},
+        {"709E29", {"Sony Bravia / PS", "Smart TV Sony / PlayStation"}},
+        {"94E6F7", {"Sony Bravia / PS", "Smart TV Sony / PlayStation"}},
+        {"AC9B0A", {"Sony Bravia / PS", "Smart TV Sony / PlayStation"}},
+        {"F8461C", {"Sony Bravia / PS", "Smart TV Sony / PlayStation"}},
+        {"001FE2", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"002483", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"10683F", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"1868CB", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"203D66", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"3CCD36", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"40B0FA", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"58A2B5", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"700514", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"88366C", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"A823FE", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"AC8B03", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"C4366C", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"E85B5B", {"LG WebOS TV", "Smart TV LG (WebOS)"}},
+        {"083E0C", {"TCL Smart TV", "Smart TV TCL / Android TV"}},
+        {"2876CD", {"TCL Smart TV", "Smart TV TCL / Android TV"}},
+        {"408BF6", {"TCL Smart TV", "Smart TV TCL / Android TV"}},
+        {"50338B", {"TCL Smart TV", "Smart TV TCL / Android TV"}},
+        {"6CF37F", {"TCL Smart TV", "Smart TV TCL / Android TV"}},
+        {"D0D783", {"TCL Smart TV", "Smart TV TCL / Android TV"}},
+        {"00264A", {"Casper / Skyworth", "Smart TV Casper / Skyworth"}},
+        {"14F879", {"Casper / Skyworth", "Smart TV Casper / Skyworth"}},
+        {"440377", {"Casper / Skyworth", "Smart TV Casper / Skyworth"}},
+        {"C89346", {"Casper / Skyworth", "Smart TV Casper / Skyworth"}},
+        {"0009BF", {"Nintendo Switch", "Máy chơi game Nintendo"}},
+        {"98B6E9", {"Nintendo Switch", "Máy chơi game Nintendo"}},
+        {"B87826", {"Nintendo Switch", "Máy chơi game Nintendo"}},
+        {"CCFB65", {"Nintendo Switch", "Máy chơi game Nintendo"}},
+        {"E84ECE", {"Nintendo Switch", "Máy chơi game Nintendo"}},
+
+        // Máy tính, Laptop, Card mạng PC (Dell, HP, Lenovo, Asus, Acer, Intel, Realtek)
+        {"78BE81", {"Máy tính (PC/Laptop)", "Máy tính (Lite-On / Acer / PC)"}},
+        {"000C6E", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"0015F2", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"001E8C", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"04D9F5", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"08606E", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"107B44", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"1831BF", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"2C4D54", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"3085A9", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"382C4A", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"40167E", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"50465D", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"6045CB", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"704D7B", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"74D02B", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"90E6BA", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"A85E45", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"BCEE7B", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"C86000", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"D850E6", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"E03F49", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"F07959", {"Asus Laptop/PC", "Bo mạch / Laptop Asus ROG"}},
+        {"000124", {"Acer Laptop/PC", "Máy tính / Laptop Acer"}},
+        {"006067", {"Acer Laptop/PC", "Máy tính / Laptop Acer"}},
+        {"00A060", {"Acer Laptop/PC", "Máy tính / Laptop Acer"}},
+        {"485D60", {"Acer Laptop/PC", "Máy tính / Laptop Acer"}},
+        {"80C5F2", {"Acer Laptop/PC", "Máy tính / Laptop Acer"}},
+        {"B8763F", {"Acer Laptop/PC", "Máy tính / Laptop Acer"}},
+        {"C09879", {"Acer Laptop/PC", "Máy tính / Laptop Acer"}},
+        {"C89CDC", {"Acer Laptop/PC", "Máy tính / Laptop Acer"}},
+        {"E06995", {"Acer Laptop/PC", "Máy tính / Laptop Acer"}},
+        {"00065B", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"000874", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"000BDB", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"000D56", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"001143", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"001422", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"00188B", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"180373", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"1866DA", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"24B6FD", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"3417EB", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"484D7E", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"544810", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"74867A", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"847BEB", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"90B11C", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"A44CC8", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"B8AC6F", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"C8F750", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"D481D7", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"E4F004", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"F8BC12", {"Dell Laptop/PC", "Máy tính / Laptop Dell"}},
+        {"0001E6", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"000802", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"000E7F", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"001635", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"001E0B", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"10604B", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"18A958", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"2C59E5", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"308D99", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"3C5282", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"40A8F0", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"480FCF", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"5820B1", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"68B599", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"705A0F", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"80C16E", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"9457A5", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"A0D3C1", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"B499BA", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"C8D3FF", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"D48564", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"E4115B", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"F40343", {"HP Laptop/PC", "Máy tính / Laptop HP"}},
+        {"001A64", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"00215C", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"04766E", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"083E8E", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"1008B1", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"14ABC5", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"207693", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"286F7F", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"3052CB", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"3C970E", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"482CA0", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"503EAA", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"54EE75", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"606720", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"6C8814", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"707781", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"78028F", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"802BF9", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"8C8D28", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"98FA9B", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"B0359F", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"C85B76", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"D8CE3A", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"E0D55E", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"F0D5BF", {"Lenovo Laptop/PC", "Máy tính / Laptop Lenovo"}},
+        {"0002B3", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"000347", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"000423", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"000CF1", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"000E0C", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"001302", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"001676", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"001B21", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"001E67", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"00216A", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"081196", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"3413E8", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"4851B7", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"6805CA", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"7CB0C2", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"8086F2", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"AC87A3", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"E82A44", {"Intel Network", "Card mạng máy tính Intel"}},
+        {"00070E", {"Realtek LAN", "Card mạng máy tính Realtek"}},
+        {"00E04C", {"Realtek LAN", "Card mạng máy tính Realtek"}},
+        {"52544C", {"Realtek LAN", "Card mạng máy tính Realtek"}},
+        {"0003FF", {"Microsoft Device", "Microsoft Surface / Hyper-V"}},
+        {"00155D", {"Microsoft Hyper-V", "Máy ảo Microsoft Hyper-V"}},
+        {"0017FA", {"Microsoft Device", "Microsoft Surface / PC"}},
+        {"281878", {"Microsoft Device", "Microsoft Surface / PC"}},
+        {"6045BD", {"Microsoft Device", "Microsoft Surface / PC"}},
+        {"000569", {"VMware Virtual PC", "Máy ảo VMware Workstation"}},
+        {"000C29", {"VMware Virtual PC", "Máy ảo VMware Workstation"}},
+        {"005056", {"VMware Virtual PC", "Máy ảo VMware Workstation"}},
+        {"080027", {"VirtualBox PC", "Máy ảo Oracle VirtualBox"}},
+
+        // Smart Home IoT (Espressif ESP32/ESP8266, Tuya, Raspberry Pi)
+        {"18FE34", {"Espressif IoT", "Thiết bị Smart Home (ESP8266)"}},
+        {"240AC4", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"2462AB", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"246F28", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"2CF432", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"30AEA4", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"4022D8", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"485519", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"545AA6", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"68C63A", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"7CDFA1", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"84F3EB", {"Espressif IoT", "Thiết bị Smart Home (ESP8266)"}},
+        {"A4CF12", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"B4E62D", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"CC50E3", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"DC4F22", {"Espressif IoT", "Thiết bị Smart Home (ESP32)"}},
+        {"28CDC1", {"Raspberry Pi", "Máy tính mini Raspberry Pi"}},
+        {"DC2632", {"Raspberry Pi", "Máy tính mini Raspberry Pi"}},
+        {"E45F01", {"Raspberry Pi", "Máy tính mini Raspberry Pi"}},
+        {"10521C", {"Tuya Smart", "Thiết bị thông minh Tuya IoT"}},
+        {"708976", {"Tuya Smart", "Thiết bị thông minh Tuya IoT"}},
+        {"840D8E", {"Tuya Smart", "Thiết bị thông minh Tuya IoT"}},
+        {"D81F12", {"Tuya Smart", "Thiết bị thông minh Tuya IoT"}},
+
+        // Máy in văn phòng (Canon, Epson, Brother, HP)
+        {"000085", {"Canon Printer", "Máy in văn phòng Canon"}},
+        {"001E8F", {"Canon Printer", "Máy in văn phòng Canon"}},
+        {"180CAC", {"Canon Printer", "Máy in văn phòng Canon"}},
+        {"7085C2", {"Canon Printer", "Máy in văn phòng Canon"}},
+        {"84BA3B", {"Canon Printer", "Máy in văn phòng Canon"}},
+        {"ACBCB0", {"Canon Printer", "Máy in văn phòng Canon"}},
+        {"000048", {"Epson Printer", "Máy in phun Epson"}},
+        {"0021B7", {"Epson Printer", "Máy in phun Epson"}},
+        {"0026AB", {"Epson Printer", "Máy in phun Epson"}},
+        {"64EB8C", {"Epson Printer", "Máy in phun Epson"}},
+        {"9CB654", {"Epson Printer", "Máy in phun Epson"}},
+        {"008077", {"Brother Printer", "Máy in Brother"}},
+        {"30055C", {"Brother Printer", "Máy in Brother"}},
+        {"485D36", {"Brother Printer", "Máy in Brother"}},
+        {"E89E0C", {"Brother Printer", "Máy in Brother"}}
+    };
+    return ouiMap;
 }
 
 static pair<string, string> lookupVendorFromMac(const string& mac) {
@@ -499,92 +1003,25 @@ static pair<string, string> lookupVendorFromMac(const string& mac) {
     if (clean.length() < 6) return {"Thiết bị không định danh", "Thiết bị mạng"};
     string oui = clean.substr(0, 6);
 
-    // Apple
-    if (oui == "A0BD1D" || oui == "F01898" || oui == "ACBC32" || oui == "F8FFC2" ||
-        oui == "0017F2" || oui == "3CD0F8" || oui == "D89695" || oui == "406C8F" ||
-        oui == "8C8590" || oui == "B8782E" || oui == "38F9D3" || oui == "701124" ||
-        oui == "BCD074" || oui == "DCA904" || oui == "F4F15A" || oui == "A85B78" ||
-        oui == "60F81D" || oui == "B817C2" || oui == "90DD5D" || oui == "E8802E" ||
-        oui == "286ABA" || oui == "3C22FB" || oui == "70ECE4" || oui == "A483E7")
-        return {"Apple Device", "Apple iPhone / iPad / Mac"};
+    const auto& ouiMap = getOuiDatabase();
+    auto it = ouiMap.find(oui);
+    if (it != ouiMap.end()) {
+        return it->second;
+    }
 
-    // Samsung
-    if (oui == "503275" || oui == "A4C494" || oui == "342387" || oui == "88329B" ||
-        oui == "CC07AB" || oui == "E458E7" || oui == "784B87" || oui == "404E36" ||
-        oui == "0007AB" || oui == "001247" || oui == "001599" || oui == "001D25" ||
-        oui == "0023D7" || oui == "08373D" || oui == "103047" || oui == "286D97" ||
-        oui == "40163B" || oui == "508569" || oui == "7840E4" || oui == "94652D" ||
-        oui == "BC4486" || oui == "DC7144" || oui == "E47CF9" || oui == "F409D8" ||
-        oui == "842519" || oui == "5CF8A1" || oui == "70288B" || oui == "A0821F")
-        return {"Samsung Galaxy", "Samsung (Android)"};
-
-    // Xiaomi / Redmi
-    if (oui == "54AF97" || oui == "640980" || oui == "502B73" || oui == "7C49EB" ||
-        oui == "9C99A0" || oui == "3480B3" || oui == "186590" || oui == "009EC8" ||
-        oui == "04CF8C" || oui == "185936" || oui == "286C07" || oui == "50642B" ||
-        oui == "742344" || oui == "8CBEBE" || oui == "ACC1EE" || oui == "C40BCB" ||
-        oui == "D4970B" || oui == "E446DA" || oui == "F460E2")
-        return {"Xiaomi / Redmi", "Xiaomi (Android)"};
-
-    // Oppo / Vivo / Realme
-    if (oui == "8090D0" || oui == "E0191D" || oui == "9C7142" || oui == "600CB8" || oui == "C0B5D5")
-        return {"Oppo / Vivo / Realme", "Android"};
-
-    // Huawei / Honor
-    if (oui == "001E10" || oui == "042528" || oui == "0819A6" || oui == "104780" ||
-        oui == "24DF6A" || oui == "4846FB" || oui == "70723C" || oui == "84A8E4" ||
-        oui == "AC853D" || oui == "D8490B" || oui == "E0247F" || oui == "40B034")
-        return {"Huawei Device", "Điện thoại / Thiết bị Huawei"};
-
-    // TP-Link / Tenda / Totolink
-    if (oui == "F81A67" || oui == "3C8CF8" || oui == "74DA88" || oui == "C0C9E3" || oui == "50C7BF" ||
-        oui == "000AEB" || oui == "001478" || oui == "001D0F" || oui == "002586" ||
-        oui == "14CC20" || oui == "1C3BF3" || oui == "30DE4B" || oui == "6032B1" ||
-        oui == "704F57" || oui == "8416F9" || oui == "98DAC4" || oui == "A0F3C1" ||
-        oui == "C04A00" || oui == "EC086B" || oui == "F48CEB" || oui == "6CA6B4")
-        return {"TP-Link Device", "Thiết bị mạng (Wi-Fi/AP)"};
-
-    if (oui == "00B00C" || oui == "502B73" || oui == "C83A35" || oui == "CC3429" || oui == "E865D4")
-        return {"Tenda Device", "Bộ phát Wi-Fi Tenda"};
-
-    // Camera IP (Hikvision / Dahua / Ezviz / Imou)
-    if (oui == "38AF29" || oui == "BC1401" || oui == "C42F90" || oui == "4419B6" || oui == "B0F963" || oui == "AC83F3")
-        return {"IP Camera An ninh", "Camera IP / Smart Home"};
-
-    // Smart TV
-    if (oui == "001FE2" || oui == "AC8B03" || oui == "3C15C2" || oui == "00248D" || oui == "10F96F" || oui == "203D66")
-        return {"Smart TV", "Smart TV / TV Box"};
-
-    // Máy tính / Laptop / Card mạng (Intel / Realtek / VMware / VirtualBox)
-    if (oui == "000C29" || oui == "005056") return {"VMware Virtual PC", "Máy ảo VMware"};
-    if (oui == "080027") return {"VirtualBox Virtual PC", "Máy ảo VirtualBox"};
-    if (oui == "001A7D" || oui == "00216A" || oui == "106530" || oui == "54EE75" ||
-        oui == "0002B3" || oui == "000347" || oui == "000423" || oui == "000CF1" ||
-        oui == "081196" || oui == "3413E8" || oui == "4851B7" || oui == "7CB0C2" ||
-        oui == "8086F2" || oui == "AC87A3" || oui == "C85B76" || oui == "E82A44" ||
-        oui == "78BE81" || oui == "00E04C" || oui == "52544C")
-        return {"Máy tính (PC/Laptop)", "Máy tính (PC/Laptop)"};
-
-    // Espressif (Nhà thông minh IoT)
-    if (oui == "18FE34" || oui == "240AC4" || oui == "2462AB" || oui == "2CF432" ||
-        oui == "30AEA4" || oui == "84F3EB" || oui == "A4CF12" || oui == "CC50E3" || oui == "DC4F22")
-        return {"Espressif IoT", "Thiết bị Smart Home / IoT"};
-
-    // Modem nhà mạng (ZTE / Dasan VNPT / DrayTek)
-    if (oui == "001E73" || oui == "200889" || oui == "34E0CF" || oui == "908D78" || oui == "B49842")
-        return {"ZTE Modem", "Modem nhà mạng (Viettel/VNPT)"};
-    if (oui == "0017C2" || oui == "002534" || oui == "48EE0C")
-        return {"Dasan Modem", "Modem mạng VNPT"};
+    if (isRandomizedPrivateMac(mac)) {
+        return {"Ẩn danh (Bảo mật MAC)", "Điện thoại / Tablet (iOS / Android)"};
+    }
 
     return {"Thiết bị mạng (OEM)", "Thiết bị kết nối Wi-Fi"};
 }
 
-// Truy vấn tên máy Windows qua NetBIOS Name Service (UDP 137, timeout cực nhanh 120ms)
+// 1. Truy vấn tên máy Windows qua NetBIOS Name Service (UDP 137, timeout siêu tốc 50ms)
 static string queryNetBiosName(const string& ipStr) {
     SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (s == INVALID_SOCKET) return "";
 
-    DWORD timeout = 120; // 120ms timeout
+    DWORD timeout = 50; // 50ms timeout cục bộ trong LAN
     setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
 
     sockaddr_in dest;
@@ -631,14 +1068,116 @@ static string queryNetBiosName(const string& ipStr) {
     return "";
 }
 
-// Phân loại thiết bị hoàn toàn tương đương ClassifyDevice trong C# NetworkService
-static pair<string, string> classifyDevice(const string& ip, const string& mac, bool isLocal, bool isGw, const string& localHost, const string& netBios, const string& dnsHost) {
+// 2. Truy vấn tên thiết bị qua DNS PTR nội bộ tới Router (UDP 53, timeout 50ms)
+static string queryLocalDnsPtr(const string& ipStr, const string& routerIp, int timeoutMs = 50) {
+    if (routerIp.empty()) return "";
+
+    int o1, o2, o3, o4;
+    if (sscanf(ipStr.c_str(), "%d.%d.%d.%d", &o1, &o2, &o3, &o4) != 4) return "";
+
+    string qname = to_string(o4) + "." + to_string(o3) + "." + to_string(o2) + "." + to_string(o1) + ".in-addr.arpa";
+
+    SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (s == INVALID_SOCKET) return "";
+
+    DWORD timeout = timeoutMs;
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+
+    sockaddr_in dest;
+    memset(&dest, 0, sizeof(dest));
+    dest.sin_family = AF_INET;
+    dest.sin_port = htons(53);
+    dest.sin_addr.s_addr = inet_addr(routerIp.c_str());
+
+    unsigned char packet[512];
+    memset(packet, 0, sizeof(packet));
+
+    packet[0] = 0x24; packet[1] = 0x68; // Transaction ID
+    packet[2] = 0x01; packet[3] = 0x00; // Standard query
+    packet[4] = 0x00; packet[5] = 0x01; // QDCOUNT = 1
+
+    int idx = 12;
+    size_t start = 0;
+    while (start < qname.length()) {
+        size_t dot = qname.find('.', start);
+        if (dot == string::npos) dot = qname.length();
+        int labelLen = (int)(dot - start);
+        packet[idx++] = (unsigned char)labelLen;
+        for (int i = 0; i < labelLen; ++i) packet[idx++] = qname[start + i];
+        start = dot + 1;
+    }
+    packet[idx++] = 0x00; // End of QNAME
+
+    // QTYPE = PTR (0x000C), QCLASS = IN (0x0001)
+    packet[idx++] = 0x00; packet[idx++] = 0x0C;
+    packet[idx++] = 0x00; packet[idx++] = 0x01;
+
+    sendto(s, (const char*)packet, idx, 0, (sockaddr*)&dest, sizeof(dest));
+
+    char recvBuf[512];
+    int recvLen = recv(s, recvBuf, sizeof(recvBuf), 0);
+    closesocket(s);
+
+    if (recvLen <= idx) return "";
+
+    unsigned short flags = ntohs(*(unsigned short*)(recvBuf + 2));
+    if ((flags & 0x8000) == 0 || (flags & 0x000F) != 0) return "";
+
+    unsigned short anCount = ntohs(*(unsigned short*)(recvBuf + 6));
+    if (anCount == 0) return "";
+
+    int ansIdx = idx;
+    if (ansIdx >= recvLen) return "";
+
+    if ((recvBuf[ansIdx] & 0xC0) == 0xC0) {
+        ansIdx += 2;
+    } else {
+        while (ansIdx < recvLen && recvBuf[ansIdx] != 0) ansIdx += ((unsigned char)recvBuf[ansIdx]) + 1;
+        ansIdx++;
+    }
+
+    if (ansIdx + 10 > recvLen) return "";
+    unsigned short aType = ntohs(*(unsigned short*)(recvBuf + ansIdx));
+    ansIdx += 8;
+    unsigned short dataLen = ntohs(*(unsigned short*)(recvBuf + ansIdx));
+    ansIdx += 2;
+
+    if (aType != 12 || ansIdx + dataLen > recvLen) return "";
+
+    string hostname = "";
+    int rIdx = ansIdx;
+    while (rIdx < ansIdx + dataLen) {
+        unsigned char len = (unsigned char)recvBuf[rIdx++];
+        if (len == 0) break;
+        if ((len & 0xC0) == 0xC0) break;
+        if (!hostname.empty()) hostname += ".";
+        for (int i = 0; i < len && rIdx < ansIdx + dataLen; ++i) {
+            hostname += recvBuf[rIdx++];
+        }
+    }
+
+    // Lược bỏ các hậu tố domain nội bộ của Router nếu có
+    size_t firstDot = hostname.find('.');
+    if (firstDot != string::npos) {
+        string tld = hostname.substr(firstDot);
+        if (tld == ".lan" || tld == ".local" || tld == ".home" || tld == ".station") {
+            hostname = hostname.substr(0, firstDot);
+        }
+    }
+
+    return hostname;
+}
+
+// Phân loại thiết bị chính xác kết hợp Vendor OUI, Hostname, NetBIOS, DNS và Gateway
+static pair<string, string> classifyDevice(const string& ip, const string& mac, bool isLocal, bool isGw,
+                                          const string& localHost, const string& netBios, const string& dnsHost) {
     if (isLocal) {
         return {localHost, "Máy tính này (This PC)"};
     }
 
     if (isGw) {
-        string gwName = !dnsHost.empty() ? dnsHost : "Router / Modem Wi-Fi";
+        auto gwVendor = lookupVendorFromMac(mac);
+        string gwName = !dnsHost.empty() ? dnsHost : "Router Wi-Fi (" + gwVendor.first + ")";
         return {gwName, "Router / Modem Wi-Fi"};
     }
 
@@ -647,15 +1186,32 @@ static pair<string, string> classifyDevice(const string& ip, const string& mac, 
     }
 
     if (!dnsHost.empty()) {
+        string lower = dnsHost;
+        transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        if (lower.find("iphone") != string::npos || lower.find("ipad") != string::npos) {
+            return {dnsHost, "Điện thoại / iPad (Apple)"};
+        }
+        if (lower.find("galaxy") != string::npos || lower.find("samsung") != string::npos) {
+            return {dnsHost, "Điện thoại Samsung Galaxy"};
+        }
+        if (lower.find("redmi") != string::npos || lower.find("xiaomi") != string::npos) {
+            return {dnsHost, "Điện thoại Xiaomi / Redmi"};
+        }
+        if (lower.find("desktop") != string::npos || lower.find("laptop") != string::npos) {
+            return {dnsHost, "Máy tính (PC / Laptop)"};
+        }
+        if (lower.find("tapo") != string::npos || lower.find("cam") != string::npos) {
+            return {dnsHost, "Camera IP an ninh"};
+        }
         return {dnsHost, "Thiết bị mạng (Đã định danh)"};
     }
 
-    // Kiểm tra MAC ngẫu nhiên (Private / Randomized MAC trên iPhone iOS 14+ và Android 10+)
+    // Kiểm tra MAC ngẫu nhiên bảo mật (Private Wi-Fi Address trên iOS 14+ và Android 10+)
     if (isRandomizedPrivateMac(mac)) {
-        return {"Ẩn danh (Bảo mật MAC riêng tư)", "Điện thoại (iOS / Android)"};
+        return {"Ẩn danh (Bảo mật MAC)", "Điện thoại / Tablet (iOS/Android)"};
     }
 
-    // Tra cứu hãng sản xuất từ MAC (OUI)
+    // Tra cứu hãng sản xuất OUI
     return lookupVendorFromMac(mac);
 }
 
@@ -706,10 +1262,72 @@ struct DiscoveredDevice {
     bool isGateway;
 };
 
+// 3. Hàm xuất toàn bộ dữ liệu báo cáo ra file text (.txt) chuẩn UTF-8 có BOM
+static bool exportLanDevicesTxt(const vector<DiscoveredDevice>& devices, const string& myIP,
+                                const string& gatewayIP, const string& subnet, double elapsedSec) {
+    string filename = "danh_sach_thiet_bi_lan.txt";
+    ofstream out(filename, ios::binary);
+    if (!out.is_open()) return false;
+
+    // Ghi UTF-8 BOM (\xEF\xBB\xBF) để Notepad trên Windows mở hiển thị tiếng Việt hoàn hảo
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    out.write((const char*)bom, sizeof(bom));
+
+    // Lấy thời gian hiện tại
+    time_t now = time(nullptr);
+    tm localTm;
+    localtime_s(&localTm, &now);
+    char timeStr[64];
+    strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", &localTm);
+
+    stringstream ss;
+    ss << "====================================================================================================\n"
+       << "                           BÁO CÁO THIẾT BỊ KẾT NỐI MẠNG WI-FI / LAN\n"
+       << "====================================================================================================\n"
+       << " * Thời gian quét       : " << timeStr << "\n"
+       << " * Thời gian thực thi   : " << fixed << setprecision(2) << elapsedSec << " giây\n"
+       << " * Địa chỉ máy quét     : " << myIP << "\n"
+       << " * Dải mạng (Subnet)    : " << subnet << "0/24\n"
+       << " * Gateway (Router)     : " << gatewayIP << "\n"
+       << " * Tổng số thiết bị     : " << devices.size() << " thiết bị đang hoạt động\n"
+       << "====================================================================================================\n\n"
+       << "+-----+-----------------+-------------------+-------------------------------+-----------------------------------+\n"
+       << "| STT |   Địa chỉ IP    |    Địa chỉ MAC    |   Loại thiết bị / Phân loại   |      Tên thiết bị (Hostname)      |\n"
+       << "+-----+-----------------+-------------------+-------------------------------+-----------------------------------+\n";
+
+    for (size_t i = 0; i < devices.size(); ++i) {
+        const auto& d = devices[i];
+        string typeDisplay = utf8_pad_right(d.deviceType, 29);
+        string hostDisplay = utf8_pad_right(d.hostname, 33);
+        string ipDisplay = utf8_pad_right(d.ip, 15);
+        string macDisplay = utf8_pad_right(d.mac, 17);
+
+        ss << "| " << setw(3) << left << (i + 1) << " | "
+           << ipDisplay << " | "
+           << macDisplay << " | "
+           << typeDisplay << " | "
+           << hostDisplay << " |\n";
+    }
+
+    ss << "+-----+-----------------+-------------------+-------------------------------+-----------------------------------+\n\n"
+       << " * Ghi chú kỹ thuật:\n"
+       << "   - Thiết bị 'Máy tính này': Thiết bị Windows đang chạy phần mềm CMD BOX Toolkit.\n"
+       << "   - Thiết bị 'Router / Modem Wi-Fi': Cổng kết nối Gateway cấp phát Internet cho toàn mạng.\n"
+       << "   - Thiết bị có địa chỉ MAC dạng x2:xx, x6:xx, xA:xx, xE:xx là do chế độ 'Địa chỉ riêng tư'\n"
+       << "     (Private Wi-Fi Address) được bật mặc định trên Apple iOS 14+ và Android 10+ nhằm chống theo dõi.\n"
+       << "   - Báo cáo được tạo tự động bởi CMD BOX Toolkit Pro.\n"
+       << "====================================================================================================\n";
+
+    string content = ss.str();
+    out.write(content.data(), content.size());
+    out.close();
+    return true;
+}
+
 void Internet::scanConnectedDevices() {
     while (true) {
         sc.cls();
-        cout << "\n [*] Vui lòng đợi trong giây lát!\n";
+        cout << "\n [*] Vui lòng đợi trong giây lát...\n";
         cout.flush();
 
         // 1. Lấy thông tin Card mạng chính & dải Subnet
@@ -785,35 +1403,33 @@ void Internet::scanConnectedDevices() {
             strcpy(localHostName, "This-PC");
         }
 
-        // 2. Quét nhanh cực hạn 254 IP bằng SendARP (OpenMP 40 luồng song song, KHÔNG chặn DNS trong vòng lặp)
-        map<string, string> activeMap;
-        mutex mapMutex;
+        // Bắt đầu bấm giờ đo tốc độ quét
+        auto scanStart = chrono::high_resolution_clock::now();
 
-        // Luôn ghi nhận máy hiện tại
-        activeMap[myIP] = (!myMAC.empty() ? myMAC : "00:00:00:00:00:00");
-
-        #pragma omp parallel for schedule(dynamic, 4) num_threads(40)
+        // 2. GIAI ĐOẠN 1: QUÉT NHANH CỰC ĐẠI 254 IP BẰNG ICMP PING ĐA LUỒNG (128 THREADS, TIMEOUT 70MS)
+        // Kích hoạt đồng thời toàn bộ dải mạng để Windows Kernel nạp bảng ARP Cache trong chưa đầy 1 giây!
+        #pragma omp parallel for schedule(dynamic, 1) num_threads(128)
         for (int i = 1; i <= 254; ++i) {
             string curIP = baseSubnet + to_string(i);
             if (curIP == myIP) continue;
 
             IPAddr destIp = inet_addr(curIP.c_str());
-            ULONG macAddr[2] = {0};
-            ULONG physAddrLen = 6;
-
-            DWORD ret = SendARP(destIp, 0, macAddr, &physAddrLen);
-            if (ret == NO_ERROR && physAddrLen == 6) {
-                BYTE* b = (BYTE*)macAddr;
-                char macBuf[24];
-                sprintf(macBuf, "%02X:%02X:%02X:%02X:%02X:%02X",
-                        b[0], b[1], b[2], b[3], b[4], b[5]);
-
-                lock_guard<mutex> lock(mapMutex);
-                activeMap[curIP] = macBuf;
+            HANDLE hIcmp = IcmpCreateFile();
+            if (hIcmp != INVALID_HANDLE_VALUE) {
+                char sendData[] = "Q";
+                BYTE replyBuf[sizeof(ICMP_ECHO_REPLY) + 32];
+                // Timeout cực ngắn 70ms: Đủ nhận phản hồi nội bộ trong LAN (< 2ms) mà không bị nghẽn
+                IcmpSendEcho(hIcmp, destIp, sendData, sizeof(sendData), NULL, replyBuf, sizeof(replyBuf), 70);
+                IcmpCloseHandle(hIcmp);
             }
         }
 
-        // Đọc thêm bảng ARP cache hệ thống để đảm bảo không sót thiết bị
+        map<string, string> activeMap;
+
+        // Luôn ghi nhận máy tính hiện tại
+        activeMap[myIP] = (!myMAC.empty() ? myMAC : "00:00:00:00:00:00");
+
+        // Đọc toàn bộ bảng ARP Cache hệ thống Windows sau đợt kích hoạt
         ULONG tableSize = 0;
         GetIpNetTable(NULL, &tableSize, FALSE);
         if (tableSize > 0) {
@@ -825,15 +1441,13 @@ void Internet::scanConnectedDevices() {
                         in_addr inAddr;
                         inAddr.s_addr = row.dwAddr;
                         string ip = inet_ntoa(inAddr);
-                        if (ip.rfind(baseSubnet, 0) == 0 && !ip.empty() && 
+                        if (ip.rfind(baseSubnet, 0) == 0 && !ip.empty() &&
                             (ip.length() < 4 || ip.rfind(".255") != ip.length() - 4) && row.dwPhysAddrLen == 6) {
                             char macBuf[24];
                             sprintf(macBuf, "%02X:%02X:%02X:%02X:%02X:%02X",
                                     row.bPhysAddr[0], row.bPhysAddr[1], row.bPhysAddr[2],
                                     row.bPhysAddr[3], row.bPhysAddr[4], row.bPhysAddr[5]);
-                            if (activeMap.find(ip) == activeMap.end()) {
-                                activeMap[ip] = macBuf;
-                            }
+                            activeMap[ip] = macBuf;
                         }
                     }
                 }
@@ -841,13 +1455,25 @@ void Internet::scanConnectedDevices() {
             if (pIpNetTable) free(pIpNetTable);
         }
 
-        // 3. Phân loại & nhận diện chi tiết các thiết bị online (Xử lý song song chỉ các thiết bị tìm được)
+        // Bổ sung quét SendARP nhanh cho Gateway nếu chưa có trong bảng
+        if (activeMap.find(gatewayIP) == activeMap.end()) {
+            IPAddr gwDest = inet_addr(gatewayIP.c_str());
+            ULONG gwMac[2] = {0};
+            ULONG gwLen = 6;
+            if (SendARP(gwDest, 0, gwMac, &gwLen) == NO_ERROR && gwLen == 6) {
+                BYTE* b = (BYTE*)gwMac;
+                char macBuf[24];
+                sprintf(macBuf, "%02X:%02X:%02X:%02X:%02X:%02X", b[0], b[1], b[2], b[3], b[4], b[5]);
+                activeMap[gatewayIP] = macBuf;
+            }
+        }
+
+        // 3. GIAI ĐOẠN 2: PHÂN LOẠI & ĐỊNH DANH CHI TIẾT (SONG SONG NETBIOS + DNS PTR + OUI)
         vector<DiscoveredDevice> deviceList;
         vector<pair<string, string>> activeEntries(activeMap.begin(), activeMap.end());
-
         vector<DiscoveredDevice> tempDevices(activeEntries.size());
 
-        #pragma omp parallel for schedule(dynamic, 1) num_threads(8)
+        #pragma omp parallel for schedule(dynamic, 1) num_threads(16)
         for (int i = 0; i < (int)activeEntries.size(); ++i) {
             string ip = activeEntries[i].first;
             string mac = activeEntries[i].second;
@@ -857,9 +1483,14 @@ void Internet::scanConnectedDevices() {
             string netBios = "";
             string dnsHost = "";
 
-            if (!isLocal && !isGw) {
-                // Thử lấy tên NetBIOS trước (nếu là máy tính Windows)
-                netBios = queryNetBiosName(ip);
+            if (!isLocal) {
+                // Thử lấy Hostname qua DNS PTR cục bộ từ Router (50ms)
+                dnsHost = queryLocalDnsPtr(ip, gatewayIP, 50);
+
+                // Nếu chưa có tên và không phải Gateway, thử NetBIOS (50ms cho Windows PC)
+                if (dnsHost.empty() && !isGw) {
+                    netBios = queryNetBiosName(ip);
+                }
             }
 
             auto res = classifyDevice(ip, mac, isLocal, isGw, localHostName, netBios, dnsHost);
@@ -878,16 +1509,19 @@ void Internet::scanConnectedDevices() {
 
         deviceList = tempDevices;
 
-        // 4. Sắp xếp chuẩn C#: Router đầu tiên, Máy tính này thứ hai, các thiết bị còn lại theo thứ tự IP
+        // 4. Sắp xếp chuẩn: Router đầu tiên -> Máy tính này thứ hai -> Các thiết bị còn lại theo số IP tăng dần
         sort(deviceList.begin(), deviceList.end(), [](const DiscoveredDevice& a, const DiscoveredDevice& b) {
             if (a.isGateway != b.isGateway) return a.isGateway > b.isGateway;
             if (a.isSelf != b.isSelf) return a.isSelf > b.isSelf;
             return a.ipInt < b.ipInt;
         });
 
+        auto scanEnd = chrono::high_resolution_clock::now();
+        double elapsedSec = chrono::duration<double>(scanEnd - scanStart).count();
+
         // 5. Hiển thị bảng danh sách thiết bị căn chỉnh hoàn hảo từng cột
         sc.cls();
-        cout<<"\n\n";
+        cout << "\n\n";
         cout << "+-----+-----------------+-------------------+-------------------------------+-----------------------------------+\n"
              << "| STT |   Địa chỉ IP    |    Địa chỉ MAC    |   Loại thiết bị / Phân loại   |      Tên thiết bị (Hostname)      |\n"
              << "+-----+-----------------+-------------------+-------------------------------+-----------------------------------+\n";
@@ -899,7 +1533,7 @@ void Internet::scanConnectedDevices() {
             string ipDisplay = utf8_pad_right(d.ip, 15);
             string macDisplay = utf8_pad_right(d.mac, 17);
 
-            // Màu sắc làm nổi bật: Router (Xanh lá), Máy tính này (Cyan)
+            // Router: Xanh lá, Máy tính này: Cyan, Thiết bị khác: Trắng
             string colorCode = "";
             string resetCode = "\x1b[0m";
             if (d.isGateway) colorCode = "\x1b[32m";
@@ -912,14 +1546,28 @@ void Internet::scanConnectedDevices() {
                  << hostDisplay << " |\n";
         }
         cout << "+-----+-----------------+-------------------+-------------------------------+-----------------------------------+\n";
-        cout << " [*] Tìm thấy \x1b[33m" << deviceList.size() << "\x1b[0m thiết bị đang kết nối mạng.\n\n";
+        cout << " [*] Thời gian quét: \x1b[93m" << fixed << setprecision(2) << elapsedSec << "s\x1b[0m | "
+             << "Tìm thấy \x1b[32m" << deviceList.size() << "\x1b[0m thiết bị đang kết nối mạng.\n\n";
 
-        cout << " [1] Quét lại\n"
-             << " [0] Quay lại\n\n"
-             << " [Chọn]: ";
+        while (true) {
+            cout << " [1] Quét lại\n"
+                 << " [2] Xuất dữ liệu ra file (.txt)\n"
+                 << " [0] Quay lại\n\n"
+                 << " [Chọn]: ";
 
-        int choice = sc.readInt("");
-        if (choice == 0) return;
-        if (choice == 1) continue;
+            int choice = sc.readInt("");
+            if (choice == 0) return;
+            if (choice == 1) break;
+            if (choice == 2) {
+                if (exportLanDevicesTxt(deviceList, myIP, gatewayIP, baseSubnet, elapsedSec)) {
+                    char fullPath[MAX_PATH];
+                    GetFullPathNameA("danh_sach_thiet_bi_lan.txt", MAX_PATH, fullPath, NULL);
+                    cout << "\n \x1b[32m[+] Đã xuất báo cáo thành công!\x1b[0m\n"
+                         << "     Vị trí tệp: \x1b[93m" << fullPath << "\x1b[0m\n\n";
+                } else {
+                    cout << "\n \x1b[31m[!] Lỗi khi xuất file báo cáo!\x1b[0m\n\n";
+                }
+            }
+        }
     }
 }

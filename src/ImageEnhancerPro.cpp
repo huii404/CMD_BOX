@@ -448,74 +448,6 @@ std::vector<float> ImageEnhancerPro::fastBlur(const std::vector<float>& src, int
 }
 
 // -------------------------------------------------------------
-// Oklab & OkLCh Color Transform
-// -------------------------------------------------------------
-inline float sRGBToLinear(float c) {
-    c = std::clamp(c / 255.0f, 0.0f, 1.0f);
-    return (c <= 0.04045f) ? (c / 12.92f) : std::pow((c + 0.055f) / 1.055f, 2.4f);
-}
-
-inline float linearTosRGB(float c) {
-    c = std::clamp(c, 0.0f, 1.0f);
-    float s = (c <= 0.0031308f) ? (12.92f * c) : (1.055f * std::pow(c, 1.0f / 2.4f) - 0.055f);
-    return std::clamp(s * 255.0f, 0.0f, 255.0f);
-}
-
-ImageEnhancerPro::OklabPixel ImageEnhancerPro::sRGBToOklab(float r, float g, float b) {
-    float rL = sRGBToLinear(r);
-    float gL = sRGBToLinear(g);
-    float bL = sRGBToLinear(b);
-
-    float l = 0.4122214708f * rL + 0.5363325363f * gL + 0.0514459929f * bL;
-    float m = 0.2119034982f * rL + 0.6806995451f * gL + 0.1073969566f * bL;
-    float s = 0.0883024619f * rL + 0.2817188376f * gL + 0.6299787005f * bL;
-
-    float l_ = std::cbrt(std::max(0.0f, l));
-    float m_ = std::cbrt(std::max(0.0f, m));
-    float s_ = std::cbrt(std::max(0.0f, s));
-
-    OklabPixel res;
-    res.L = 0.2104542553f * l_ + 0.7936177850f * m_ - 0.0040720468f * s_;
-    res.a = 1.9779984951f * l_ - 2.4285922050f * m_ + 0.4505937099f * s_;
-    res.b = 0.0259040371f * l_ + 0.7827717662f * m_ - 0.8086757660f * s_;
-    return res;
-}
-
-void ImageEnhancerPro::oklabTosRGB(float L, float a, float b, float& r, float& g, float& bOut) {
-    float l_ = L + 0.3963377774f * a + 0.2158037573f * b;
-    float m_ = L - 0.1055613458f * a - 0.0638541728f * b;
-    float s_ = L - 0.0894841775f * a - 1.2914855480f * b;
-
-    float l = l_ * l_ * l_;
-    float m = m_ * m_ * m_;
-    float s = s_ * s_ * s_;
-
-    float rL = +4.0767416621f * l - 3.3077115913f * m + 0.2309699292f * s;
-    float gL = -1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s;
-    float bL = -0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s;
-
-    r = linearTosRGB(rL);
-    g = linearTosRGB(gL);
-    bOut = linearTosRGB(bL);
-}
-
-ImageEnhancerPro::OkLChPixel ImageEnhancerPro::oklabToOkLCh(const OklabPixel& lab) {
-    OkLChPixel lch;
-    lch.L = lab.L;
-    lch.C = std::sqrt(lab.a * lab.a + lab.b * lab.b);
-    lch.h = std::atan2(lab.b, lab.a);
-    return lch;
-}
-
-ImageEnhancerPro::OklabPixel ImageEnhancerPro::okLChToOklab(const OkLChPixel& lch) {
-    OklabPixel lab;
-    lab.L = lch.L;
-    lab.a = lch.C * std::cos(lch.h);
-    lab.b = lch.C * std::sin(lch.h);
-    return lab;
-}
-
-// -------------------------------------------------------------
 // Contrast Limited Adaptive Histogram Equalization (CLAHE)
 // -------------------------------------------------------------
 void ImageEnhancerPro::applyCLAHE(
@@ -763,18 +695,6 @@ void ImageEnhancerPro::synthesizeTextureLayer(
         float damp = 8.0f / (std::abs(texture) + 8.0f);
         luma[i] = std::clamp(luma[i] + texture * textureBoost * damp, 0.0f, 255.0f);
     }
-}
-
-// -------------------------------------------------------------
-// Halo Suppression Local Clamp (Inlined into sharp loop)
-// -------------------------------------------------------------
-void ImageEnhancerPro::applyHaloClamp(
-    std::vector<float>& sharpLuma,
-    const std::vector<float>& origLuma,
-    int width, int height,
-    float haloTolerance)
-{
-    (void)sharpLuma; (void)origLuma; (void)width; (void)height; (void)haloTolerance;
 }
 
 // -------------------------------------------------------------
@@ -1228,15 +1148,6 @@ void ImageEnhancerPro::processSharpenPro(
             dstRow[x * 4 + 3] = alpha[idx];
         }
     }
-}
-
-void ImageEnhancerPro::processSharpenOklab(
-    const std::vector<uint8_t>& src, std::vector<uint8_t>& dst,
-    int width, int height, int stride,
-    const EnhanceOptionsPro& opts,
-    float estimatedNoise)
-{
-    processSharpenPro(src, dst, width, height, stride, opts, estimatedNoise);
 }
 
 // -------------------------------------------------------------
