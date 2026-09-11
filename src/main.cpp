@@ -1,15 +1,15 @@
-#include "../include/Internet.h"
+#include "Internet.h"
 #include <windows.h>
 #include <iostream>
 #include <limits>
 #include <vector>
 #include <memory>
 #include <mutex>
-#include "../include/SystemCore.h"
-#include "../include/SystemOptimizer.h"
-#include "../include/UtilityTools.h"
-#include "../include/MediaProcessor.h"
-#include "../include/UpdateManager.h"
+#include "SystemCore.h"
+#include "SystemOptimizer.h"
+#include "UtilityTools.h"
+#include "MediaProcessor.h"
+#include "UpdateManager.h"
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -37,7 +37,7 @@ private:
     SystemOptimizer& getOptimizer() {
         if (!opt) {
             std::lock_guard<std::mutex> lock(optMutex);
-            if (!opt) opt = std::make_unique<SystemOptimizer>(*this, getInternet());
+            if (!opt) opt = std::make_unique<SystemOptimizer>(*this);
         }
         return *opt;
     }
@@ -61,9 +61,6 @@ private:
 public:
     AppUI() {
         UpdateManager::checkUpdateAsync();
-        std::thread([this]() {
-            getMedia();
-        }).detach();
     }
     ~AppUI() = default;
 
@@ -111,8 +108,8 @@ public:
             case 1:
                 while (true) {
                     cls();
-                    cout << " [1] Dọn rác Đa Tầng (Nhanh -> Trình duyệt -> Hệ thống -> Dev)\n"
-                         << " [2] Tăng tốc & Tối ưu Đa Tầng (Khởi động -> Dịch vụ -> Taskbar/UI)\n"
+                    cout << " [1] Dọn rác Đa Tầng\n"
+                         << " [2] Tăng tốc & Tối ưu Đa Tầng\n"
                          << " [3] Sửa lỗi kẹt Windows Update\n"
                          << " [0] Quay lại\n\n"
                          << " [Chọn]: ";
@@ -136,8 +133,8 @@ public:
                          << " [2] Kích hoạt Lá chắn bảo mật toàn diện\n"
                          << " [3] Kiểm tra trạng thái bảo mật hệ thống\n"
                          << " [4] Xem danh sách mật khẩu Wi-Fi đã lưu\n"
-                         << " [5] Quét & Bảo vệ tập tin Hosts\n"
-                         << " [6] Quét thiết bị kết nối Wi-Fi / LAN\n"
+                         << " [5] Quét thiết bị kết nối Wi-Fi / LAN\n"
+                         << " [6] Local Web Drop (Truyền file P2P / Web LAN)\n"
                          << " [0] Quay lại\n\n"
                          << " [Chọn]: ";
                     sub = readInt("");
@@ -148,8 +145,8 @@ public:
                     case 2:  getInternet().fullSecurityShield(); break;
                     case 3:  getInternet().checkSecurityStatus(); break;
                     case 4:  getInternet().wifiAudit(); break;
-                    case 5:  getInternet().checkHostsFileSecurity(); break;
-                    case 6:  getInternet().scanConnectedDevices(); break;
+                    case 5:  getInternet().scanConnectedDevices(); break;
+                    case 6:  getInternet().localDropMenu(); break;
                     default: Sleep(300); break;
                     }
                 }
@@ -162,10 +159,10 @@ public:
                     cout << " [1] Auto Click\n"
                          << " [2] Spam Text\n"
                          << " [3] Auto Paste\n"
-                         << " [4] Tải & Cài đặt phần mềm\n"
-                         << " [5] Gỡ bỏ ứng dụng rác\n"
-                         << " [6] Kiểm tra Pin Laptop\n"
-                         << " [0] Quay lại\n\n"
+                         << " [4] Install Software\n"
+                         << " [5] Uninstall Bloatware\n"
+                         << " [6] Check Pin Laptop\n"
+                         << " [0] Return\n\n"
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;

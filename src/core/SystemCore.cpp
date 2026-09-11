@@ -1,4 +1,4 @@
-#include "../include/SystemCore.h"
+#include "SystemCore.h"
 #include <iostream>
 #include <string>
 #include <vector>

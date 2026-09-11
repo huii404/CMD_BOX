@@ -1,4 +1,4 @@
-#include "../include/UtilityTools.h"
+#include "UtilityTools.h"
 #include <iostream>
 #include <windows.h>
 #include <tlhelp32.h>
@@ -359,7 +359,7 @@ void UtilityTools::downloadManager() {
         if (inputLine == "A" || inputLine == "a") {
             if (apps.empty()) continue;
             sc.cls();
-            cout << "=== TẢI TOÀN BỘ " << apps.size() << " ỨNG DỤNG ===\n\n";
+            cout << "Tải toàn bộ " << apps.size() << " ứng dụng:\n\n";
 
             int successCount = 0;
             for (size_t i = 0; i < apps.size(); ++i) {
@@ -430,7 +430,7 @@ void UtilityTools::downloadManager() {
         } else {
             // Tải nhiều ứng dụng được chọn theo lô
             sc.cls();
-            cout << "=== TẢI " << selectedIndices.size() << " ỨNG DỤNG ĐÃ CHỌN ===\n\n";
+            cout << "Tải " << selectedIndices.size() << " ứng dụng đã chọn:\n\n";
 
             int successCount = 0;
             for (size_t i = 0; i < selectedIndices.size(); ++i) {
@@ -649,7 +649,7 @@ static void cleanAdvancedBloat(SystemCore &sc, const AdvancedBloatStatus &adv) {
 // Gỡ bỏ ứng dụng rác Bloatware (Dọn dẹp toàn diện cả 2 luồng: Thứ cấp & Nâng cao)
 void UtilityTools::uninstallBloatware() {
     sc.cls();
-    cout << "\n[-] Đang dò quét ứng dụng rác trên hệ thống...\n\n";
+    cout << "\n\n";
 
     vector<BloatAppInfo> detectedSec;
     AdvancedBloatStatus advStatus;
@@ -683,7 +683,7 @@ void UtilityTools::uninstallBloatware() {
     bool hasAnyAdv = advStatus.hasOneDrive || advStatus.hasPhoneLink || advStatus.hasCortana || advStatus.hasTeams;
 
     if (!hasAnySec && !hasAnyAdv) {
-        cout << " \x1b[32m[✓] Hệ thống đã hoàn toàn sạch sẽ, không phát hiện ứng dụng rác nào cần xử lý!\x1b[0m\n\n";
+        cout << " \x1b[32m[✓] Hệ thống đã hoàn toàn sạch sẽ\x1b[0m\n";
         sc.waitEnter();
         return;
     }
@@ -738,7 +738,7 @@ static string formatNumber(long long n) {
 void UtilityTools::batteryHealthDiagnostic() {
     while (true) {
         sc.cls();
-        cout << "--- THÔNG TIN PIN LAPTOP ---\n"
+        cout << "THÔNG TIN PIN LAPTOP\n"
              << "Đang đọc dữ liệu ACPI...\n";
 
         SYSTEM_POWER_STATUS sps;
@@ -747,7 +747,7 @@ void UtilityTools::batteryHealthDiagnostic() {
         // Kiểm tra thiết bị có pin không
         if (hasSps && (sps.BatteryFlag == 128 || sps.BatteryFlag == 255) && sps.BatteryLifePercent == 255) {
             sc.cls();
-            cout << "--- THÔNG TIN PIN LAPTOP ---\n\n"
+            cout << "THÔNG TIN PIN LAPTOP\n\n"
                  << " [!] Máy tính bàn (PC) hoặc không có Pin.\n"
                  << "     Nguồn: Cắm sạc trực tiếp (AC Online).\n\n";
             sc.waitEnter();
@@ -799,7 +799,7 @@ void UtilityTools::batteryHealthDiagnostic() {
         }
 
         sc.cls();
-        cout << "=== THÔNG TIN PIN LAPTOP ===\n";
+        cout << "THÔNG TIN PIN LAPTOP\n\n";
 
         if (!sysMfg.empty() && sysMfg != "N/A") {
             cout << "  Thiết bị     : " << sysMfg << " " << sysModel << " (BIOS: " << biosVer << ")\n";
@@ -807,7 +807,7 @@ void UtilityTools::batteryHealthDiagnostic() {
         if (!deviceName.empty() && deviceName != "N/A") {
             cout << "  Pin          : " << chemistry << " - " << manufacturer << " [" << deviceName << "]\n";
         }
-        cout << "----------------------------------------------------------------------\n";
+        cout << "\n";
 
         if (designCap > 0 && fullCap > 0) {
             double healthPercent = ((double)fullCap / (double)designCap) * 100.0;
@@ -866,7 +866,7 @@ void UtilityTools::batteryHealthDiagnostic() {
             }
         }
 
-        cout << "----------------------------------------------------------------------\n"
+        cout << "\n"
              << " [1] Báo cáo HTML | [2] Cài đặt Pin | [R] Làm mới | [0] Quay lại\n"
              << " Chọn: ";
 

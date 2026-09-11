@@ -2,7 +2,6 @@
 #define SYSTEMOPTIMIZER_H
 
 #include "SystemCore.h"
-#include "Internet.h"
 #include <string>
 
 /**
@@ -13,9 +12,8 @@
 class SystemOptimizer {
 private:
     SystemCore &sc;
-    Internet &n;
 public:
-    SystemOptimizer(SystemCore &s, Internet &net);
+    SystemOptimizer(SystemCore &s);
 
     // --- HỆ THỐNG ĐA TẦNG MỚI ---
     // 1. Hệ thống Dọn rác Đa Tầng (Tầng 1 -> Tầng 4)
@@ -28,7 +26,7 @@ public:
     long long runCleanTier1();
     long long runCleanTier2();
     long long runCleanTier3();
-    long long runCleanTier4(const std::string &customPath = "");
+    long long runCleanTier4();
 
     int runOptimizeTier1();
     int runOptimizeTier2();
@@ -37,16 +35,11 @@ public:
     // 3. Sửa lỗi kẹt cập nhật Windows Update
     void fixWindowsUpdate();
 
-    // --- CÁC HÀM RIÊNG LẺ / TƯƠNG THÍCH ---
-    void cleanDiskQuick();
-    void cleanDiskPro();
-    void disableAllStartupApps();
+    // 4. Các tiện ích phụ trợ & Quản lý dịch vụ
     void clearBrowserCache();
     void cleanDevCaches(bool interactive = false);
-    void optimizeSystemPRO();
     bool ServiceControlAPI(std::string serviceName, DWORD startupType, bool stopService);
     void turnOffServicesMenu();
-    void optimizeTaskbar();
 };
 
 #endif 

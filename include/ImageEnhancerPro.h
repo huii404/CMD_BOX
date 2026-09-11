@@ -61,9 +61,9 @@ struct EnhanceOptionsPro {
     float claheBlend = 0.25f;
     float detailBoost = 1.50f;     // Hệ số 3-Scale Guided Filter
 
-    // Tham số nâng cấp PRO theo đặc tả tài liệu
-    float nanoDetailBoost = 1.30f; // Cường độ tầng Nano-scale (r=0.5)
-    float haloTolerance = 1.15f;   // Hệ số nới lỏng kẹp Local Clamp chống halo
+    // Tham số nâng cấp PRO theo đặc tả tài liệu (PRO V2)
+    float nanoDetailBoost = 1.80f; // Cường độ tầng Nano-scale (xung kích r=1, eps=100)
+    float haloTolerance = 1.25f;   // Hệ số nới lỏng kẹp Local Clamp chống halo
     bool noiseAdaptive = true;     // Ước lượng MAD nhiễu nền để tự chỉnh ngưỡng Cauchy
     float textureBoost = 0.25f;    // Cường độ lớp chất liệu (Texture Layer Synthesis)
     float clarityBoost = 0.20f;    // Cường độ tương phản cục bộ Local Laplacian
@@ -73,6 +73,7 @@ struct EnhanceOptionsPro {
     bool use16BitPipeline = false; // Xử lý nội bộ 16-bit/kênh nếu có
     bool thinStrokeGate = true;    // Bật co bán kính + lọc định hướng chống phình nét mảnh
     float strokeAnisotropy = 0.85f;// Mức độ chỉ khuếch đại theo hướng gradient
+    bool antiBloat = true;         // Cơ chế ức chế bên Lateral Inhibition chống dính điểm ảnh & bệt viền
 };
 
 class ImageEnhancerPro {
@@ -124,35 +125,12 @@ public:
         int width, int height,
         float textureBoost);
 
-    struct OklabPixel {
-        float L, a, b;
-    };
-    struct OkLChPixel {
-        float L, C, h;
-    };
-    static OklabPixel sRGBToOklab(float r, float g, float b);
-    static void oklabTosRGB(float L, float a, float b, float& r, float& g, float& bOut);
-    static OkLChPixel oklabToOkLCh(const OklabPixel& lab);
-    static OklabPixel okLChToOklab(const OkLChPixel& lch);
-
     static void applyCLAHE(
         std::vector<float>& luma,
         int width, int height,
         float clipLimit, float blendFactor);
 
-    static void applyHaloClamp(
-        std::vector<float>& sharpLuma,
-        const std::vector<float>& origLuma,
-        int width, int height,
-        float haloTolerance);
-
     static void processSharpenPro(
-        const std::vector<uint8_t>& src, std::vector<uint8_t>& dst,
-        int width, int height, int stride,
-        const EnhanceOptionsPro& opts,
-        float estimatedNoise);
-
-    static void processSharpenOklab(
         const std::vector<uint8_t>& src, std::vector<uint8_t>& dst,
         int width, int height, int stride,
         const EnhanceOptionsPro& opts,

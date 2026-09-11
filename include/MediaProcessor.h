@@ -1,7 +1,7 @@
 #ifndef MEDIA_PROCESSOR_H
 #define MEDIA_PROCESSOR_H
 
-#include "../include/SystemCore.h"
+#include "SystemCore.h"
 #include <string>
 #include <windows.h>
 #include <vector>
@@ -52,7 +52,7 @@ public:
     // Hàm mẹ: Ẩn file trong file (Menu lồng)
     void processAnFileTrongFile();
 
-    // Các chức năng con
+    // Các chức năng Ẩn & Trích xuất file trong Media
     void hideFileInImage();
     void hideFileInVideo();
     void extractHiddenFromMedia();
