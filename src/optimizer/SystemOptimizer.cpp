@@ -1,4 +1,4 @@
-#include "../include/SystemOptimizer.h"
+#include "SystemOptimizer.h"
 #include <iostream>
 #include <algorithm>
 #include <windows.h>
@@ -13,7 +13,7 @@ namespace fs = std::filesystem;
 // MODULE: SYSTEM OPTIMIZER (Tối ưu hóa và dọn dẹp hệ thống)
 // =========================================================================================
 
-SystemOptimizer::SystemOptimizer(SystemCore &s, Internet &net) : sc(s), n(net) {}
+SystemOptimizer::SystemOptimizer(SystemCore &s) : sc(s) {}
 
 /**
  * @brief Hàm phụ trợ: Xóa sạch toàn bộ file & thư mục con bên trong một thư mục chỉ định
@@ -108,20 +108,25 @@ long long SystemOptimizer::runCleanTier3() {
 }
 
 // Tầng 4: Rác Môi trường lập trình (node_modules, pip, gradle, VS Code...)
-long long SystemOptimizer::runCleanTier4(const std::string &customPath) {
-    long long before = 0, after = 0;
-    try { before = fs::space("C:\\").available; } catch (...) {}
+long long SystemOptimizer::runCleanTier4() {
+    auto getTotalDrivesFreeSpace = []() -> long long {
+        long long total = 0;
+        DWORD mask = GetLogicalDrives();
+        for (char c = 'C'; c <= 'Z'; ++c) {
+            if (mask & (1 << (c - 'A'))) {
+                string r = string(1, c) + ":\\";
+                if (GetDriveTypeA(r.c_str()) == DRIVE_FIXED) {
+                    try { total += fs::space(r).available; } catch (...) {}
+                }
+            }
+        }
+        return total;
+    };
 
+    long long before = getTotalDrivesFreeSpace();
     cleanDevCaches(false);
+    long long after = getTotalDrivesFreeSpace();
 
-    if (!customPath.empty() && fs::exists(customPath)) {
-        long long extraFreed = 0;
-        cleanDirectoryArtifacts(customPath, 
-            {"node_modules", "node_module", ".turbo", ".next", ".nuxt", ".parcel-cache", ".svelte-kit", ".cache"}, 
-            {".pyc", ".pyo"}, extraFreed);
-    }
-
-    try { after = fs::space("C:\\").available; } catch (...) {}
     return (after > before) ? (after - before) : 0;
 }
 
@@ -132,8 +137,8 @@ void SystemOptimizer::multiTierDiskClean() {
         cout << "\n\n"
              << " [1] Dọn rác bề mặt\n"
              << " [2] Dọn rác Trình duyệt & Ứng dụng\n"
-             << " [3] Dọn dẹp Chuyên sâu Hệ thống\n"
-             << " [4] Dọn rác Môi trường lập trình\n"
+             << " [3] Dọn dẹp Chuyên sâu\n"
+             << " [4] Dọn rác Lập trình\n"
              << " [5] [⚡] Dọn liên hoàn Tầng 1 + 2 + 3\n"
              << " [6] [🚀] Dọn toàn bộ cả 4\n"
              << " [0] Quay lại\n\n"
@@ -174,7 +179,17 @@ void SystemOptimizer::multiTierDiskClean() {
             cout << "     └── [✓ Xong] " << (f3 > 0 ? ("Giải phóng " + SystemCore::formatSize(f3)) : "Đã sạch sẽ từ trước") << "\n\n";
         }
 
-        if (choice == 4 || choice == 6) {
+        if (choice == 4) {
+            cout << " [*] Tầng 4: Đang dọn rác Môi trường lập trình (Dev Caches & Artifacts)...\n"
+                 << "     ├── Dọn cache npm, yarn, pnpm, pip, nuget, gradle, cargo, go...\n"
+                 << "     ├── Dọn cache VS Code, Cursor workspace storage...\n"
+                 << "     ├── Quét & giải phóng node_modules, build cache trong workspace...\n";
+            long long f4 = runCleanTier4();
+            totalFreed += f4;
+            cout << "     └── [✓ Xong] " << (f4 > 0 ? ("Giải phóng " + SystemCore::formatSize(f4)) : "Đã sạch sẽ từ trước") << "\n\n";
+        }
+
+        if (choice == 6) {
             cout << " [*] Tầng 4: Đang dọn rác Môi trường lập trình (Dev Caches)...\n"
                  << "     ├── Dọn cache npm, yarn, pnpm, pip, nuget, gradle, cargo, go...\n"
                  << "     ├── Dọn cache VS Code, Cursor workspace storage...\n";
@@ -193,25 +208,7 @@ void SystemOptimizer::multiTierDiskClean() {
     }
 }
 
-void SystemOptimizer::cleanDiskQuick() {
-    sc.cls();
-    cout << "Đang dọn rác nhanh\n";
-    long long freed = runCleanTier1();
-    cout << "\n[✓] Đã xong!";
-    if (freed > 0) cout << " (Giải phóng: " << SystemCore::formatSize(freed) << ")";
-    cout << "\n\n";
-    sc.waitEnter();
-}
 
-void SystemOptimizer::cleanDiskPro() {
-    sc.cls();
-    cout << "Đang dọn rác chuyên sâu\n";
-    long long freed = runCleanTier1() + runCleanTier2() + runCleanTier3();
-    cout << "\n[✓] Đã xong!";
-    if (freed > 0) cout << " (Giải phóng: " << SystemCore::formatSize(freed) << ")";
-    cout << "\n\n";
-    sc.waitEnter();
-}
 
 /**
  * =========================================================================================
@@ -425,36 +422,7 @@ static bool disableSingleStartupApp(const StartupAppInfo &item) {
     return false;
 }
 
-void SystemOptimizer::disableAllStartupApps() {
-    sc.cls();
-    cout << "Đang quét và tắt các ứng dụng khởi động làm chậm máy...\n\n";
 
-    vector<StartupAppInfo> appList = scanAllStartupApps();
-    if (appList.empty()) {
-        cout << " [✓] Không tìm thấy ứng dụng khởi động nào.\n";
-        sc.waitEnter();
-        return;
-    }
-
-    int disabledCount = 0;
-    int keptCount = 0;
-
-    for (const auto &app : appList) {
-        if (!app.isSafe) {
-            if (disableSingleStartupApp(app)) {
-                cout << "  [✓] Đã tắt:  " << left << setw(28) << app.name << " (" << app.locationName << ")\n";
-                disabledCount++;
-            }
-        } else {
-            cout << "  [-] Giữ lại: " << left << setw(28) << app.name << " [" << app.category << "]\n";
-            keptCount++;
-        }
-    }
-
-    cout << "\n";
-    cout << "[✓] Hoàn tất: Đã tắt " << disabledCount << " ứng dụng làm chậm máy (Bảo vệ " << keptCount << " ứng dụng hệ thống & bộ gõ).\n";
-    sc.waitEnter();
-}
 
 /**
  * =========================================================================================
@@ -608,6 +576,57 @@ void SystemOptimizer::clearBrowserCache() {
  * CÁCH BỔ SUNG MÔI TRƯỜNG DEV MỚI:
  * - Thêm đường dẫn thư mục cache vào vector `devCachePaths` theo các biến môi trường tương ứng.
  */
+// Hàm xóa tận gốc thư mục trên Windows: Xử lý Read-Only, System, Hidden và đường dẫn dài MAX_PATH (>260 ký tự)
+static bool forceDeleteFolder(const fs::path &folderPath) {
+    if (!fs::exists(folderPath)) return true;
+
+    string pathStr = folderPath.string();
+    std::replace(pathStr.begin(), pathStr.end(), '/', '\\');
+
+    string extendedPath = pathStr;
+    if (extendedPath.rfind("\\\\?\\", 0) != 0) {
+        if (extendedPath.length() >= 2 && extendedPath[1] == ':') {
+            extendedPath = "\\\\?\\" + extendedPath;
+        }
+    }
+
+    // 1. Đệ quy gỡ bỏ thuộc tính Read-Only, System, Hidden cho toàn bộ file/folder con
+    std::error_code ec;
+    try {
+        for (auto it = fs::recursive_directory_iterator(folderPath, fs::directory_options::skip_permission_denied, ec);
+             it != fs::recursive_directory_iterator();) {
+            if (ec) { ec.clear(); try { it++; } catch (...) { break; } continue; }
+            try {
+                const auto &p = it->path();
+                string subExt = p.string();
+                std::replace(subExt.begin(), subExt.end(), '/', '\\');
+                if (subExt.rfind("\\\\?\\", 0) != 0 && subExt.length() >= 2 && subExt[1] == ':') {
+                    subExt = "\\\\?\\" + subExt;
+                }
+                SetFileAttributesA(subExt.c_str(), FILE_ATTRIBUTE_NORMAL);
+            } catch (...) {}
+            it.increment(ec);
+        }
+    } catch (...) {}
+
+    SetFileAttributesA(extendedPath.c_str(), FILE_ATTRIBUTE_NORMAL);
+
+    // 2. Thử xóa bằng std::filesystem::remove_all
+    fs::remove_all(folderPath, ec);
+    if (!fs::exists(folderPath)) return true;
+
+    // 3. Nếu chưa sạch (do symlinks hoặc kẹt tiến trình), dùng lệnh rd /s /q an toàn
+    string cmd = "cmd.exe /d /c \"rd /s /q \"" + pathStr + "\"\" >nul 2>&1";
+    system(cmd.c_str());
+    if (!fs::exists(folderPath)) return true;
+
+    // 4. Nếu vẫn còn, ép buộc xóa bằng PowerShell Force
+    string psCmd = "powershell -NoProfile -NonInteractive -Command \"Remove-Item -LiteralPath '" + pathStr + "' -Recurse -Force -ErrorAction SilentlyContinue\" >nul 2>&1";
+    system(psCmd.c_str());
+
+    return !fs::exists(folderPath);
+}
+
 static int cleanDirectoryArtifacts(const fs::path &rootPath, const std::vector<std::string> &targetDirNames, const std::vector<std::string> &targetExtensions, long long &freedBytes) {
     if (!fs::exists(rootPath)) return 0;
     int deletedCount = 0;
@@ -636,7 +655,6 @@ static int cleanDirectoryArtifacts(const fs::path &rootPath, const std::vector<s
                 if (entry.is_directory(ec)) {
                     bool isTarget = false;
                     for (const auto &td : targetDirNames) {
-                        // Không bao giờ cho phép target là .git
                         if (td == ".git" || td == ".github") continue;
                         if (name == td) {
                             isTarget = true;
@@ -688,21 +706,16 @@ static int cleanDirectoryArtifacts(const fs::path &rootPath, const std::vector<s
                 }
             } catch (...) {}
 
-            // Gỡ bỏ thuộc tính Read-Only và xóa tận gốc thư mục (khắc phục lỗi Access Denied trên Windows)
-            string cmd = "cmd /c \"attrib -r -s -h /s /d \"" + d.string() + "\\*\" >nul 2>&1 & rd /s /q \"" + d.string() + "\" >nul 2>&1\"";
-            system(cmd.c_str());
-
-            if (!fs::exists(d)) {
+            if (forceDeleteFolder(d)) {
                 deletedCount++;
-            } else {
-                fs::remove_all(d, ec);
-                if (!fs::exists(d)) deletedCount++;
             }
         } catch (...) {}
     }
 
     return deletedCount;
 }
+
+
 
 void SystemOptimizer::cleanDevCaches(bool interactive) {
     char *localAppData = std::getenv("LOCALAPPDATA");
@@ -713,16 +726,64 @@ void SystemOptimizer::cleanDevCaches(bool interactive) {
     string baseApp   = appData ? string(appData) : "";
     string baseUser  = userProfile ? string(userProfile) : "";
 
-    // Xác định thư mục dự án / workspace để quét
-    fs::path scanRoot = fs::current_path();
-    if (scanRoot.filename() == "bin" && fs::exists(scanRoot.parent_path())) {
-        scanRoot = scanRoot.parent_path();
+    // Tự động tìm kiếm các thư mục dự án / workspace trên TẤT CẢ các ổ đĩa (C:, D:, E:, G:...)
+    std::vector<fs::path> scanRoots;
+    
+    // Thư mục chạy hiện tại
+    fs::path currentRoot = fs::current_path();
+    if (currentRoot.filename() == "bin" && fs::exists(currentRoot.parent_path())) {
+        currentRoot = currentRoot.parent_path();
+    }
+    scanRoots.push_back(currentRoot);
+
+    // Lấy danh sách các ổ đĩa logic có sẵn (Fixed drives)
+    DWORD driveMask = GetLogicalDrives();
+    for (char c = 'C'; c <= 'Z'; ++c) {
+        if (driveMask & (1 << (c - 'A'))) {
+            string rootDrive = string(1, c) + ":\\";
+            UINT driveType = GetDriveTypeA(rootDrive.c_str());
+            if (driveType == DRIVE_FIXED) {
+                // Quét các thư mục code/dự án phổ biến trên từng ổ đĩa
+                static const vector<string> commonDevFolders = {
+                    "Code", "Projects", "Source", "Repos", "Dev", "Web", "Workspace"
+                };
+                for (const auto &df : commonDevFolders) {
+                    fs::path devPath = rootDrive + df;
+                    std::error_code ec;
+                    if (fs::exists(devPath, ec) && fs::is_directory(devPath, ec)) {
+                        bool duplicate = false;
+                        for (const auto &sr : scanRoots) {
+                            if (fs::equivalent(sr, devPath, ec)) { duplicate = true; break; }
+                        }
+                        if (!duplicate) scanRoots.push_back(devPath);
+                    }
+                }
+            }
+        }
+    }
+
+    // Thêm các thư mục code phổ biến trong UserProfile
+    if (!baseUser.empty()) {
+        static const vector<string> userDevFolders = {
+            "Desktop", "Documents", "Projects", "source\\repos"
+        };
+        for (const auto &uf : userDevFolders) {
+            fs::path uPath = fs::path(baseUser) / uf;
+            std::error_code ec;
+            if (fs::exists(uPath, ec) && fs::is_directory(uPath, ec)) {
+                bool duplicate = false;
+                for (const auto &sr : scanRoots) {
+                    if (fs::equivalent(sr, uPath, ec)) { duplicate = true; break; }
+                }
+                if (!duplicate) scanRoots.push_back(uPath);
+            }
+        }
     }
 
     if (interactive) {
         sc.cls();
         cout << "DỌN RÁC MÔI TRƯỜNG DEV\n"
-             << "Mục tiêu quét: " << scanRoot.string() << "\n\n";
+             << "Đang quét các vùng làm việc Dev trên hệ thống (" << scanRoots.size() << " vị trí)...\n\n";
     } else {
         cout << "Đang dọn rác Dev Caches...\n";
     }
@@ -736,49 +797,49 @@ void SystemOptimizer::cleanDevCaches(bool interactive) {
         if (!baseLocal.empty()) wipeFolderContents(baseLocal + "\\pip\\cache");
 
         long long pyFreed = 0;
-        int pyDeleted = cleanDirectoryArtifacts(scanRoot, 
-            {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox"}, 
-            {".pyc", ".pyo"}, 
-            pyFreed);
+        int pyDeleted = 0;
+        for (const auto &sr : scanRoots) {
+            pyDeleted += cleanDirectoryArtifacts(sr, 
+                {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox"}, 
+                {".pyc", ".pyo"}, 
+                pyFreed);
+        }
 
         if (interactive) {
             cout << " [✓] Python : Đã dọn Pip cache, " << pyDeleted << " mục (__pycache__/.pyc) - " << SystemCore::formatSize(pyFreed) << "\n";
         }
     }
 
-    // 2. KIỂM TRA & DỌN DẸP NODE.JS / JAVASCRIPT
-    bool hasNode = SystemCore::runRawCommand("where node >nul 2>nul") ||
-                   SystemCore::runRawCommand("where npm >nul 2>nul") ||
-                   (!baseLocal.empty() && (fs::exists(baseLocal + "\\npm-cache") || fs::exists(baseLocal + "\\pnpm\\store")));
+    // 2. DỌN DẸP NODE.JS / JAVASCRIPT
+    if (!baseLocal.empty()) {
+        wipeFolderContents(baseLocal + "\\npm-cache");
+        wipeFolderContents(baseLocal + "\\Yarn\\Cache");
+        wipeFolderContents(baseLocal + "\\pnpm\\store");
+        wipeFolderContents(baseLocal + "\\electron\\Cache");
+        wipeFolderContents(baseLocal + "\\Microsoft\\TypeScript");
+        wipeFolderContents(baseLocal + "\\deno\\deps");
+    }
+    if (!baseApp.empty()) {
+        wipeFolderContents(baseApp + "\\npm-cache");
+    }
+    if (!baseUser.empty()) {
+        wipeFolderContents(baseUser + "\\.turbo");
+        wipeFolderContents(baseUser + "\\.npm");
+        wipeFolderContents(baseUser + "\\.yarn");
+        wipeFolderContents(baseUser + "\\.pnpm-store");
+    }
 
-    if (hasNode) {
-        if (!baseLocal.empty()) {
-            wipeFolderContents(baseLocal + "\\npm-cache");
-            wipeFolderContents(baseLocal + "\\Yarn\\Cache");
-            wipeFolderContents(baseLocal + "\\pnpm\\store");
-            wipeFolderContents(baseLocal + "\\electron\\Cache");
-            wipeFolderContents(baseLocal + "\\Microsoft\\TypeScript");
-            wipeFolderContents(baseLocal + "\\deno\\deps");
-        }
-        if (!baseApp.empty()) {
-            wipeFolderContents(baseApp + "\\npm-cache");
-        }
-        if (!baseUser.empty()) {
-            wipeFolderContents(baseUser + "\\.turbo");
-            wipeFolderContents(baseUser + "\\.npm");
-            wipeFolderContents(baseUser + "\\.yarn");
-            wipeFolderContents(baseUser + "\\.pnpm-store");
-        }
-
-        long long nodeFreed = 0;
-        int nodeDeleted = cleanDirectoryArtifacts(scanRoot, 
+    long long nodeFreed = 0;
+    int nodeDeleted = 0;
+    for (const auto &sr : scanRoots) {
+        nodeDeleted += cleanDirectoryArtifacts(sr, 
             {"node_modules", "node_module", ".turbo", ".next", ".nuxt", ".parcel-cache", ".svelte-kit", ".cache"}, 
             {}, 
             nodeFreed);
+    }
 
-        if (interactive) {
-            cout << " [✓] Node.js: Đã dọn npm/yarn/pnpm, " << nodeDeleted << " thư mục (node_modules/cache) - " << SystemCore::formatSize(nodeFreed) << "\n";
-        }
+    if (interactive) {
+        cout << " [✓] Node.js: Đã dọn npm/yarn/pnpm, " << nodeDeleted << " thư mục (node_modules/cache) - " << SystemCore::formatSize(nodeFreed) << "\n";
     }
 
     // 3. KIỂM TRA & DỌN DẸP JAVA / ANDROID
@@ -874,90 +935,136 @@ int SystemOptimizer::runOptimizeTier2() {
 }
 
 // Tầng 3: Tối ưu Giao diện, Taskbar & Độ nhạy Windows (Kiểm tra trước khi thay đổi, chỉ khởi động lại Explorer nếu cần)
+// Tầng 3: Tối ưu Giao diện, Taskbar & Độ nhạy Windows (Kiểm tra trạng thái 0/1 trước, chỉ khởi động lại Explorer khi có thay đổi thực sự)
 bool SystemOptimizer::runOptimizeTier3() {
     struct TaskbarSetting {
         string keyPath;
         string valueName;
         DWORD targetValue;
         string desc;
+        bool affectsExplorer; // Cần khởi động lại Explorer nếu thay đổi
     };
 
     vector<TaskbarSetting> settings = {
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Search", "SearchboxTaskbarMode", 0, "Searchbox (Thu gọn tìm kiếm)"},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "TaskbarDa", 0, "Widgets (Tắt tin tức widget)"},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "TaskbarMn", 0, "Chat Teams (Tắt biểu tượng chat)"},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "ShowTaskViewButton", 0, "Task View (Tắt xem tác vụ)"},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Feeds", "ShellFeedsTaskbarViewMode", 2, "Feeds News (Tắt tin tức Win 10)"},
-        {"Software\\Policies\\Microsoft\\Windows\\WindowsCopilot", "TurnOffWindowsCopilot", 1, "Copilot AI (Tắt nút Copilot)"},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "EnableTransparency", 0, "Transparency (Tắt trong suốt tiết kiệm GPU)"},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "SnapAssist", 0, "Snap Assist (Tắt gợi ý chia đôi cửa sổ)"},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SilentInstalledAppsEnabled", 0, "Silent Apps (Chặn Store cài app rác ngầm)"},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-310093Enabled", 0, "Start Ads (Tắt quảng cáo Start Menu)"},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-338388Enabled", 0, "Settings Tips (Tắt mẹo gợi ý Settings)"},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-338389Enabled", 0, "Explorer Ads (Tắt quảng cáo trong Explorer)"},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "ShowSyncProviderNotifications", 0, "Sync Notifications (Tắt quảng cáo OneDrive)"}
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Search", "SearchboxTaskbarMode", 0, "Searchbox (Thu gọn ô tìm kiếm)", true},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "TaskbarDa", 0, "Widgets (Tắt tin tức widget)", true},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "TaskbarMn", 0, "Chat Teams (Tắt biểu tượng chat)", true},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "ShowTaskViewButton", 0, "Task View (Tắt xem tác vụ)", true},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Feeds", "ShellFeedsTaskbarViewMode", 2, "Feeds News (Tắt tin tức Win 10)", true},
+        {"Software\\Policies\\Microsoft\\Windows\\WindowsCopilot", "TurnOffWindowsCopilot", 1, "Copilot AI (Tắt nút Copilot)", true},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "EnableTransparency", 0, "Transparency (Tắt trong suốt tiết kiệm GPU)", false},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "SnapAssist", 0, "Snap Assist (Tắt gợi ý chia đôi cửa sổ)", true},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SilentInstalledAppsEnabled", 0, "Silent Apps (Chặn Store cài app rác ngầm)", false},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-310093Enabled", 0, "Start Ads (Tắt quảng cáo Start Menu)", false},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-338388Enabled", 0, "Settings Tips (Tắt mẹo gợi ý Settings)", false},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-338389Enabled", 0, "Explorer Ads (Tắt quảng cáo trong Explorer)", false},
+        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "ShowSyncProviderNotifications", 0, "Sync Notifications (Tắt quảng cáo OneDrive)", false}
     };
 
+    bool explorerNeedsRestart = false;
     int newlyChanged = 0;
+
     for (const auto &item : settings) {
         HKEY hKey;
         DWORD currentVal = 0;
         DWORD dataSize = sizeof(DWORD);
-        bool alreadySet = false;
+        DWORD valType = 0;
+        bool alreadyOptimized = false;
 
-        if (RegOpenKeyExA(HKEY_CURRENT_USER, item.keyPath.c_str(), 0, KEY_READ | KEY_WRITE, &hKey) == ERROR_SUCCESS) {
-            if (RegQueryValueExA(hKey, item.valueName.c_str(), NULL, NULL, (LPBYTE)&currentVal, &dataSize) == ERROR_SUCCESS) {
-                if (currentVal == item.targetValue) alreadySet = true;
-            }
-            if (!alreadySet) {
-                if (RegSetValueExA(hKey, item.valueName.c_str(), 0, REG_DWORD, (const BYTE*)&item.targetValue, sizeof(DWORD)) == ERROR_SUCCESS) {
-                    cout << "     ├── [Tinh chỉnh] " << item.desc << "\n";
-                    newlyChanged++;
+        // BƯỚC 1: Đọc kiểm tra trạng thái hiện tại (0 hay 1) bằng quyền đọc an toàn (KEY_QUERY_VALUE)
+        if (RegOpenKeyExA(HKEY_CURRENT_USER, item.keyPath.c_str(), 0, KEY_QUERY_VALUE, &hKey) == ERROR_SUCCESS) {
+            if (RegQueryValueExA(hKey, item.valueName.c_str(), NULL, &valType, (LPBYTE)&currentVal, &dataSize) == ERROR_SUCCESS) {
+                if (currentVal == item.targetValue) {
+                    alreadyOptimized = true;
                 }
             }
             RegCloseKey(hKey);
+        }
+
+        // BƯỚC 2: Nếu đã ở trạng thái tối ưu (0 hoặc targetValue) -> Bỏ qua, không ghi đè, không reset explorer!
+        if (alreadyOptimized) {
+            cout << "     ├── [✓ Đã tắt] " << item.desc << "\n";
+            continue;
+        }
+
+        // BƯỚC 3: Nếu đang bật (1) hoặc chưa cấu hình -> Tiến hành tắt và đánh dấu cần làm mới
+        bool changeSuccess = false;
+        if (RegOpenKeyExA(HKEY_CURRENT_USER, item.keyPath.c_str(), 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS) {
+            if (RegSetValueExA(hKey, item.valueName.c_str(), 0, REG_DWORD, (const BYTE*)&item.targetValue, sizeof(DWORD)) == ERROR_SUCCESS) {
+                changeSuccess = true;
+            }
+            RegCloseKey(hKey);
         } else {
-            if (RegCreateKeyExA(HKEY_CURRENT_USER, item.keyPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+            // Thử tạo key nếu key chưa tồn tại
+            if (RegCreateKeyExA(HKEY_CURRENT_USER, item.keyPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
                 if (RegSetValueExA(hKey, item.valueName.c_str(), 0, REG_DWORD, (const BYTE*)&item.targetValue, sizeof(DWORD)) == ERROR_SUCCESS) {
-                    cout << "     ├── [Tinh chỉnh] " << item.desc << "\n";
-                    newlyChanged++;
+                    changeSuccess = true;
                 }
                 RegCloseKey(hKey);
             }
         }
+
+        if (changeSuccess) {
+            cout << "     ├── [Đã tắt mới] " << item.desc << "\n";
+            newlyChanged++;
+            if (item.affectsExplorer) {
+                explorerNeedsRestart = true;
+            }
+        }
     }
 
-    // Bỏ độ trễ mở menu chuột phải (Desktop MenuShowDelay = 0)
+    // Kiểm tra độ trễ mở menu chuột phải (Desktop MenuShowDelay = 0)
     HKEY hDesktop;
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, "Control Panel\\Desktop", 0, KEY_READ | KEY_WRITE, &hDesktop) == ERROR_SUCCESS) {
+    bool delayIsZero = false;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, "Control Panel\\Desktop", 0, KEY_QUERY_VALUE, &hDesktop) == ERROR_SUCCESS) {
         char valBuf[32] = {0};
         DWORD valSz = sizeof(valBuf);
-        bool delayIsZero = false;
         if (RegQueryValueExA(hDesktop, "MenuShowDelay", NULL, NULL, (LPBYTE)valBuf, &valSz) == ERROR_SUCCESS) {
             if (string(valBuf) == "0") delayIsZero = true;
-        }
-        if (!delayIsZero) {
-            const char zeroStr[] = "0";
-            RegSetValueExA(hDesktop, "MenuShowDelay", 0, REG_SZ, (const BYTE*)zeroStr, 2);
-            cout << "     ├── [Tinh chỉnh] Giảm độ trễ Menu chuột phải về 0ms\n";
-            newlyChanged++;
         }
         RegCloseKey(hDesktop);
     }
 
-    // Tắt Telemetry chẩn đoán ngầm trong HKLM (yêu cầu Admin)
-    HKEY hLM;
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", 0, KEY_READ | KEY_WRITE, &hLM) == ERROR_SUCCESS) {
-        DWORD curTelem = 1, szTelem = sizeof(DWORD);
-        if (RegQueryValueExA(hLM, "AllowTelemetry", NULL, NULL, (LPBYTE)&curTelem, &szTelem) != ERROR_SUCCESS || curTelem != 0) {
-            DWORD zeroVal = 0;
-            RegSetValueExA(hLM, "AllowTelemetry", 0, REG_DWORD, (const BYTE*)&zeroVal, sizeof(DWORD));
+    if (delayIsZero) {
+        cout << "     ├── [✓ Đã tối ưu] Độ trễ Menu chuột phải (0ms)\n";
+    } else {
+        if (RegOpenKeyExA(HKEY_CURRENT_USER, "Control Panel\\Desktop", 0, KEY_SET_VALUE, &hDesktop) == ERROR_SUCCESS) {
+            const char zeroStr[] = "0";
+            if (RegSetValueExA(hDesktop, "MenuShowDelay", 0, REG_SZ, (const BYTE*)zeroStr, 2) == ERROR_SUCCESS) {
+                cout << "     ├── [Đã tối ưu mới] Giảm độ trễ Menu chuột phải về 0ms\n";
+                newlyChanged++;
+            }
+            RegCloseKey(hDesktop);
         }
-        RegCloseKey(hLM);
     }
 
-    // CHỈ KHỞI ĐỘNG LẠI EXPLORER NẾU CÓ THAY ĐỔI MỚI THỰC SỰ!
-    if (newlyChanged > 0) {
+    // Kiểm tra Telemetry chẩn đoán ngầm trong HKLM
+    HKEY hLM;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", 0, KEY_QUERY_VALUE, &hLM) == ERROR_SUCCESS) {
+        DWORD curTelem = 1, szTelem = sizeof(DWORD);
+        bool telemZero = false;
+        if (RegQueryValueExA(hLM, "AllowTelemetry", NULL, NULL, (LPBYTE)&curTelem, &szTelem) == ERROR_SUCCESS && curTelem == 0) {
+            telemZero = true;
+        }
+        RegCloseKey(hLM);
+
+        if (telemZero) {
+            cout << "     ├── [✓ Đã tắt] Telemetry chẩn đoán ngầm Windows\n";
+        } else {
+            if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", 0, KEY_SET_VALUE, &hLM) == ERROR_SUCCESS) {
+                DWORD zeroVal = 0;
+                if (RegSetValueExA(hLM, "AllowTelemetry", 0, REG_DWORD, (const BYTE*)&zeroVal, sizeof(DWORD)) == ERROR_SUCCESS) {
+                    cout << "     ├── [Đã tắt mới] Telemetry chẩn đoán ngầm Windows\n";
+                    newlyChanged++;
+                }
+                RegCloseKey(hLM);
+            }
+        }
+    }
+
+    // CHỈ KHỞI ĐỘNG LẠI EXPLORER NẾU CÓ THAY ĐỔI TASKBAR MỚI THỰC SỰ!
+    // Nếu tất cả đã tắt rồi -> Tuyệt đối không reset explorer.exe tránh giật lag/khó chịu
+    if (explorerNeedsRestart) {
         sc.runCMD("taskkill /f /im explorer.exe >nul 2>&1 & start explorer.exe");
         return true;
     }
@@ -1016,9 +1123,7 @@ void SystemOptimizer::multiTierPerformanceOptimize() {
     }
 }
 
-void SystemOptimizer::optimizeSystemPRO() {
-    multiTierPerformanceOptimize();
-}
+
 
 /**
  * =========================================================================================
@@ -1206,32 +1311,4 @@ void SystemOptimizer::turnOffServicesMenu() {
     }
 }
 
-/**
- * =========================================================================================
- * 9. HÀM TỐI ƯU HÓA GIAO DIỆN TASKBAR (optimizeTaskbar)
- * =========================================================================================
- * TÍNH NĂNG:
- * - Kiểm tra và tắt các icon/tính năng gây tốn tài nguyên trên thanh Taskbar Windows 11 & Windows 10:
- *   + SearchboxTaskbarMode = 0: Tắt / thu gọn thanh tìm kiếm Search.
- *   + TaskbarDa = 0: Tắt biểu tượng Widgets (Tin tức/Thời tiết).
- *   + TaskbarMn = 0: Tắt biểu tượng Chat (Microsoft Teams).
- *   + ShowTaskViewButton = 0: Tắt nút Task View (Xem tác vụ).
- *   + ShellFeedsTaskbarViewMode = 2: Tắt News & Interests trên Windows 10.
- *   + TurnOffWindowsCopilot = 1: Tắt nút trợ lý ảo Copilot AI trên Taskbar.
- * - Kiểm tra trạng thái hiện tại trong Registry (tránh ghi đè nếu đã tắt từ trước).
- * - Nếu có thay đổi mới: Tự động khởi động lại explorer.exe để cập nhật giao diện ngay tức thì.
- * 
- * CÁCH BỔ SUNG TÙY CHỈNH TASKBAR MỚI:
- * - Thêm struct `TaskbarSetting` mới vào vector `settings`.
- */
-void SystemOptimizer::optimizeTaskbar() {
-    sc.cls();
-    cout << "Đang kiểm tra-tối ưu Taskbar & Giao diện\n\n";
-    bool changed = runOptimizeTier3();
-    if (changed) {
-        cout << "\n[✓] Làm mới Taskbar thành công\n\n";
-    } else {
-        cout << "\n[✓] Taskbar đã ở trạng thái tối ưu chuẩn từ trước\n\n";
-    }
-    sc.waitEnter();
-}
+

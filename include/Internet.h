@@ -28,6 +28,7 @@ public:
     void checkSecurityStatus();
     void fullSecurityShield();
     void scanConnectedDevices();
+    void localDropMenu();
 };
 
 #endif 

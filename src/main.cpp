@@ -1,15 +1,15 @@
-#include "../include/Internet.h"
+#include "Internet.h"
 #include <windows.h>
 #include <iostream>
 #include <limits>
 #include <vector>
 #include <memory>
 #include <mutex>
-#include "../include/SystemCore.h"
-#include "../include/SystemOptimizer.h"
-#include "../include/UtilityTools.h"
-#include "../include/MediaProcessor.h"
-#include "../include/UpdateManager.h"
+#include "SystemCore.h"
+#include "SystemOptimizer.h"
+#include "UtilityTools.h"
+#include "MediaProcessor.h"
+#include "UpdateManager.h"
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -37,7 +37,7 @@ private:
     SystemOptimizer& getOptimizer() {
         if (!opt) {
             std::lock_guard<std::mutex> lock(optMutex);
-            if (!opt) opt = std::make_unique<SystemOptimizer>(*this, getInternet());
+            if (!opt) opt = std::make_unique<SystemOptimizer>(*this);
         }
         return *opt;
     }
@@ -61,9 +61,6 @@ private:
 public:
     AppUI() {
         UpdateManager::checkUpdateAsync();
-        std::thread([this]() {
-            getMedia();
-        }).detach();
     }
     ~AppUI() = default;
 
@@ -137,6 +134,7 @@ public:
                          << " [3] Kiểm tra trạng thái bảo mật hệ thống\n"
                          << " [4] Xem danh sách mật khẩu Wi-Fi đã lưu\n"
                          << " [5] Quét thiết bị kết nối Wi-Fi / LAN\n"
+                         << " [6] Local Web Drop (Truyền file P2P / Web LAN)\n"
                          << " [0] Quay lại\n\n"
                          << " [Chọn]: ";
                     sub = readInt("");
@@ -148,6 +146,7 @@ public:
                     case 3:  getInternet().checkSecurityStatus(); break;
                     case 4:  getInternet().wifiAudit(); break;
                     case 5:  getInternet().scanConnectedDevices(); break;
+                    case 6:  getInternet().localDropMenu(); break;
                     default: Sleep(300); break;
                     }
                 }
@@ -160,10 +159,10 @@ public:
                     cout << " [1] Auto Click\n"
                          << " [2] Spam Text\n"
                          << " [3] Auto Paste\n"
-                         << " [4] Cài đặt phần mềm\n"
-                         << " [5] Gỡ bỏ ứng dụng rác\n"
-                         << " [6] Kiểm tra Pin Laptop\n"
-                         << " [0] Quay lại\n\n"
+                         << " [4] Install Software\n"
+                         << " [5] Uninstall Bloatware\n"
+                         << " [6] Check Pin Laptop\n"
+                         << " [0] Return\n\n"
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;

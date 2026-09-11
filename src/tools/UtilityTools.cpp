@@ -1,4 +1,4 @@
-#include "../include/UtilityTools.h"
+#include "UtilityTools.h"
 #include <iostream>
 #include <windows.h>
 #include <tlhelp32.h>
@@ -649,7 +649,7 @@ static void cleanAdvancedBloat(SystemCore &sc, const AdvancedBloatStatus &adv) {
 // Gỡ bỏ ứng dụng rác Bloatware (Dọn dẹp toàn diện cả 2 luồng: Thứ cấp & Nâng cao)
 void UtilityTools::uninstallBloatware() {
     sc.cls();
-    cout << "\n[-] Đang dò quét ứng dụng rác trên hệ thống...\n\n";
+    cout << "\n\n";
 
     vector<BloatAppInfo> detectedSec;
     AdvancedBloatStatus advStatus;
@@ -683,7 +683,7 @@ void UtilityTools::uninstallBloatware() {
     bool hasAnyAdv = advStatus.hasOneDrive || advStatus.hasPhoneLink || advStatus.hasCortana || advStatus.hasTeams;
 
     if (!hasAnySec && !hasAnyAdv) {
-        cout << " \x1b[32m[✓] Hệ thống đã hoàn toàn sạch sẽ, không phát hiện ứng dụng rác nào cần xử lý!\x1b[0m\n\n";
+        cout << " \x1b[32m[✓] Hệ thống đã hoàn toàn sạch sẽ\x1b[0m\n";
         sc.waitEnter();
         return;
     }

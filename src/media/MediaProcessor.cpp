@@ -1,7 +1,7 @@
-#include "../include/MediaProcessor.h"
-#include "../include/SystemCore.h"
-#include "../include/ImageEnhancer.h"
-#include "../include/ImageEnhancerPro.h"
+#include "MediaProcessor.h"
+#include "SystemCore.h"
+#include "ImageEnhancer.h"
+#include "ImageEnhancerPro.h"
 #include <iostream>
 #include <conio.h>
 #include <random>

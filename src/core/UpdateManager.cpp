@@ -1,6 +1,6 @@
 // UpdateManager.cpp
-#include "../include/UpdateManager.h"
-#include "../include/SystemCore.h"
+#include "UpdateManager.h"
+#include "SystemCore.h"
 #include <windows.h>
 #include <iostream>
 #include <fstream>
