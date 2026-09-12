@@ -15,22 +15,46 @@ private:
 public:
     SystemOptimizer(SystemCore &s);
 
-    // --- HỆ THỐNG ĐA TẦNG MỚI ---
-    // 1. Hệ thống Dọn rác Đa Tầng (Tầng 1 -> Tầng 4)
+    // --- HỆ THỐNG ĐIỀU PHỐI DỌN RÁC & TỐI ƯU ---
+    // 1. Quản lý Dọn rác Hệ thống
     void multiTierDiskClean();
 
-    // 2. Hệ thống Tăng tốc & Tối ưu Đa Tầng (Boot -> Services -> UI/Taskbar)
+    // 2. Quản lý Tăng tốc & Tối ưu Hệ thống
     void multiTierPerformanceOptimize();
 
-    // Các hàm phụ trợ thực thi từng tầng
-    long long runCleanTier1();
-    long long runCleanTier2();
-    long long runCleanTier3();
-    long long runCleanTier4();
+    // --- CÁC HÀM DỌN RÁC THEO NHIỆM VỤ (TASK-BASED) ---
+    // Dọn rác tạm bề mặt & cache người dùng (Temp, CrashDumps, WER User, INetCache, RecycleBin, Flush DNS)
+    long long cleanSurfaceAndUserTemp();
 
-    int runOptimizeTier1();
-    int runOptimizeTier2();
-    bool runOptimizeTier3();
+    // Dọn bộ đệm trình duyệt & ứng dụng giao tiếp (Chrome, Edge, Firefox, Discord, Telegram...)
+    long long cleanBrowserAndAppCache();
+
+    // Dọn dẹp chuyên sâu hệ thống & tồn dư cập nhật ($WINDOWS.~BT/WS, Windows.old, DISM, Logs, LiveKernelReports)
+    long long cleanDeepSystemAndUpdates();
+
+    // Dọn dẹp rác môi trường lập trình & artifacts dự án (node_modules, pip, gradle, VS Code, v.v.)
+    long long cleanDevArtifactsAndCaches();
+
+    // Alias tương thích ngược
+    inline long long runCleanTier1() { return cleanSurfaceAndUserTemp(); }
+    inline long long runCleanTier2() { return cleanBrowserAndAppCache(); }
+    inline long long runCleanTier3() { return cleanDeepSystemAndUpdates(); }
+    inline long long runCleanTier4() { return cleanDevArtifactsAndCaches(); }
+
+    // --- CÁC HÀM TỐI ƯU HIỆU NĂNG THEO NHIỆM VỤ (TASK-BASED) ---
+    // Tối ưu ứng dụng khởi động (Tắt app bên thứ ba làm chậm máy, bảo vệ 100% Bộ gõ & Driver)
+    int optimizeStartupApps();
+
+    // Tối ưu dịch vụ chạy ngầm vô ích (Maps, Wallet, Telemetry, ErrorReporting...)
+    int optimizeBackgroundServices();
+
+    // Tối ưu giao diện & Taskbar (Tắt widget, thu gọn taskbar, tối ưu độ nhạy UI)
+    bool optimizeVisualEffectsAndUI();
+
+    // Alias tương thích ngược
+    inline int runOptimizeTier1() { return optimizeStartupApps(); }
+    inline int runOptimizeTier2() { return optimizeBackgroundServices(); }
+    inline bool runOptimizeTier3() { return optimizeVisualEffectsAndUI(); }
 
     // 3. Sửa lỗi kẹt cập nhật Windows Update
     void fixWindowsUpdate();

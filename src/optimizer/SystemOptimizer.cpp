@@ -36,10 +36,10 @@ static void wipeFolderContents(const fs::path &dirPath) {
 // Forward declaration hàm dọn dẹp thư mục dev artifacts (được định nghĩa chi tiết ở phần dưới)
 static int cleanDirectoryArtifacts(const fs::path &rootPath, const std::vector<std::string> &targetDirNames, const std::vector<std::string> &targetExtensions, long long &freedBytes);
 
-// --- HỆ THỐNG DỌN RÁC ĐA TẦNG (MULTI-TIER DISK CLEAN) ---
+// --- HỆ THỐNG DỌN RÁC THEO NHIỆM VỤ (TASK-BASED DISK CLEAN) ---
 
-// Tầng 1: Rác bề mặt siêu tốc (Temp, Recent, Thùng rác, Flush DNS)
-long long SystemOptimizer::runCleanTier1() {
+// 1. Nhiệm vụ: Dọn rác tạm bề mặt & Cache người dùng (Temp, CrashDumps, WER User, INetCache, RecycleBin, Flush DNS)
+long long SystemOptimizer::cleanSurfaceAndUserTemp() {
     long long before = 0, after = 0;
     try { before = fs::space("C:\\").available; } catch (...) {}
 
@@ -47,13 +47,28 @@ long long SystemOptimizer::runCleanTier1() {
     // AssignProcessToJobObject là thread-safe theo MSDN, nhưng nếu SystemCore thay đổi
     // cần đảm bảo không thêm shared mutable state vào runCMD.
     vector<thread> threads;
+    // Rác tạm hệ thống & user
     threads.emplace_back([this]() { sc.runCMD("cmd /c del /s /f /q \"%temp%\\*\" 2>nul"); });
     threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%systemroot%\\temp\\*\" 2>nul"); });
     threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\Microsoft\\Windows\\Recent\\*\" 2>nul"); });
     threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\D3DSCache\\*\" 2>nul"); });
     threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Low\\Microsoft\\CryptnetUrlCache\\*\" 2>nul"); });
+
+    // Cache người dùng mới: CrashDumps của User & App thứ ba
+    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\CrashDumps\\*\" 2>nul"); });
+
+    // Cache người dùng mới: WER cá nhân (Temp, ReportArchive, ReportQueue)
     threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\WER\\Temp\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\WER\\ReportArchive\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\WER\\ReportQueue\\*\" 2>nul"); });
+
+    // WER toàn hệ thống
     threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\Temp\\*\" 2>nul"); });
+
+    // Cache người dùng mới: INetCache (tệp tạm webview & ứng dụng ngầm người dùng)
+    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\INetCache\\*\" 2>nul"); });
+
+    // Thùng rác & Flush DNS
     threads.emplace_back([this]() { sc.runCMD("powershell -NoProfile -Command \"Clear-RecycleBin -Force -ErrorAction SilentlyContinue\""); });
     threads.emplace_back([this]() { sc.runCMD("ipconfig /flushdns >nul 2>&1"); });
 
@@ -63,8 +78,8 @@ long long SystemOptimizer::runCleanTier1() {
     return (after > before) ? (after - before) : 0;
 }
 
-// Tầng 2: Rác Trình duyệt & Ứng dụng (Chrome, Edge, Brave, Discord, Shader)
-long long SystemOptimizer::runCleanTier2() {
+// 2. Nhiệm vụ: Dọn rác Trình duyệt & Ứng dụng (Chrome, Edge, Brave, Discord, Shader)
+long long SystemOptimizer::cleanBrowserAndAppCache() {
     long long before = 0, after = 0;
     try { before = fs::space("C:\\").available; } catch (...) {}
 
@@ -83,8 +98,8 @@ long long SystemOptimizer::runCleanTier2() {
     return (after > before) ? (after - before) : 0;
 }
 
-// Tầng 3: Chuyên sâu Hệ thống (DISM WinSxS, Update kẹt, Logs, Event Viewer)
-long long SystemOptimizer::runCleanTier3() {
+// 3. Nhiệm vụ: Dọn dẹp Chuyên sâu Hệ thống & Tồn dư Cập nhật (DISM WinSxS, Windows.old, $WINDOWS.~BT, Logs, LiveKernelReports)
+long long SystemOptimizer::cleanDeepSystemAndUpdates() {
     long long before = 0, after = 0;
     try { before = fs::space("C:\\").available; } catch (...) {}
 
@@ -92,6 +107,31 @@ long long SystemOptimizer::runCleanTier3() {
     batContent += "mkdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
     batContent += "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\temp\" /mir /w:0 /r:0 /log:nul\n";
     batContent += "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\Prefetch\" /mir /w:0 /r:0 /log:nul\n";
+
+    // Tồn dư cập nhật bản lớn ($WINDOWS.~BT, $WINDOWS.~WS, Windows.old)
+    batContent += "if exist \"%SystemDrive%\\$WINDOWS.~BT\" (\n";
+    batContent += "    takeown /F \"%SystemDrive%\\$WINDOWS.~BT\" /A /R /D Y >nul 2>&1\n";
+    batContent += "    icacls \"%SystemDrive%\\$WINDOWS.~BT\" /grant *S-1-5-32-544:F /T /C /Q >nul 2>&1\n";
+    batContent += "    rd /s /q \"%SystemDrive%\\$WINDOWS.~BT\" 2>nul\n";
+    batContent += ")\n";
+
+    batContent += "if exist \"%SystemDrive%\\$WINDOWS.~WS\" (\n";
+    batContent += "    takeown /F \"%SystemDrive%\\$WINDOWS.~WS\" /A /R /D Y >nul 2>&1\n";
+    batContent += "    icacls \"%SystemDrive%\\$WINDOWS.~WS\" /grant *S-1-5-32-544:F /T /C /Q >nul 2>&1\n";
+    batContent += "    rd /s /q \"%SystemDrive%\\$WINDOWS.~WS\" 2>nul\n";
+    batContent += ")\n";
+
+    batContent += "if exist \"%SystemDrive%\\Windows.old\" (\n";
+    batContent += "    takeown /F \"%SystemDrive%\\Windows.old\" /A /R /D Y >nul 2>&1\n";
+    batContent += "    icacls \"%SystemDrive%\\Windows.old\" /grant *S-1-5-32-544:F /T /C /Q >nul 2>&1\n";
+    batContent += "    rd /s /q \"%SystemDrive%\\Windows.old\" 2>nul\n";
+    batContent += ")\n";
+
+    // Nhật ký nâng cấp Windows & LiveKernelReports
+    batContent += "del /f /s /q \"%SystemRoot%\\Panther\\*.*\" 2>nul\n";
+    batContent += "del /f /s /q \"%SystemRoot%\\LiveKernelReports\\*.*\" 2>nul\n";
+
+    // Dọn dẹp chuẩn hệ thống DISM WinSxS & Windows Update tệp tải dở
     batContent += "dism /online /cleanup-image /startcomponentcleanup /resetbase\n";
     batContent += "del /f /s /q \"%systemroot%\\SoftwareDistribution\\Download\\*\" 2>nul\n";
     batContent += "del /f /s /q \"%systemroot%\\Logs\\CBS\\*.*\" 2>nul\n";
@@ -104,14 +144,14 @@ long long SystemOptimizer::runCleanTier3() {
     batContent += "cleanmgr /sagerun:1\n";
     batContent += "rmdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
 
-    SystemCore::runBatchAsAdmin(batContent, "Dọn dẹp hệ thống chuyên sâu");
+    SystemCore::runBatchAsAdmin(batContent, "Dọn dẹp hệ thống chuyên sâu & Tồn dư cập nhật");
 
     try { after = fs::space("C:\\").available; } catch (...) {}
     return (after > before) ? (after - before) : 0;
 }
 
-// Tầng 4: Rác Môi trường lập trình (node_modules, pip, gradle, VS Code...)
-long long SystemOptimizer::runCleanTier4() {
+// 4. Nhiệm vụ: Dọn rác Môi trường lập trình (node_modules, pip, gradle, VS Code...)
+long long SystemOptimizer::cleanDevArtifactsAndCaches() {
     auto getTotalDrivesFreeSpace = []() -> long long {
         long long total = 0;
         DWORD mask = GetLogicalDrives();
@@ -133,17 +173,17 @@ long long SystemOptimizer::runCleanTier4() {
     return (after > before) ? (after - before) : 0;
 }
 
-// Menu điều phối Dọn rác Đa Tầng
+// Menu điều phối Dọn rác
 void SystemOptimizer::multiTierDiskClean() {
     while (true) {
         sc.cls();
         cout << "\n\n"
-             << " [1] Dọn rác bề mặt\n"
-             << " [2] Dọn rác Trình duyệt & Ứng dụng\n"
-             << " [3] Dọn dẹp Chuyên sâu\n"
-             << " [4] Dọn rác Lập trình\n"
-             << " [5] [⚡] Dọn liên hoàn Tầng 1 + 2 + 3\n"
-             << " [6] [🚀] Dọn toàn bộ cả 4\n"
+             << " [1] Dọn rác bề mặt & Cache người dùng (Temp, CrashDumps, WER, DNS, Thùng rác)\n"
+             << " [2] Dọn rác Trình duyệt & Ứng dụng (Chrome, Edge, Firefox, Discord...)\n"
+             << " [3] Dọn dẹp Chuyên sâu & Tồn dư Cập nhật (Windows.old, $WINDOWS.~BT, DISM, Logs)\n"
+             << " [4] Dọn rác Môi trường lập trình (node_modules, Pip, Gradle, VS Code...)\n"
+             << " [5] [⚡] Dọn toàn diện Hệ thống (1 + 2 + 3)\n"
+             << " [6] [🚀] Dọn tất cả (Cả 4)\n"
              << " [0] Quay lại\n\n"
              << " [Chọn]: ";
 
@@ -155,41 +195,43 @@ void SystemOptimizer::multiTierDiskClean() {
         long long totalFreed = 0;
 
         if (choice == 1 || choice == 5 || choice == 6) {
-            cout << " [*] Tầng 1: Đang dọn rác tạm & cache bề mặt\n"
-                 << "     ├── Dọn Temp, Recent, ShaderCache, Cryptnet, WER Temp\n"
+            cout << " [*] Nhiệm vụ 1: Đang dọn rác tạm & cache người dùng\n"
+                 << "     ├── Dọn Temp, Recent, ShaderCache, Cryptnet, INetCache\n"
+                 << "     ├── Dọn User CrashDumps, WER Reports (User & System)\n"
                  << "     ├── Xóa sạch Thùng rác (Recycle Bin) & Flush DNS\n";
-            long long f1 = runCleanTier1();
+            long long f1 = cleanSurfaceAndUserTemp();
             totalFreed += f1;
-            cout << "     └── [✓ Xong] " << (f1 > 0 ? ("Giải phóng " + SystemCore::formatSize(f1)) : "Đã sạch sẽ từ trước") << "\n\n";
+            cout << "     └── [✓] " << (f1 > 0 ? ("Giải phóng " + SystemCore::formatSize(f1)) : "Đã sạch sẽ từ trước") << "\n\n";
         }
 
         if (choice == 2 || choice == 5 || choice == 6) {
-            cout << " [*] Tầng 2: Đang dọn rác Trình duyệt & Ứng dụng\n"
+            cout << " [*] Nhiệm vụ 2: Đang dọn rác Trình duyệt & Ứng dụng\n"
                  << "     ├── Dọn cache Chrome, Edge, Brave, CocCoc, Opera, Firefox\n"
                  << "     ├── Dọn cache Discord, Telegram, NVIDIA GLCache, Thumbnails\n";
-            long long f2 = runCleanTier2();
+            long long f2 = cleanBrowserAndAppCache();
             totalFreed += f2;
-            cout << "     └── [✓ Xong] " << (f2 > 0 ? ("Giải phóng " + SystemCore::formatSize(f2)) : "Đã sạch sẽ từ trước") << "\n\n";
+            cout << "     └── [✓] " << (f2 > 0 ? ("Giải phóng " + SystemCore::formatSize(f2)) : "Đã sạch sẽ từ trước") << "\n\n";
         }
 
         if (choice == 3 || choice == 5 || choice == 6) {
-            cout << " [*] Tầng 3: Đang dọn dẹp Chuyên sâu Hệ thống\n"
-                 << "     ├── Chạy DISM WinSxS ResetBase, dọn Windows Update kẹt\n"
-                 << "     ├── Xóa Delivery Optimization, CBS Logs, Windows Error Reports\n"
-                 << "     ├── Xóa toàn bộ Windows Event Logs, giải phóng file ngủ đông\n";
-            long long f3 = runCleanTier3();
+            cout << " [*] Nhiệm vụ 3: Đang dọn dẹp Chuyên sâu Hệ thống & Tồn dư Cập nhật\n"
+                 << "     ├── Dọn tồn dư cập nhật bản lớn ($WINDOWS.~BT, $WINDOWS.~WS, Windows.old)\n"
+                 << "     ├── Chạy DISM WinSxS ResetBase, dọn Windows Update kẹt & Delivery Optimization\n"
+                 << "     ├── Xóa LiveKernelReports, CBS Logs, Panther Logs, Windows Error Reports\n"
+                 << "     ├── Xóa toàn bộ Windows Event Logs, giải phóng file ngủ đông (hiberfil)\n";
+            long long f3 = cleanDeepSystemAndUpdates();
             totalFreed += f3;
-            cout << "     └── [✓ Xong] " << (f3 > 0 ? ("Giải phóng " + SystemCore::formatSize(f3)) : "Đã sạch sẽ từ trước") << "\n\n";
+            cout << "     └── [✓] " << (f3 > 0 ? ("Giải phóng " + SystemCore::formatSize(f3)) : "Đã sạch sẽ từ trước") << "\n\n";
         }
 
         if (choice == 4 || choice == 6) {
-            cout << " [*] Tầng 4: Đang dọn rác Môi trường lập trình (Dev Caches & Artifacts)\n"
+            cout << " [*] Nhiệm vụ 4: Đang dọn rác Môi trường lập trình (Dev Caches & Artifacts)\n"
                  << "     ├── Dọn cache npm, yarn, pnpm, pip, nuget, gradle, cargo, go\n"
                  << "     ├── Dọn cache VS Code, Cursor workspace storage\n"
                  << "     ├── Quét & giải phóng node_modules, build cache trong workspace\n";
-            long long f4 = runCleanTier4();
+            long long f4 = cleanDevArtifactsAndCaches();
             totalFreed += f4;
-            cout << "     └── [✓ Xong] " << (f4 > 0 ? ("Giải phóng " + SystemCore::formatSize(f4)) : "Đã sạch sẽ từ trước") << "\n\n";
+            cout << "     └── [✓] " << (f4 > 0 ? ("Giải phóng " + SystemCore::formatSize(f4)) : "Đã sạch sẽ từ trước") << "\n\n";
         }
 
         cout << "\n\n";
@@ -883,10 +925,10 @@ void SystemOptimizer::cleanDevCaches(bool interactive) {
     }
 }
 
-// --- HỆ THỐNG TĂNG TỐC & TỐI ƯU ĐA TẦNG (MULTI-TIER PERFORMANCE TUNING) ---
+// --- HỆ THỐNG TĂNG TỐC & TỐI ƯU HIỆU NĂNG THEO NHIỆM VỤ ---
 
-// Tầng 1: Tối ưu Khởi động (Tắt app bên thứ ba làm chậm máy, bảo vệ 100% Bộ gõ & Driver)
-int SystemOptimizer::runOptimizeTier1() {
+// Nhiệm vụ 1: Tối ưu Khởi động (Tắt app bên thứ ba làm chậm máy, bảo vệ 100% Bộ gõ & Driver)
+int SystemOptimizer::optimizeStartupApps() {
     vector<StartupAppInfo> appList = scanAllStartupApps();
     int disabledCount = 0;
     int safeCount = 0;
@@ -906,8 +948,8 @@ int SystemOptimizer::runOptimizeTier1() {
     return disabledCount;
 }
 
-// Tầng 2: Tối ưu Dịch vụ ngầm (Maps, Wallet, Telemetry, Demo, ErrorReporting...)
-int SystemOptimizer::runOptimizeTier2() {
+// Nhiệm vụ 2: Tối ưu Dịch vụ ngầm (Maps, Wallet, Telemetry, Demo, ErrorReporting...)
+int SystemOptimizer::optimizeBackgroundServices() {
     struct SvcCheck { string name; string desc; };
     vector<SvcCheck> svcs = {
         {"MapsBroker", "Bản đồ ngoại tuyến Windows"},
@@ -930,8 +972,8 @@ int SystemOptimizer::runOptimizeTier2() {
     return disabledCount;
 }
 
-// Tầng 3: Tối ưu Giao diện, Taskbar & Độ nhạy Windows (Kiểm tra trạng thái 0/1 trước, chỉ khởi động lại Explorer khi có thay đổi thực sự)
-bool SystemOptimizer::runOptimizeTier3() {
+// Nhiệm vụ 3: Tối ưu Giao diện, Taskbar & Độ nhạy Windows (Kiểm tra trạng thái 0/1 trước, chỉ khởi động lại Explorer khi có thay đổi thực sự)
+bool SystemOptimizer::optimizeVisualEffectsAndUI() {
     struct TaskbarSetting {
         string keyPath;
         string valueName;
@@ -1095,24 +1137,24 @@ void SystemOptimizer::multiTierPerformanceOptimize() {
         cout << "\n\n";
 
         if (choice == 1 || choice == 4) {
-            cout << " [*] Tầng 1: Đang quét và tắt ứng dụng khởi động làm chậm máy\n";
-            int count = runOptimizeTier1();
-            cout << "     └── [✓ Xong] " << (count > 0 ? ("Đã tắt " + to_string(count) + " app làm chậm máy") : "Tất cả ứng dụng khởi động đã tối ưu") << "\n\n";
+            cout << " [*] Nhiệm vụ 1: Đang quét và tắt ứng dụng khởi động làm chậm máy\n";
+            int count = optimizeStartupApps();
+            cout << "     └── [✓] " << (count > 0 ? ("Đã tắt " + to_string(count) + " app làm chậm máy") : "Tất cả ứng dụng khởi động đã tối ưu") << "\n\n";
         }
 
         if (choice == 2 || choice == 4) {
-            cout << " [*] Tầng 2: Đang vô hiệu hóa các dịch vụ chạy ngầm vô ích\n";
-            int count = runOptimizeTier2();
-            cout << "     └── [✓ Xong] Đã tối ưu " << count << " dịch vụ ngầm (Maps, Wallet, Telemetry, ErrorReporting)\n\n";
+            cout << " [*] Nhiệm vụ 2: Đang vô hiệu hóa các dịch vụ chạy ngầm vô ích\n";
+            int count = optimizeBackgroundServices();
+            cout << "     └── [✓] Đã tối ưu " << count << " dịch vụ ngầm (Maps, Wallet, Telemetry, ErrorReporting)\n\n";
         }
 
         if (choice == 3 || choice == 4) {
-            cout << " [*] Tầng 3: Kiểm tra và tối ưu Giao diện & Taskbar\n";
-            bool restarted = runOptimizeTier3();
+            cout << " [*] Nhiệm vụ 3: Kiểm tra và tối ưu Giao diện & Taskbar\n";
+            bool restarted = optimizeVisualEffectsAndUI();
             if (restarted) {
-                cout << "     └── [✓ Xong] Đã áp dụng tinh chỉnh mới và làm mới Explorer.\n\n";
+                cout << "     └── [✓] Đã áp dụng tinh chỉnh mới và làm mới Explorer.\n\n";
             } else {
-                cout << "     └── [✓ Xong] Taskbar & Giao diện đã tinh gọn từ trước (Bỏ qua reset Explorer, tránh chớp màn hình).\n\n";
+                cout << "     └── [✓] Taskbar & Giao diện đã tinh gọn từ trước (Bỏ qua reset Explorer, tránh chớp màn hình).\n\n";
             }
         }
 
