@@ -27,8 +27,6 @@ class MediaProcessor {
 private:
     std::string getFFmpegPath();
     GpuCodecInfo getGpuEncoder();
-    bool runCommand(const std::string& command);
-    void compressImage(const std::string& inputPath, const std::string& outputPath, int quality);
     void extractAudioCore(const std::string& inputPath, const std::string& outputPath);
     void changeSpeedCore(const std::string& inputPath, const std::string& outputPath, float speedMultiplier);
 

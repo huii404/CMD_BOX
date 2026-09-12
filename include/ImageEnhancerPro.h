@@ -47,17 +47,32 @@ struct ImageScorePro {
     std::string renderStrategy = "";   // Mô tả chuỗi render tự động được kích hoạt
 };
 
+enum class EnhanceErrorPro {
+    Success = 0,
+    FileNotFound,
+    CodecNotFoundOrUnsupported, // Thiếu WIC codec mở rộng (HEIF/RAW từ Microsoft Store)
+    DecoderInitFailed,
+    FrameDecodeFailed,
+    OutOfMemory,
+    FormatConversionFailed,
+    EncodingFailed,
+    InvalidOptions
+};
+
 struct EnhanceOptionsPro {
     float amount = 1.50f;
     int radius = 2;
-    float threshold = 2.0f;
     float edgeSensitivity = 1.25f;
     float contrast = 1.05f;
     float vibrance = 0.06f;
     int scalePercent = 135;
     float casStrength = 1.00f;
     bool isPortrait = false;
+    bool isDocument = false;
     float skinSmooth = 0.40f;
+    float skinPorePreserve = 0.85f; // Mức độ bảo tồn vân lỗ chân lông tự nhiên (chống bệt da)
+    bool crestLimiter = true;       // Giới hạn đỉnh biên độ tương phản cao (chống gai cành cây/sợi tóc)
+    float compressionBlockiness = 0.0f; // Mức độ vỡ khối JPEG ước lượng để giảm gai lưới 8x8
     float claheBlend = 0.25f;
     float detailBoost = 1.50f;     // Hệ số 3-Scale Guided Filter
 
@@ -69,11 +84,13 @@ struct EnhanceOptionsPro {
     float clarityBoost = 0.20f;    // Cường độ tương phản cục bộ Local Laplacian
     float shadowLift = 0.08f;      // Mức mở chi tiết vùng tối trước khi làm nét
     float highlightPull = 0.06f;   // Mức kéo chi tiết vùng cháy sáng
-    float skinProbSigma = 0.85f;   // Độ mềm chuyển tiếp mặt nạ da Gaussian
-    bool use16BitPipeline = false; // Xử lý nội bộ 16-bit/kênh nếu có
+    bool enableDither = false;     // Bật TPDF Dither chống banding lượng tử hóa màu
     bool thinStrokeGate = true;    // Bật co bán kính + lọc định hướng chống phình nét mảnh
     float strokeAnisotropy = 0.85f;// Mức độ chỉ khuếch đại theo hướng gradient
     bool antiBloat = true;         // Cơ chế ức chế bên Lateral Inhibition chống dính điểm ảnh & bệt viền
+
+    // Lớp phòng thủ (Defensive Validation): kẹp tham số trong ngưỡng hợp lệ an toàn
+    void sanitize();
 };
 
 class ImageEnhancerPro {
@@ -86,14 +103,19 @@ public:
         const std::string& inputPath,
         const std::string& outputPath,
         int level = 0,
-        ImageScorePro* outScore = nullptr);
+        ImageScorePro* outScore = nullptr,
+        std::string* outErrorMessage = nullptr,
+        EnhanceErrorPro* outErrorCode = nullptr);
 
     static ImageScorePro analyzeImageBufferPro(
         const std::vector<uint8_t>& src,
         int width, int height, int stride,
         uintmax_t fileSize);
 
-public:
+    static ImageScorePro analyzeImageFile(const std::string& filePath);
+
+private:
+    // Các giải thuật lọc nội bộ được đóng gói chặt chẽ (Encapsulated)
     static float lanczos3Kernel(float x);
     static std::vector<uint8_t> lanczos3Resample(
         const std::vector<uint8_t>& src, int srcW, int srcH, int srcStride,
@@ -101,6 +123,17 @@ public:
 
     static std::vector<float> fastBoxFilter(const std::vector<float>& src, int width, int height, int radius);
     static std::vector<float> fastBlur(const std::vector<float>& src, int width, int height, int radius);
+
+    static void applyAdaptiveDeblocking(
+        std::vector<float>& luma, int width, int height, float blockiness);
+
+    static void applyOutlierDespeckle(
+        std::vector<float>& luma, int width, int height,
+        float estimatedNoise, const std::vector<float>* pSkinMask = nullptr);
+
+    static void applyChromaDenoise(
+        std::vector<float>& cb, std::vector<float>& cr,
+        const std::vector<float>& luma, int width, int height);
 
     static std::vector<float> applyGuidedFilterSingle(
         const std::vector<float>& p, const std::vector<float>& I,
@@ -110,11 +143,15 @@ public:
         const std::vector<float>& luma,
         std::vector<float>& diffGuided,
         int width, int height,
-        const EnhanceOptionsPro& opts);
+        const EnhanceOptionsPro& opts,
+        const std::vector<float>* pSkinMask = nullptr,
+        std::vector<float>* pMicroBaseOut = nullptr,
+        float estimatedNoise = 1.5f);
 
     static void applyLocalLaplacianToneMapping(
         std::vector<float>& luma, int width, int height,
-        float clarityBoost);
+        float clarityBoost,
+        const std::vector<float>* pSkinMask = nullptr);
 
     static void applyHighlightShadowRecovery(
         std::vector<float>& luma, int width, int height,
@@ -123,7 +160,9 @@ public:
     static void synthesizeTextureLayer(
         std::vector<float>& luma,
         int width, int height,
-        float textureBoost);
+        float textureBoost,
+        const std::vector<float>* pSkinMask = nullptr,
+        const std::vector<float>* pPrecomputedStructure = nullptr);
 
     static void applyCLAHE(
         std::vector<float>& luma,

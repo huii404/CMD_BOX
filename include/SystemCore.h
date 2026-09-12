@@ -21,7 +21,7 @@ public:
     SystemCore();
     ~SystemCore();
 
-    void cls();
+    static void cls();
     static std::string getTime(bool includeDate = true);
     static void waitEnter();
     static bool confirm(const std::string& prompt);

@@ -607,9 +607,10 @@ void ImageEnhancer::processSharpenYCbCr(
 
 static std::wstring toWideString(const std::string& str) {
     if (str.empty()) return L"";
-    int sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), NULL, 0);
+    int sizeNeeded = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, str.c_str(), (int)str.size(), NULL, 0);
     if (sizeNeeded <= 0) {
         sizeNeeded = MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.size(), NULL, 0);
+        if (sizeNeeded <= 0) return L"";
         std::wstring wstr(sizeNeeded, 0);
         MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.size(), &wstr[0], sizeNeeded);
         return wstr;
@@ -929,9 +930,9 @@ bool ImageEnhancer::enhanceImage(
     if (pPropertyBag) pPropertyBag->Release();
     if (pEncoder) pEncoder->Release();
     if (pStream) pStream->Release();
-    pFrame->Release();
-    pDecoder->Release();
-    pFactory->Release();
+    if (pFrame) pFrame->Release();
+    if (pDecoder) pDecoder->Release();
+    if (pFactory) pFactory->Release();
     CoUninitialize();
 
     // Đồng bộ ngày giờ tạo/sửa đổi tệp tin trên hệ điều hành trùng khớp ảnh gốc

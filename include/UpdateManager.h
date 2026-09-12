@@ -16,7 +16,6 @@ struct ReleaseInfo {
 class UpdateManager {
 public:
     static const std::string CURRENT_VERSION;
-    static const std::string GITHUB_REPO;
     static const std::string API_RELEASES_URL;
 
     // Kiểm tra ngầm trong nền (background thread) khi khởi động

@@ -13,7 +13,6 @@ private:
     SystemCore &sc;
 
     std::string getField(const std::string &line);
-    std::string getLocalIP();
 
     // Native Win32 Registry & Service Helpers (Chỉ giữ hàm thực sự sử dụng)
     static bool readRegDword(HKEY hRoot, const std::string &subKey, const std::string &valueName, DWORD &outVal);

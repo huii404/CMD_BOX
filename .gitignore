@@ -1,6 +1,2 @@
 .vscode/tasks.json
 bin/*
-image_test/*
-!image_test/evaluation_log.md
-!image_test/deep_pro_metrics_report.md
-

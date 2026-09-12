@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -32,7 +33,7 @@ void UtilityTools::autoClickPoint() {
     int times = sc.readInt("Số lần click: ");
     if (times <= 0) return;
     
-    int intervalMs = sc.readInt("Delay giữa các lần (ms) [100]: ");
+    int intervalMs = sc.readInt("Delay các lần (ms) [100]: ");
     if (intervalMs <= 0) intervalMs = 100;
     
     int clickType = sc.readInt("Kiểu click: [1] Trái | [2] Phải | [3] Đúp trái: ");
@@ -41,9 +42,9 @@ void UtilityTools::autoClickPoint() {
     int delaySec = sc.readInt("Thời gian chờ di chuột (giây) [3]: ");
     if (delaySec <= 0) delaySec = 3;
     
-    cout << "\nDi chuột đến vị trí cần click...\n";
+    cout << "\nDi chuột đến vị trí cần click\n";
     for (int i = delaySec; i > 0; i--) { 
-        cout << " " << i << "... "; cout.flush(); 
+        cout << " " << i; cout.flush(); 
         if (sleepWithEmergencyCheck(1000)) {
             cout << "\nĐã hủy.\n";
             return;
@@ -102,12 +103,11 @@ void UtilityTools::autoClickPoint() {
 void UtilityTools::spamText() {
     sc.cls();
     
-    cout << "Nhập text cần gửi: ";
+    cout << "Nhập text cần gửi (nhấn Enter hoặc '0' để hủy): ";
     string content; 
-    getline(cin, content);
-    while (content.empty()) {
-        getline(cin, content);
-    }
+    if (!getline(cin, content)) return;
+    content = SystemCore::trim(content);
+    if (content.empty() || content == "0") return;
     
     int times = sc.readInt("Số lần gửi: ");
     if (times <= 0) return;
@@ -121,9 +121,9 @@ void UtilityTools::spamText() {
     bool shouldClick = (autoFocus == "y" || autoFocus == "Y");
     
     cout << "Phím ngắt: ESC / F6\n"
-         << "Bắt đầu sau 3 giây...\n";
+         << "Bắt đầu sau 3 giây\n";
     for (int i = 3; i > 0; i--) { 
-        cout << " " << i << "... "; cout.flush(); 
+        cout << " " << i; cout.flush(); 
         if (sleepWithEmergencyCheck(1000)) {
             cout << "\nĐã hủy.\n";
             sc.waitEnter();
@@ -151,6 +151,7 @@ void UtilityTools::spamText() {
 
         sc.setClipboard(content); 
         sc.pressCtrlV();
+        Sleep(15);
         sc.pressEnter();
         executed++;
         
@@ -199,9 +200,9 @@ void UtilityTools::autoPasteData() {
     bool shouldClick = (autoFocus == "y" || autoFocus == "Y");
     
     cout << "Phím ngắt: ESC / F6\n"
-         << "Bắt đầu sau 3 giây...\n";
+         << "Bắt đầu sau 3 giây\n";
     for (int i = 3; i > 0; i--) { 
-        cout << " " << i << "... "; cout.flush(); 
+        cout << " " << i; cout.flush(); 
         if (sleepWithEmergencyCheck(1000)) {
             cout << "\nĐã hủy.\n";
             sc.waitEnter();
@@ -229,6 +230,7 @@ void UtilityTools::autoPasteData() {
 
         sc.setClipboard(dataList[i]);
         sc.pressCtrlV();
+        Sleep(15);
         sc.pressEnter();
         executed++;
         
@@ -255,17 +257,10 @@ struct AppItem {
     string fileName;
 };
 
-static string trimStr(const string &s) {
-    auto start = s.find_first_not_of(" \t\r\n");
-    if (start == string::npos) return "";
-    auto end = s.find_last_not_of(" \t\r\n");
-    return s.substr(start, end - start + 1);
-}
-
 static string resolveAppConfigPath() {
-    // 1. Tìm theo đường dẫn thực tế của file thực thi .exe
-    char buffer[MAX_PATH];
-    if (GetModuleFileNameA(NULL, buffer, MAX_PATH) > 0) {
+    // 1. Tìm theo đường dẫn thực tế của file thực thi .exe (hỗ trợ Unicode)
+    wchar_t buffer[MAX_PATH];
+    if (GetModuleFileNameW(NULL, buffer, MAX_PATH) > 0) {
         fs::path exePath(buffer);
         fs::path exeDir = exePath.parent_path();
 
@@ -292,15 +287,15 @@ static vector<AppItem> loadAppsFromTxt(const string &filePath) {
 
     string line;
     while (getline(file, line)) {
-        string t = trimStr(line);
+        string t = SystemCore::trim(line);
         if (t.empty() || t[0] == '#') continue;
 
         stringstream ss(t);
         string name, url, fname;
         if (getline(ss, name, '|') && getline(ss, url, '|') && getline(ss, fname)) {
-            name = trimStr(name);
-            url = trimStr(url);
-            fname = trimStr(fname);
+            name = SystemCore::trim(name);
+            url = SystemCore::trim(url);
+            fname = SystemCore::trim(fname);
             if (!name.empty() && !url.empty() && !fname.empty()) {
                 list.push_back({name, url, fname});
             }
@@ -363,9 +358,9 @@ void UtilityTools::downloadManager() {
 
             int successCount = 0;
             for (size_t i = 0; i < apps.size(); ++i) {
-                cout << "[" << (i + 1) << "/" << apps.size() << "] Đang tải: " << apps[i].name << "...\n";
+                cout << "[" << (i + 1) << "/" << apps.size() << "] Đang tải: " << apps[i].name << "\n";
                 string targetPath = downloadDir + "\\" + apps[i].fileName;
-                string cmd = "curl -# -L \"" + apps[i].url + "\" -o \"" + targetPath + "\"";
+                string cmd = "curl -# -f -L \"" + apps[i].url + "\" -o \"" + targetPath + "\"";
                 int ret = system(cmd.c_str());
 
                 if (ret == 0 && fs::exists(targetPath)) {
@@ -373,6 +368,9 @@ void UtilityTools::downloadManager() {
                     successCount++;
                 } else {
                     cout << "  [!] Thất bại: " << apps[i].name << "\n";
+                    if (fs::exists(targetPath)) {
+                        try { fs::remove(targetPath); } catch (...) {}
+                    }
                 }
             }
 
@@ -399,6 +397,15 @@ void UtilityTools::downloadManager() {
             }
         }
 
+        // Khử trùng lặp lựa chọn giữ nguyên thứ tự
+        vector<int> uniqueIndices;
+        for (int idx : selectedIndices) {
+            if (find(uniqueIndices.begin(), uniqueIndices.end(), idx) == uniqueIndices.end()) {
+                uniqueIndices.push_back(idx);
+            }
+        }
+        selectedIndices = std::move(uniqueIndices);
+
         if (selectedIndices.empty()) {
             cout << "\n[!] Lựa chọn không hợp lệ!\n";
             Sleep(500);
@@ -409,10 +416,10 @@ void UtilityTools::downloadManager() {
         if (selectedIndices.size() == 1) {
             const auto &app = apps[selectedIndices[0]];
             sc.cls();
-            cout << "[-] Đang tải " << app.name << " (" << app.fileName << ")...\n\n";
+            cout << "[-] Đang tải " << app.name << " (" << app.fileName << ")\n\n";
 
             string targetPath = downloadDir + "\\" + app.fileName;
-            string cmd = "curl -# -L \"" + app.url + "\" -o \"" + targetPath + "\"";
+            string cmd = "curl -# -f -L \"" + app.url + "\" -o \"" + targetPath + "\"";
             int ret = system(cmd.c_str());
 
             if (ret == 0 && fs::exists(targetPath)) {
@@ -425,6 +432,9 @@ void UtilityTools::downloadManager() {
                 }
             } else {
                 cout << "\n[!] Tải thất bại! Kiểm tra kết nối mạng.\n";
+                if (fs::exists(targetPath)) {
+                    try { fs::remove(targetPath); } catch (...) {}
+                }
                 sc.waitEnter();
             }
         } else {
@@ -435,9 +445,9 @@ void UtilityTools::downloadManager() {
             int successCount = 0;
             for (size_t i = 0; i < selectedIndices.size(); ++i) {
                 const auto &app = apps[selectedIndices[i]];
-                cout << "[" << (i + 1) << "/" << selectedIndices.size() << "] Đang tải: " << app.name << "...\n";
+                cout << "[" << (i + 1) << "/" << selectedIndices.size() << "] Đang tải: " << app.name << "\n";
                 string targetPath = downloadDir + "\\" + app.fileName;
-                string cmd = "curl -# -L \"" + app.url + "\" -o \"" + targetPath + "\"";
+                string cmd = "curl -# -f -L \"" + app.url + "\" -o \"" + targetPath + "\"";
                 int ret = system(cmd.c_str());
 
                 if (ret == 0 && fs::exists(targetPath)) {
@@ -445,6 +455,9 @@ void UtilityTools::downloadManager() {
                     successCount++;
                 } else {
                     cout << "  [!] Thất bại: " << app.name << "\n";
+                    if (fs::exists(targetPath)) {
+                        try { fs::remove(targetPath); } catch (...) {}
+                    }
                 }
             }
 
@@ -518,13 +531,30 @@ struct AdvancedBloatStatus {
     bool teamsRunning = false;
 };
 
+// Thực thi an toàn đoạn mã PowerShell quản trị thông qua file .ps1 tạm thời
+static bool runPowerShellScriptAsAdmin(SystemCore &sc, const string &psScript) {
+    char tempPath[MAX_PATH];
+    if (GetTempPathA(MAX_PATH, tempPath) == 0) return false;
+    string ps1Path = string(tempPath) + "cmd_bloat_task_" + to_string(GetCurrentProcessId()) + ".ps1";
+    
+    ofstream ps1File(ps1Path);
+    if (!ps1File.is_open()) return false;
+    ps1File << psScript;
+    ps1File.close();
+
+    string cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + ps1Path + "\"";
+    bool ok = sc.runAdmin(cmd, true);
+    try { fs::remove(ps1Path); } catch (...) {}
+    return ok;
+}
+
 // Dò quét thực tế trên máy tính
 static void scanBloatware(vector<BloatAppInfo> &outSecondary, AdvancedBloatStatus &outAdv) {
     char tempPath[MAX_PATH];
     GetTempPathA(MAX_PATH, tempPath);
-    string scanFile = string(tempPath) + "cmd_installed_apps.txt";
-    string scanCmd = "powershell -NoProfile -Command \"Get-AppxPackage | Select-Object -ExpandProperty Name | Out-File -FilePath '" + scanFile + "' -Encoding ascii\"";
-    system(scanCmd.c_str());
+    string scanFile = string(tempPath) + "cmd_installed_apps_" + to_string(GetCurrentProcessId()) + ".txt";
+    string scanCmd = "powershell.exe -NoProfile -Command \"Get-AppxPackage | Select-Object -ExpandProperty Name | Out-File -FilePath '" + scanFile + "' -Encoding ascii\"";
+    SystemCore::runRawCommand(scanCmd);
 
     string installed = "";
     if (fs::exists(scanFile)) {
@@ -564,7 +594,7 @@ static void cleanSecondaryBloat(SystemCore &sc, const vector<BloatAppInfo> &list
         cout << " [✓] Không có ứng dụng rác thứ cấp nào cần gỡ.\n";
         return;
     }
-    cout << " [-] Đang gỡ bỏ " << list.size() << " ứng dụng rác thứ cấp...\n";
+    cout << " [-] Đang gỡ bỏ " << list.size() << " ứng dụng rác thứ cấp\n";
     string psScript = "$apps = @(\n";
     for (size_t i = 0; i < list.size(); ++i) {
         psScript += "    '" + list[i].id + "'";
@@ -577,8 +607,7 @@ static void cleanSecondaryBloat(SystemCore &sc, const vector<BloatAppInfo> &list
     psScript += "    Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like ('*' + $pkg + '*') -or $_.PackageName -like ('*' + $pkg + '*') } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue;\n";
     psScript += "}\n";
 
-    string cmd = "powershell -NoProfile -Command \"" + psScript + "\"";
-    sc.runAdmin(cmd, true);
+    runPowerShellScriptAsAdmin(sc, psScript);
     cout << " [✓] Đã dọn sạch " << list.size() << " ứng dụng rác thứ cấp thành công!\n";
 }
 
@@ -589,7 +618,7 @@ static void cleanAdvancedBloat(SystemCore &sc, const AdvancedBloatStatus &adv) {
         return;
     }
 
-    cout << " [-] Đang xử lý gỡ bỏ các ứng dụng nâng cao được phát hiện...\n";
+    cout << " [-] Đang xử lý gỡ bỏ các ứng dụng nâng cao được phát hiện\n";
     string psScript = "";
 
     // 1. Kiểm tra & Gỡ Microsoft OneDrive nếu có
@@ -636,8 +665,7 @@ static void cleanAdvancedBloat(SystemCore &sc, const AdvancedBloatStatus &adv) {
     }
 
     if (!psScript.empty()) {
-        string cmd = "powershell -NoProfile -Command \"" + psScript + "\"";
-        sc.runAdmin(cmd, true);
+        runPowerShellScriptAsAdmin(sc, psScript);
     }
 
     if (adv.hasOneDrive) cout << " [✓] Đã gỡ triệt để Microsoft OneDrive (tiến trình, thư mục C:, icon Explorer).\n";
@@ -725,6 +753,7 @@ static string renderBar(double percent, int width = 20) {
 }
 
 static string formatNumber(long long n) {
+    if (n < 0) return "-" + formatNumber(-n);
     string s = to_string(n);
     int insertPosition = (int)s.length() - 3;
     while (insertPosition > 0) {
@@ -739,13 +768,14 @@ void UtilityTools::batteryHealthDiagnostic() {
     while (true) {
         sc.cls();
         cout << "THÔNG TIN PIN LAPTOP\n"
-             << "Đang đọc dữ liệu ACPI...\n";
+             << "Đang đọc dữ liệu ACPI\n";
 
         SYSTEM_POWER_STATUS sps;
         bool hasSps = GetSystemPowerStatus(&sps);
 
-        // Kiểm tra thiết bị có pin không
-        if (hasSps && (sps.BatteryFlag == 128 || sps.BatteryFlag == 255) && sps.BatteryLifePercent == 255) {
+        // Kiểm tra thiết bị có pin không (đồng bộ với SystemCore)
+        bool hasBattery = hasSps && !(sps.BatteryFlag & 128) && (sps.BatteryLifePercent != 255);
+        if (!hasBattery) {
             sc.cls();
             cout << "THÔNG TIN PIN LAPTOP\n\n"
                  << " [!] Máy tính bàn (PC) hoặc không có Pin.\n"
@@ -757,9 +787,9 @@ void UtilityTools::batteryHealthDiagnostic() {
         // Tạo file XML báo cáo pin tạm thời
         char tempPath[MAX_PATH];
         GetTempPathA(MAX_PATH, tempPath);
-        string xmlPath = string(tempPath) + "cmd_battery_report.xml";
-        string cmd = "powercfg /batteryreport /xml /output \"" + xmlPath + "\" >nul 2>&1";
-        system(cmd.c_str());
+        string xmlPath = string(tempPath) + "cmd_battery_report_" + to_string(GetCurrentProcessId()) + ".xml";
+        string cmd = "powercfg.exe /batteryreport /xml /output \"" + xmlPath + "\"";
+        SystemCore::runRawCommand(cmd);
 
         string manufacturer = "N/A", deviceName = "N/A", serial = "N/A", chemistry = "Li-ion";
         string sysMfg = "N/A", sysModel = "N/A", biosVer = "N/A";
@@ -878,12 +908,12 @@ void UtilityTools::batteryHealthDiagnostic() {
         if (opt == "0") break;
 
         if (opt == "1") {
-            cout << "\nĐang xuất báo cáo HTML...\n";
+            cout << "\nĐang xuất báo cáo HTML\n";
             char tempHtml[MAX_PATH];
             GetTempPathA(MAX_PATH, tempHtml);
             string htmlPath = string(tempHtml) + "battery_report.html";
-            string genCmd = "powercfg /batteryreport /output \"" + htmlPath + "\" >nul 2>&1";
-            system(genCmd.c_str());
+            string genCmd = "powercfg.exe /batteryreport /output \"" + htmlPath + "\"";
+            SystemCore::runRawCommand(genCmd);
 
             if (fs::exists(htmlPath)) {
                 ShellExecuteA(NULL, "open", htmlPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
@@ -897,7 +927,7 @@ void UtilityTools::batteryHealthDiagnostic() {
 
         if (opt == "2") {
             ShellExecuteA(NULL, "open", "ms-settings:batterysaver", NULL, NULL, SW_SHOWNORMAL);
-            cout << "\nĐã mở cài đặt Pin...\n";
+            cout << "\nĐã mở cài đặt Pin\n";
             Sleep(800);
             continue;
         }

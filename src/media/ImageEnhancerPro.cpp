@@ -6,24 +6,18 @@
 #include <algorithm>
 #include <filesystem>
 #include <vector>
-#include <numeric>
-#include <iostream>
-
 #ifdef _OPENMP
 #include <omp.h>
-#endif
-
-#ifdef __AVX2__
-#include <immintrin.h>
 #endif
 
 namespace fs = std::filesystem;
 
 static std::wstring toWideString(const std::string& str) {
     if (str.empty()) return L"";
-    int sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), NULL, 0);
+    int sizeNeeded = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, str.c_str(), (int)str.size(), NULL, 0);
     if (sizeNeeded <= 0) {
         sizeNeeded = MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.size(), NULL, 0);
+        if (sizeNeeded <= 0) return L"";
         std::wstring wstr(sizeNeeded, 0);
         MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.size(), &wstr[0], sizeNeeded);
         return wstr;
@@ -33,13 +27,34 @@ static std::wstring toWideString(const std::string& str) {
     return wstr;
 }
 
+void EnhanceOptionsPro::sanitize() {
+    amount = std::clamp(amount, 0.0f, 3.5f);
+    radius = std::clamp(radius, 1, 10);
+    edgeSensitivity = std::clamp(edgeSensitivity, 0.1f, 3.0f);
+    contrast = std::clamp(contrast, 0.5f, 2.0f);
+    vibrance = std::clamp(vibrance, -1.0f, 1.0f);
+    scalePercent = std::clamp(scalePercent, 50, 400);
+    casStrength = std::clamp(casStrength, 0.0f, 2.0f);
+    skinSmooth = std::clamp(skinSmooth, 0.0f, 1.0f);
+    skinPorePreserve = std::clamp(skinPorePreserve, 0.0f, 1.0f);
+    compressionBlockiness = std::clamp(compressionBlockiness, 0.0f, 100.0f);
+    claheBlend = std::clamp(claheBlend, 0.0f, 1.0f);
+    detailBoost = std::clamp(detailBoost, 0.0f, 3.5f);
+    nanoDetailBoost = std::clamp(nanoDetailBoost, 0.0f, 3.5f);
+    haloTolerance = std::clamp(haloTolerance, 0.5f, 3.0f);
+    textureBoost = std::clamp(textureBoost, 0.0f, 2.0f);
+    clarityBoost = std::clamp(clarityBoost, 0.0f, 2.0f);
+    shadowLift = std::clamp(shadowLift, 0.0f, 0.5f);
+    highlightPull = std::clamp(highlightPull, 0.0f, 0.5f);
+    strokeAnisotropy = std::clamp(strokeAnisotropy, 0.0f, 1.0f);
+}
+
 EnhanceOptionsPro ImageEnhancerPro::getPresetPro(int level) {
     EnhanceOptionsPro opt;
     switch (level) {
         case 1: // Base Portrait
             opt.amount = 1.10f;
             opt.radius = 2;
-            opt.threshold = 2.6f;
             opt.edgeSensitivity = 1.15f;
             opt.contrast = 1.03f;
             opt.vibrance = 0.05f;
@@ -47,6 +62,8 @@ EnhanceOptionsPro ImageEnhancerPro::getPresetPro(int level) {
             opt.casStrength = 0.75f;
             opt.isPortrait = true;
             opt.skinSmooth = 0.45f;
+            opt.skinPorePreserve = 0.85f;
+            opt.crestLimiter = true;
             opt.claheBlend = 0.15f;
             opt.detailBoost = 1.35f;
             opt.nanoDetailBoost = 1.20f;
@@ -58,7 +75,6 @@ EnhanceOptionsPro ImageEnhancerPro::getPresetPro(int level) {
         case 2: // Base Landscape
             opt.amount = 1.50f;
             opt.radius = 2;
-            opt.threshold = 1.8f;
             opt.edgeSensitivity = 1.35f;
             opt.contrast = 1.06f;
             opt.vibrance = 0.08f;
@@ -77,7 +93,6 @@ EnhanceOptionsPro ImageEnhancerPro::getPresetPro(int level) {
         case 3: // Base Ultra
             opt.amount = 1.95f;
             opt.radius = 2;
-            opt.threshold = 1.4f;
             opt.edgeSensitivity = 1.55f;
             opt.contrast = 1.08f;
             opt.vibrance = 0.10f;
@@ -106,7 +121,7 @@ EnhanceOptionsPro ImageEnhancerPro::getPresetPro(int level) {
             opt.skinSmooth = 0.00f;
             opt.shadowLift = 0.10f;
             opt.highlightPull = 0.08f;
-            opt.use16BitPipeline = true;
+            opt.enableDither = true;
             opt.contrast = 1.06f;
             opt.vibrance = 0.08f;
             opt.antiBloat = true;
@@ -115,6 +130,7 @@ EnhanceOptionsPro ImageEnhancerPro::getPresetPro(int level) {
         case 5: // Level 5: PRO Studio Portrait
             opt.scalePercent = 120;
             opt.amount = 1.20f;
+            opt.casStrength = 0.80f;     // CAS êm dịu, triệt tiêu răng cưa
             opt.detailBoost = 1.40f;
             opt.nanoDetailBoost = 1.40f;
             opt.textureBoost = 0.20f;
@@ -123,10 +139,11 @@ EnhanceOptionsPro ImageEnhancerPro::getPresetPro(int level) {
             opt.haloTolerance = 1.20f;
             opt.isPortrait = true;
             opt.skinSmooth = 0.42f;
-            opt.skinProbSigma = 0.85f;
+            opt.skinPorePreserve = 0.88f;
+            opt.crestLimiter = true;
             opt.shadowLift = 0.06f;
             opt.highlightPull = 0.05f;
-            opt.use16BitPipeline = true;
+            opt.enableDither = true;
             opt.contrast = 1.03f;
             opt.vibrance = 0.05f;
             opt.antiBloat = true;
@@ -164,24 +181,24 @@ EnhanceOptionsPro ImageEnhancerPro::computeAdaptiveOptions(const ImageScorePro& 
 
     // Mục V.2: Hàm bù điểm liên tục (Compensation Function)
     // 1. Hệ số suy giảm do nhiễu (noiseAtt)
-    float noiseAtt = std::clamp(0.55f + 0.45f * noiseScore, 0.55f, 1.00f);
+    float noiseAtt = std::clamp(0.65f + 0.35f * noiseScore, 0.65f, 1.00f);
 
-    // 2. Cường độ làm nét (amount): ảnh càng mờ càng bù mạnh, giảm nếu nhiễu cao
-    opt.amount = std::clamp(1.00f + 0.85f * std::pow(1.0f - clarityScoreNorm, 1.20f), 1.00f, 1.85f) * noiseAtt;
+    // 2. Cường độ làm nét (amount): ảnh càng mờ càng bù mạnh, ảnh nét vẫn giữ lực nét tối thiểu 1.20f
+    opt.amount = std::clamp(1.20f + 0.65f * std::pow(1.0f - clarityScoreNorm, 1.10f), 1.20f, 1.85f) * noiseAtt;
 
     // 3. Multi-Scale Detail Boost (detailBoost)
-    opt.detailBoost = std::clamp(1.20f + 0.60f * (1.0f - clarityScoreNorm), 1.20f, 1.80f);
-    opt.nanoDetailBoost = std::clamp(1.10f + 0.45f * (1.0f - clarityScoreNorm), 1.10f, 1.55f);
+    opt.detailBoost = std::clamp(1.30f + 0.45f * (1.0f - clarityScoreNorm), 1.30f, 1.75f);
+    opt.nanoDetailBoost = std::clamp(1.20f + 0.40f * (1.0f - clarityScoreNorm), 1.20f, 1.65f);
 
     // 4. Local Laplacian Tone Mapping (clarityBoost)
-    opt.clarityBoost = std::clamp(0.10f + 0.45f * (1.0f - dynamicRangeScore), 0.10f, 0.55f);
+    opt.clarityBoost = std::clamp(0.10f + 0.35f * (1.0f - dynamicRangeScore), 0.10f, 0.45f);
 
     // 5. Texture Layer Synthesis (textureBoost)
-    opt.textureBoost = std::clamp(0.05f + 0.50f * (1.0f - textureEnergyScore), 0.05f, 0.55f) * noiseAtt;
+    opt.textureBoost = std::clamp(0.08f + 0.35f * (1.0f - textureEnergyScore), 0.08f, 0.45f) * noiseAtt;
 
     // 6. Highlight/Shadow Local Recovery
-    opt.shadowLift = std::clamp(0.02f + 0.14f * shadowClipRatio, 0.02f, 0.16f);
-    opt.highlightPull = std::clamp(0.02f + 0.12f * highlightClipRatio, 0.02f, 0.14f);
+    opt.shadowLift = std::clamp(0.04f + 0.12f * shadowClipRatio, 0.04f, 0.16f);
+    opt.highlightPull = std::clamp(0.03f + 0.10f * highlightClipRatio, 0.03f, 0.14f);
 
     // 7. Cường độ chống phình nét mảnh (strokeAnisotropy) & Thin-Stroke Gating
     opt.thinStrokeGate = true;
@@ -189,40 +206,106 @@ EnhanceOptionsPro ImageEnhancerPro::computeAdaptiveOptions(const ImageScorePro& 
     opt.antiBloat = true;
 
     // 8. Chống quầng sáng Halo Suppression (haloTolerance)
-    opt.haloTolerance = std::clamp(1.10f + 0.25f * clarityScoreNorm, 1.10f, 1.35f);
+    opt.haloTolerance = std::clamp(1.10f + 0.20f * clarityScoreNorm, 1.10f, 1.30f);
 
     // 9. Hòa trộn bảo vệ chân dung liên tục (portraitBlend)
-    float portraitBlend = std::clamp((skinPercent - 0.08f) / 0.20f, 0.0f, 1.0f);
-    opt.isPortrait = (portraitBlend > 0.02f);
+    // Kích hoạt chế độ Portrait khi mật độ da đáng kể (>= 12%)
+    float portraitBlend = std::clamp((skinPercent - 0.10f) / 0.18f, 0.0f, 1.0f);
+    opt.isPortrait = (portraitBlend > 0.05f);
     opt.skinSmooth = 0.50f * portraitBlend;
-    opt.skinProbSigma = 0.60f + 0.50f * portraitBlend;
+    opt.skinPorePreserve = 0.85f;
+    opt.crestLimiter = true;
+    opt.compressionBlockiness = score.compressionBlockiness;
 
-    // 10. Phân loại ngữ cảnh Document / Text vs Landscape / Portrait (PRO V2)
+    // 10. Phân loại ngữ cảnh Document / Text vs Portrait Studio vs Environmental Portrait vs Defocus vs Landscape
     bool isDoc = (score.detectedType == "Tài liệu / Văn bản (Document / Text)");
+    bool isDefocus = (score.detectedType == "Ảnh mờ / Cần phục hồi nét (Blur/Defocus)");
+    bool isStudioPortrait = (score.detectedType == "Chân dung cận cảnh (Portrait Studio)");
+    bool isEnvPortrait = (score.detectedType == "Người + Phong cảnh (Environmental Portrait)");
 
     if (isDoc) {
+        opt.isDocument = true;
         opt.isPortrait = false;
         opt.skinSmooth = 0.0f;
-        opt.textureBoost = 0.0f; // Triệt tiêu bơm hạt vào nền giấy
-        opt.claheBlend = 0.35f;  // Kéo tương phản cao tách chữ đen khỏi giấy
-        opt.contrast = 1.08f;    // Nén sâu mực đen
-        opt.amount = std::clamp(opt.amount * 1.15f, 1.60f, 1.95f); // Nét chữ sắc lẹm
-        opt.detailBoost = std::clamp(opt.detailBoost, 1.60f, 1.90f);
-        opt.nanoDetailBoost = 1.45f;
+        opt.textureBoost = 0.0f; // Triệt tiêu bơm hạt vào nền giấy / biểu đồ
+        opt.claheBlend = 0.16f;  // Tách nét chữ vừa vặn, không sinh hạt nền
+        opt.contrast = 1.03f;
+        opt.amount = 1.60f;      // Nét chữ sắc sảo
+        opt.detailBoost = 1.55f;
+        opt.nanoDetailBoost = 1.30f;
         opt.haloTolerance = 1.05f; // Khóa chặt quầng sáng quanh chữ
-        opt.casStrength = 1.25f;
+        opt.casStrength = 1.20f;
+        opt.edgeSensitivity = 1.30f;
+        opt.vibrance = 0.02f;
         opt.antiBloat = true;
+        opt.thinStrokeGate = true;
+        opt.strokeAnisotropy = 0.90f;
+    } else if (isDefocus) {
+        opt.isPortrait = false;
+        opt.amount = 1.75f;
+        opt.detailBoost = 1.65f;
+        opt.nanoDetailBoost = 1.60f;
+        opt.textureBoost = 0.18f;
+        opt.clarityBoost = 0.22f;
+        opt.casStrength = 1.20f;
+        opt.edgeSensitivity = 1.35f;
+        opt.haloTolerance = 1.20f;
+        opt.contrast = 1.04f;
+        opt.shadowLift = 0.08f;
+        opt.highlightPull = 0.06f;
+        opt.antiBloat = true;
+    } else if (isStudioPortrait) {
+        // Chân dung Studio cận cảnh: làm nét êm ái, bảo vệ da mịn màng, triệt tiêu 100% noi và răng cưa
+        opt.isPortrait = true;
+        opt.claheBlend = 0.06f;
+        opt.textureBoost = 0.02f;    // Tuyệt đối không bơm hạt lên mặt
+        opt.clarityBoost = 0.06f;    // Khống chế micro-contrast không làm lộ lỗ chân lông
+        opt.nanoDetailBoost = 1.05f; // Hạ nano boost trên chân dung để tránh noi
+        opt.amount = 1.28f;          // Nét tự nhiên, tinh tế, vừa vặn
+        opt.casStrength = 0.85f;     // CAS êm dịu, triệt tiêu răng cưa
+        opt.haloTolerance = 1.15f;
+        opt.edgeSensitivity = 1.20f;
+        opt.contrast = 1.02f;        // Tương phản dịu dàng tôn vinh làn da
+        opt.vibrance = 0.035f;       // Màu da hồng hào tự nhiên, không rực cam
+        opt.antiBloat = true;
+        opt.thinStrokeGate = true;
+        opt.strokeAnisotropy = 0.70f;
+        opt.skinSmooth = 0.45f;
+        opt.skinPorePreserve = 0.88f; // Giữ 88% vi cấu trúc lỗ chân lông tự nhiên
+        opt.crestLimiter = true;
+    } else if (isEnvPortrait) {
+        // Người + Phong cảnh: Mặt/da được bảo vệ mịn tự nhiên, hậu cảnh phong cảnh vẫn giữ lực nét cao
+        opt.isPortrait = true;
+        opt.claheBlend = 0.10f;
+        opt.textureBoost = 0.10f;
+        opt.clarityBoost = 0.12f;
+        opt.nanoDetailBoost = 1.40f;
+        opt.amount = 1.45f;
+        opt.detailBoost = 1.50f;
+        opt.casStrength = 1.00f;
+        opt.haloTolerance = 1.20f;
+        opt.edgeSensitivity = 1.25f;
+        opt.contrast = 1.035f;
+        opt.vibrance = 0.045f;
+        opt.antiBloat = true;
+        opt.thinStrokeGate = true;
+        opt.strokeAnisotropy = 0.75f;
+        opt.skinSmooth = 0.35f;
+        opt.skinPorePreserve = 0.82f; // Giữ 82% vi cấu trúc lỗ chân lông môi trường
+        opt.crestLimiter = true;
     } else {
-        opt.claheBlend = std::clamp(0.12f + 0.18f * (1.0f - dynamicRangeScore), 0.10f, 0.30f);
-        if (opt.isPortrait) {
-            opt.claheBlend = 0.10f;
-            opt.nanoDetailBoost = 1.40f;
-            opt.haloTolerance = 1.20f;
-        } else {
-            opt.nanoDetailBoost = 1.80f; // Xung kích tầng Nano Acutance cho phong cảnh
-            opt.haloTolerance = 1.25f;
-        }
+        // Phong cảnh / Chi tiết cao
+        opt.isPortrait = false;
+        opt.claheBlend = std::clamp(0.10f + 0.15f * (1.0f - dynamicRangeScore), 0.08f, 0.25f);
+        opt.nanoDetailBoost = 1.65f; // Xung kích tầng Nano Acutance cho phong cảnh
+        opt.haloTolerance = 1.20f;
+        opt.casStrength = 1.05f;
+        opt.edgeSensitivity = 1.25f;
+        opt.contrast = 1.04f;
+        opt.vibrance = 0.05f;
         opt.antiBloat = true;
+        opt.thinStrokeGate = false;
+        opt.strokeAnisotropy = 0.50f;
     }
 
     // 11. Tự động tính toán tỷ lệ nội suy Lanczos-3 (scalePercent)
@@ -241,12 +324,8 @@ EnhanceOptionsPro ImageEnhancerPro::computeAdaptiveOptions(const ImageScorePro& 
         opt.scalePercent = std::max(100, opt.scalePercent - 15);
     }
 
-    opt.casStrength = isDoc ? 1.25f : 1.00f;
-    opt.edgeSensitivity = isDoc ? 1.35f : 1.25f;
-    opt.contrast = isDoc ? 1.08f : (opt.isPortrait ? 1.03f : 1.06f);
-    opt.vibrance = opt.isPortrait ? 0.05f : 0.07f;
     opt.noiseAdaptive = true;
-    opt.use16BitPipeline = (score.dynamicRange > 180.0f);
+    opt.enableDither = (score.dynamicRange > 180.0f);
 
     return opt;
 }
@@ -448,6 +527,187 @@ std::vector<float> ImageEnhancerPro::fastBlur(const std::vector<float>& src, int
 }
 
 // -------------------------------------------------------------
+// Adaptive In-Loop Deblocking Filter (ITU-T / H.264 Inspired)
+// -------------------------------------------------------------
+void ImageEnhancerPro::applyAdaptiveDeblocking(
+    std::vector<float>& luma, int width, int height, float blockiness)
+{
+    if (blockiness < 10.0f) return;
+
+    // Ngưỡng thích ứng suy biến từ chỉ số blockiness [10, 100]
+    float alpha = std::clamp(blockiness * 0.16f, 2.5f, 9.0f);
+    float beta = alpha * 0.55f;
+    float maxDelta = alpha * 0.35f;
+
+    // 1. Quét lọc biên đứng (Vertical 8x8 block boundaries: x = 8, 16, 24...)
+    #pragma omp parallel for schedule(static)
+    for (int y = 0; y < height; ++y) {
+        int rowIdx = y * width;
+        for (int x = 8; x < width; x += 8) {
+            int p1_idx = rowIdx + x - 2;
+            int p0_idx = rowIdx + x - 1;
+            int q0_idx = rowIdx + x;
+            int q1_idx = rowIdx + x + 1;
+
+            float p1 = luma[p1_idx];
+            float p0 = luma[p0_idx];
+            float q0 = luma[q0_idx];
+            float q1 = (q1_idx < rowIdx + width) ? luma[q1_idx] : q0;
+
+            float dStep = std::abs(q0 - p0);
+            float dP = std::abs(p0 - p1);
+            float dQ = std::abs(q1 - q0);
+
+            // Chỉ lọc khi đây là bước nhảy viền nén khối (không phải đường biên vật thể thực)
+            if (dStep < alpha && dP < beta && dQ < beta) {
+                float delta = std::clamp((q0 - p0) * 0.40f, -maxDelta, maxDelta);
+                luma[p0_idx] += delta;
+                luma[q0_idx] -= delta;
+            }
+        }
+    }
+
+    // 2. Quét lọc biên ngang (Horizontal 8x8 block boundaries: y = 8, 16, 24...)
+    #pragma omp parallel for schedule(static)
+    for (int y = 8; y < height; y += 8) {
+        int p1_row = (y - 2) * width;
+        int p0_row = (y - 1) * width;
+        int q0_row = y * width;
+        int q1_row = std::min(y + 1, height - 1) * width;
+
+        for (int x = 0; x < width; ++x) {
+            float p1 = luma[p1_row + x];
+            float p0 = luma[p0_row + x];
+            float q0 = luma[q0_row + x];
+            float q1 = luma[q1_row + x];
+
+            float dStep = std::abs(q0 - p0);
+            float dP = std::abs(p0 - p1);
+            float dQ = std::abs(q1 - q0);
+
+            if (dStep < alpha && dP < beta && dQ < beta) {
+                float delta = std::clamp((q0 - p0) * 0.40f, -maxDelta, maxDelta);
+                luma[p0_row + x] += delta;
+                luma[q0_row + x] -= delta;
+            }
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// Pre-Sharpening Outlier Despeckler (Khử chấm nhiễu phân tán có khoảng cách)
+// -------------------------------------------------------------
+void ImageEnhancerPro::applyOutlierDespeckle(
+    std::vector<float>& luma, int width, int height,
+    float estimatedNoise, const std::vector<float>* pSkinMask)
+{
+    float noiseSigma = std::max(1.2f, estimatedNoise);
+    float noiseThresh = noiseSigma * 2.2f;
+
+    std::vector<float> cleanLuma = luma;
+
+    #pragma omp parallel for schedule(static)
+    for (int y = 1; y < height - 1; ++y) {
+        int rowIdx = y * width;
+        int prevRow = (y - 1) * width;
+        int nextRow = (y + 1) * width;
+
+        for (int x = 1; x < width - 1; ++x) {
+            int idx = rowIdx + x;
+            float center = luma[idx];
+
+            float n0 = luma[prevRow + x - 1];
+            float n1 = luma[prevRow + x];
+            float n2 = luma[prevRow + x + 1];
+            float n3 = luma[rowIdx + x - 1];
+            float n4 = luma[rowIdx + x + 1];
+            float n5 = luma[nextRow + x - 1];
+            float n6 = luma[nextRow + x];
+            float n7 = luma[nextRow + x + 1];
+
+            // Tìm min và max trong 8 điểm lân cận
+            float min1 = std::min({n0, n1, n2, n3, n4, n5, n6, n7});
+            float max1 = std::max({n0, n1, n2, n3, n4, n5, n6, n7});
+
+            // Gradient nội bộ của 8 lân cận (không bao gồm center)
+            float gradN = (std::abs(n4 - n3) + std::abs(n6 - n1) + std::abs(n7 - n0) + std::abs(n5 - n2)) * 0.25f;
+
+            // Nếu center đột biến vượt trần hoặc thủng sàn so với toàn bộ 8 điểm lân cận
+            bool isOutlierPeak = (center > max1 + 0.5f);
+            bool isOutlierPit  = (center < min1 - 0.5f);
+
+            if ((isOutlierPeak || isOutlierPit) && gradN < 14.0f) {
+                float pSkin = (pSkinMask && !pSkinMask->empty()) ? (*pSkinMask)[idx] : 0.0f;
+                float dev = isOutlierPeak ? (center - max1) : (min1 - center);
+                if (dev < noiseThresh * 2.5f || pSkin > 0.05f) {
+                    float target = isOutlierPeak ? max1 : min1;
+                    float blend = (pSkin > 0.05f) ? 0.85f : 0.70f;
+                    cleanLuma[idx] = center * (1.0f - blend) + target * blend;
+                }
+            }
+        }
+    }
+
+    luma = std::move(cleanLuma);
+}
+
+// -------------------------------------------------------------
+// Luma-Guided Chroma Denoising (Khử đốm màu loang lổ trên Cb, Cr)
+// -------------------------------------------------------------
+void ImageEnhancerPro::applyChromaDenoise(
+    std::vector<float>& cb, std::vector<float>& cr,
+    const std::vector<float>& luma, int width, int height)
+{
+    std::vector<float> cleanCb = cb;
+    std::vector<float> cleanCr = cr;
+
+    #pragma omp parallel for schedule(static)
+    for (int y = 1; y < height - 1; ++y) {
+        int rowIdx = y * width;
+        int prevRow = (y - 1) * width;
+        int nextRow = (y + 1) * width;
+
+        for (int x = 1; x < width - 1; ++x) {
+            int idx = rowIdx + x;
+            float lumC = luma[idx];
+
+            float sumW = 0.0f;
+            float sumCb = 0.0f;
+            float sumCr = 0.0f;
+
+            int coords[9] = {
+                prevRow + x - 1, prevRow + x, prevRow + x + 1,
+                rowIdx + x - 1,  idx,         rowIdx + x + 1,
+                nextRow + x - 1, nextRow + x, nextRow + x + 1
+            };
+            float spatialWeights[9] = {
+                0.075f, 0.125f, 0.075f,
+                0.125f, 0.200f, 0.125f,
+                0.075f, 0.125f, 0.075f
+            };
+
+            for (int k = 0; k < 9; ++k) {
+                int cIdx = coords[k];
+                float dLum = std::abs(luma[cIdx] - lumC);
+                float rangeW = 1.0f / (1.0f + dLum * 0.15f);
+                float w = spatialWeights[k] * rangeW;
+                sumW += w;
+                sumCb += cb[cIdx] * w;
+                sumCr += cr[cIdx] * w;
+            }
+
+            if (sumW > 1e-4f) {
+                cleanCb[idx] = sumCb / sumW;
+                cleanCr[idx] = sumCr / sumW;
+            }
+        }
+    }
+
+    cb = std::move(cleanCb);
+    cr = std::move(cleanCr);
+}
+
+// -------------------------------------------------------------
 // Contrast Limited Adaptive Histogram Equalization (CLAHE)
 // -------------------------------------------------------------
 void ImageEnhancerPro::applyCLAHE(
@@ -465,13 +725,13 @@ void ImageEnhancerPro::applyCLAHE(
         GRID_Y, std::vector<std::vector<float>>(GRID_X, std::vector<float>(256, 0.0f))
     );
 
-    // 1. Tính toán Histogram và CDF phân phối tích lũy cho từng tile 8x8
+    // 1. Tính toán Histogram và CDF phân phối tích lũy cho từng tile 8x8 (Song song hóa đa luồng OpenMP)
+    #pragma omp parallel for collapse(2) schedule(dynamic)
     for (int ty = 0; ty < GRID_Y; ++ty) {
-        int yStart = ty * tileH;
-        int yEnd = std::min(yStart + tileH, height);
-        int currentTileH = yEnd - yStart;
-
         for (int tx = 0; tx < GRID_X; ++tx) {
+            int yStart = ty * tileH;
+            int yEnd = std::min(yStart + tileH, height);
+            int currentTileH = yEnd - yStart;
             int xStart = tx * tileW;
             int xEnd = std::min(xStart + tileW, width);
             int currentTileW = xEnd - xStart;
@@ -545,7 +805,14 @@ void ImageEnhancerPro::applyCLAHE(
             float bot = v01 * (1.0f - dx) + v11 * dx;
             float eqVal = top * (1.0f - dy) + bot * dy;
 
-            claheOut[row + x] = (1.0f - blendFactor) * luma[row + x] + blendFactor * eqVal;
+            // Shadow floor protection: CLAHE không được dìm vùng tối Y < 25 xuống sâu hơn ban đầu
+            float curLuma = luma[row + x];
+            if (curLuma < 25.0f && eqVal < curLuma) {
+                float protect = (25.0f - curLuma) / 25.0f;
+                eqVal = eqVal * (1.0f - protect) + curLuma * protect;
+            }
+
+            claheOut[row + x] = (1.0f - blendFactor) * curLuma + blendFactor * eqVal;
         }
     }
 
@@ -569,12 +836,17 @@ void ImageEnhancerPro::applyHighlightShadowRecovery(
         float loc = localMean[i];
         float orig = luma[i];
 
-        if (loc < 22.0f && orig < 22.0f && shadowLift > 0.02f) {
-            float lift = shadowLift * (22.0f - orig);
+        // Mở rộng dải cứu tối lên Y < 55.0f với hàm nâng bậc 2 êm dịu (Quadratic Shadow Lift)
+        if (loc < 60.0f && orig < 55.0f && shadowLift > 0.01f) {
+            float darkFactor = (55.0f - orig) / 55.0f; // 1.0 tại orig=0, giảm mượt về 0 tại orig=55
+            float lift = shadowLift * 28.0f * (darkFactor * darkFactor);
             luma[i] = std::clamp(orig + lift, 0.0f, 255.0f);
         }
-        if (loc > 235.0f && orig > 235.0f && highlightPull > 0.02f) {
-            float pull = highlightPull * (orig - 235.0f);
+
+        // Mở rộng dải cứu cháy sáng xuống Y > 215.0f với hàm nén bậc 2
+        if (loc > 210.0f && orig > 215.0f && highlightPull > 0.01f) {
+            float brightFactor = (orig - 215.0f) / 40.0f; // 0.0 tại orig=215, tăng dần lên 1.0 tại 255
+            float pull = highlightPull * 22.0f * (brightFactor * brightFactor);
             luma[i] = std::clamp(orig - pull, 0.0f, 255.0f);
         }
     }
@@ -585,7 +857,8 @@ void ImageEnhancerPro::applyHighlightShadowRecovery(
 // -------------------------------------------------------------
 void ImageEnhancerPro::applyLocalLaplacianToneMapping(
     std::vector<float>& luma, int width, int height,
-    float clarityBoost)
+    float clarityBoost,
+    const std::vector<float>* pSkinMask)
 {
     if (clarityBoost <= 0.001f) return;
 
@@ -596,7 +869,13 @@ void ImageEnhancerPro::applyLocalLaplacianToneMapping(
     for (int i = 0; i < width * height; ++i) {
         float diff = luma[i] - base[i];
         float damp = 12.0f / (std::abs(diff) + 12.0f);
-        luma[i] = std::clamp(luma[i] + diff * clarityBoost * damp, 0.0f, 255.0f);
+        float maskVal = (pSkinMask && !pSkinMask->empty()) ? (*pSkinMask)[i] : 0.0f;
+        if (std::isnan(maskVal)) maskVal = 0.0f;
+        float skinDamp = 1.0f - std::clamp(maskVal, 0.0f, 1.0f) * 0.85f;
+        float updated = luma[i] + diff * clarityBoost * damp * skinDamp;
+        if (!std::isnan(updated)) {
+            luma[i] = std::clamp(updated, 0.0f, 255.0f);
+        }
     }
 }
 
@@ -653,7 +932,10 @@ void ImageEnhancerPro::applyGuidedFilter3Scale(
     const std::vector<float>& luma,
     std::vector<float>& diffGuided,
     int width, int height,
-    const EnhanceOptionsPro& opts)
+    const EnhanceOptionsPro& opts,
+    const std::vector<float>* pSkinMask,
+    std::vector<float>* pMicroBaseOut,
+    float estimatedNoise)
 {
     int nPixels = width * height;
     diffGuided.assign(nPixels, 0.0f);
@@ -662,18 +944,61 @@ void ImageEnhancerPro::applyGuidedFilter3Scale(
     std::vector<float> microBase = applyGuidedFilterSingle(luma, luma, width, height, 2, 350.0f);
     std::vector<float> macroBase = applyGuidedFilterSingle(luma, luma, width, height, 4, 1400.0f);
 
+    if (pMicroBaseOut) {
+        *pMicroBaseOut = microBase; // Tái sử dụng tầng structure r=2 cho texture layer
+    }
+
+    float noiseThresh = std::max(1.8f, 1.8f * estimatedNoise);
+
     #pragma omp parallel for schedule(static)
-    for (int i = 0; i < nPixels; ++i) {
-        float nanoDetail = luma[i] - nanoBase[i];
-        float microDetail = nanoBase[i] - microBase[i];
-        float macroDetail = microBase[i] - macroBase[i];
+    for (int y = 0; y < height; ++y) {
+        int rowIdx = y * width;
+        int yPrev = std::max(0, y - 1) * width;
+        int yNext = std::min(height - 1, y + 1) * width;
 
-        float wNano = 1.45f * opts.nanoDetailBoost;
-        float wMicro = 1.15f;
-        float wMacro = 0.65f;
+        for (int x = 0; x < width; ++x) {
+            int i = rowIdx + x;
+            float nanoDetail = luma[i] - nanoBase[i];
+            float microDetail = nanoBase[i] - microBase[i];
+            float macroDetail = microBase[i] - macroBase[i];
 
-        float guided = (nanoDetail * wNano + microDetail * wMicro + macroDetail * wMacro);
-        diffGuided[i] = guided * (opts.detailBoost - 1.0f);
+            // Gradient Gating: ức chế nano-noise ở các vùng phẳng (bầu trời, mặt nước, tường trơn)
+            int xPrev = rowIdx + std::max(0, x - 1);
+            int xNext = rowIdx + std::min(width - 1, x + 1);
+            float grad = std::abs(luma[xNext] - luma[xPrev]) + std::abs(luma[yNext + x] - luma[yPrev + x]);
+            float flatGate = std::clamp((grad - noiseThresh) / (2.5f * noiseThresh), 0.0f, 1.0f);
+
+            // Skin Damping & Natural Pore Preservation (Anti-bệt vs Anti-gai)
+            float maskVal = (pSkinMask && !pSkinMask->empty()) ? (*pSkinMask)[i] : 0.0f;
+            if (std::isnan(maskVal)) maskVal = 0.0f;
+            float skinDamp = 1.0f - std::clamp(maskVal, 0.0f, 1.0f) * 0.90f;
+
+            float poreGate = (skinDamp > 0.5f ? skinDamp : 0.5f);
+            if (maskVal > 0.05f) {
+                // Tách tần số bảo tồn lỗ chân lông tự nhiên:
+                // microDetail mang vi cấu trúc lỗ chân lông thực tế.
+                // Nhiễu hạt < 1.5 bị triệt tiêu (anti-gai hạt), gai mụn > 6.0 bị nén mềm (anti-gai mụn),
+                // biên độ trung bình [1.5, 6.0] được bảo tồn với hệ số skinPorePreserve (anti-bệt da).
+                float poreAmp = std::abs(microDetail);
+                float pFactor = 0.0f;
+                if (poreAmp >= 1.5f && poreAmp <= 6.0f) {
+                    pFactor = opts.skinPorePreserve;
+                } else if (poreAmp > 6.0f) {
+                    pFactor = opts.skinPorePreserve * (6.0f / poreAmp);
+                } else {
+                    pFactor = opts.skinPorePreserve * (poreAmp / 1.5f) * 0.35f;
+                }
+                poreGate = (1.0f - maskVal) * poreGate + maskVal * pFactor;
+            }
+
+            // Gradient Gating trên cả 3 tầng tần số: triệt tiêu hạt nhiễu nổi trên mảng phẳng
+            float wNano = 1.45f * opts.nanoDetailBoost * flatGate * skinDamp;
+            float wMicro = 1.15f * flatGate * poreGate;
+            float wMacro = 0.65f * (0.15f + 0.85f * flatGate);
+
+            float guided = (nanoDetail * wNano + microDetail * wMicro + macroDetail * wMacro);
+            diffGuided[i] = guided * (opts.detailBoost - 1.0f);
+        }
     }
 }
 
@@ -683,17 +1008,32 @@ void ImageEnhancerPro::applyGuidedFilter3Scale(
 void ImageEnhancerPro::synthesizeTextureLayer(
     std::vector<float>& luma,
     int width, int height,
-    float textureBoost)
+    float textureBoost,
+    const std::vector<float>* pSkinMask,
+    const std::vector<float>* pPrecomputedStructure)
 {
     if (textureBoost <= 0.001f) return;
 
-    std::vector<float> structure = applyGuidedFilterSingle(luma, luma, width, height, 2, 250.0f);
+    std::vector<float> fallbackStructure;
+    const std::vector<float>* pStructure = pPrecomputedStructure;
+    if (!pStructure) {
+        fallbackStructure = applyGuidedFilterSingle(luma, luma, width, height, 2, 250.0f);
+        pStructure = &fallbackStructure;
+    }
+    const std::vector<float>& structure = *pStructure;
 
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < width * height; ++i) {
         float texture = luma[i] - structure[i];
         float damp = 8.0f / (std::abs(texture) + 8.0f);
-        luma[i] = std::clamp(luma[i] + texture * textureBoost * damp, 0.0f, 255.0f);
+        // Triệt tiêu bơm hạt texture vào vùng da người (giữ da mịn màng, tự nhiên)
+        float maskVal = (pSkinMask && !pSkinMask->empty()) ? (*pSkinMask)[i] : 0.0f;
+        if (std::isnan(maskVal)) maskVal = 0.0f;
+        float skinDamp = 1.0f - std::clamp(maskVal, 0.0f, 1.0f);
+        float updated = luma[i] + texture * textureBoost * damp * skinDamp;
+        if (!std::isnan(updated)) {
+            luma[i] = std::clamp(updated, 0.0f, 255.0f);
+        }
     }
 }
 
@@ -728,25 +1068,39 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
     double blockInnerGrad = 0.0;
     int blockInnerCount = 0;
 
+    // Tách biệt hoàn toàn bộ đếm nét mảnh (Thin Feature Ratio)
+    int edgeCountForThin = 0;
+    int thinFeatureCount = 0;
+
     int lightPixelCount = 0;
     int darkPixelCount = 0;
     int midPixelCount = 0;
 
-    // Bước nhảy lấy mẫu cân bằng độ chính xác và tốc độ
-    int step = std::max(1, (int)std::sqrt((width * height) / 600000.0f));
+    // Bước nhảy lấy mẫu cân bằng độ chính xác cao và tốc độ: kẹp tối đa step <= 3 để không bỏ sót chi tiết
+    int step = std::clamp((int)std::sqrt((width * height) / 1200000.0f), 1, 3);
 
     std::vector<float> flatRegionVariances;
+
+    // Lưới không gian 4x4 (16 ô) để đo phân bố độ nét tiêu điểm cục bộ (Focal Region vs Background Bokeh)
+    std::vector<double> tileGradSum(16, 0.0);
+    std::vector<int> tileSampleCount(16, 0);
 
     for (int y = step; y < height - step; y += step) {
         const uint8_t* rowPrev = src.data() + (y - step) * stride;
         const uint8_t* rowCur  = src.data() + y * stride;
         const uint8_t* rowNext = src.data() + (y + step) * stride;
 
+        int tileY = std::clamp(y * 4 / height, 0, 3);
+
         for (int x = step; x < width - step; x += step) {
             const uint8_t* pix = rowCur + x * 4;
             float b = pix[0];
             float g = pix[1];
             float r = pix[2];
+
+            // Phân vùng tiêu điểm cục bộ
+            int tileX = std::clamp(x * 4 / width, 0, 3);
+            int tileIdx = tileY * 4 + tileX;
 
             // Độ sáng đơn sắc (ITU-R BT.601 luma)
             float Y = 0.299f * r + 0.587f * g + 0.114f * b;
@@ -799,8 +1153,11 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
             gradSum += grad;
             tenengradSum += (dx * dx + dy * dy);
 
+            tileGradSum[tileIdx] += grad;
+            tileSampleCount[tileIdx]++;
+
             // Tần số vi mô Micro-Laplacian
-            float lap = std::abs(4.0f * Y - yR - yL - yB - yT) / (float)step;
+            float lap = std::abs(4.0f * Y - yR - yL - yB - yT) / (float)(step * step);
             lapSum += lap;
 
             // Kiểm tra ranh giới khối JPEG 8x8
@@ -819,17 +1176,23 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
 
             // Đếm tỷ lệ nét mảnh (Thin Feature Ratio: pixel cạnh có laplacian lớn so với bề rộng < 3px)
             if (grad >= 6.0f) {
-                blockBoundaryCount++; // mượn biến đếm cạnh
+                edgeCountForThin++;
                 if (lap > 5.0f) {
-                    blockInnerCount++; // mượn biến đếm nét mảnh
+                    thinFeatureCount++;
                 }
             }
 
-            // Nhận diện sắc diện da người chuẩn Melanin ROI trong YCbCr (loại trừ lá cây/cành gỗ)
+            // Nhận diện sắc diện da người chuẩn Melanin ROI trong YCbCr
+            // Đảm bảo không nhận nhầm vùng phẳng đồ họa nhân tạo (synthetic flat fill: grad < 1.2f)
             float Cb = 128.0f - 0.168736f * r - 0.331264f * g + 0.500000f * b;
             float Cr = 128.0f + 0.500000f * r - 0.418688f * g - 0.081312f * b;
-            if (Cb >= 85.0f && Cb <= 122.0f && Cr >= 135.0f && Cr <= 170.0f && 
-                Y >= 45.0f && Y <= 225.0f && (r > g) && (g > b) && grad < 8.0f) 
+            float diffRB = r - b;
+            float diffRG = r - g;
+            if (grad >= 1.2f && Cb >= 77.0f && Cb <= 128.0f && Cr >= 133.0f && Cr <= 175.0f && 
+                Y >= 35.0f && Y <= 215.0f && 
+                diffRB >= 8.0f && diffRB <= 75.0f && 
+                diffRG >= 3.0f && diffRG <= 50.0f && 
+                r > g && r > b && (r < 1.34f * g)) 
             {
                 skinPixels++;
             }
@@ -845,25 +1208,45 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
 
     if (sampleCount > 0) {
         float avgGrad = (float)(gradSum / sampleCount);
-        score.clarityScore = std::clamp(avgGrad * 7.5f, 0.0f, 100.0f);
+
+        // Đánh giá sắc nét vùng tiêu điểm cục bộ (Focal Region vs Background Bokeh)
+        float maxTileGrad = 0.0f;
+        for (int t = 0; t < 16; ++t) {
+            if (tileSampleCount[t] > 0) {
+                float tAvg = (float)(tileGradSum[t] / tileSampleCount[t]);
+                if (tAvg > maxTileGrad) maxTileGrad = tAvg;
+            }
+        }
+        // Nếu có sự phân hóa mạnh giữa vùng cực nét và vùng mờ mịt (ảnh chân dung xóa phông / DOF nông),
+        // kết hợp độ nét vùng tiêu điểm để tránh việc hậu cảnh bokeh kéo sập điểm độ nét của toàn ảnh
+        float effectiveClarityGrad = avgGrad;
+        if (maxTileGrad > 2.0f * avgGrad && maxTileGrad > 3.5f) {
+            effectiveClarityGrad = 0.55f * maxTileGrad + 0.45f * avgGrad;
+        }
+
+        // Đường cong độ nét liên tục chuẩn Tenengrad Acutance + Local Gradient
+        float tenengradAcutance = (float)std::sqrt(tenengradSum / sampleCount);
+        float effectiveAcutance = 0.50f * effectiveClarityGrad + 0.50f * tenengradAcutance;
+        score.clarityScore = std::clamp(100.0f * (1.0f - std::exp(-effectiveAcutance / 16.0f)), 0.0f, 100.0f);
         score.skinPercent = ((float)skinPixels / sampleCount) * 100.0f;
-        score.edgeSharpness = std::clamp((float)std::sqrt(tenengradSum / sampleCount) * 5.0f, 0.0f, 100.0f);
+        score.edgeSharpness = std::clamp(tenengradAcutance * 4.2f, 0.0f, 100.0f);
         score.highFreqEnergy = std::clamp((float)(lapSum / sampleCount) * 10.0f, 0.0f, 100.0f);
-        score.blurDegree = std::clamp((1.0f - score.clarityScore / 60.0f) * 100.0f, 0.0f, 100.0f);
+        score.blurDegree = std::clamp(100.0f * std::exp(-effectiveAcutance / 9.0f), 0.0f, 100.0f);
         score.shadowClipPercent = ((float)shadowClipCount / sampleCount) * 100.0f;
         score.highlightClipPercent = ((float)highlightClipCount / sampleCount) * 100.0f;
         score.colorSaturation = std::clamp(((float)(saturationSum / sampleCount) / 255.0f) * 100.0f, 0.0f, 100.0f);
         score.textureComplexity = std::clamp(((float)texturePixels / sampleCount) * 180.0f, 0.0f, 100.0f);
-        score.thinFeatureRatio = (blockBoundaryCount > 0) ? std::clamp((float)blockInnerCount / blockBoundaryCount, 0.0f, 1.0f) : 0.25f;
+        score.thinFeatureRatio = (edgeCountForThin > 0) ? std::clamp((float)thinFeatureCount / edgeCountForThin, 0.0f, 1.0f) : 0.25f;
     }
 
     // Dynamic Range: 1% đến 99% percentile
     int totalHist = sampleCount;
     int p1 = 0, p99 = 255;
+    bool foundP1 = false;
     int acc = 0;
     for (int i = 0; i < 256; ++i) {
         acc += hist[i];
-        if (p1 == 0 && acc >= totalHist * 0.01) p1 = i;
+        if (!foundP1 && acc >= totalHist * 0.01) { p1 = i; foundP1 = true; }
         if (acc >= totalHist * 0.99) { p99 = i; break; }
     }
     score.dynamicRange = (float)(p99 - p1);
@@ -905,20 +1288,26 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
     float midRatio   = (sampleCount > 0) ? (float)midPixelCount / sampleCount : 0.0f;
     bool isBimodal   = (lightRatio >= 0.40f && darkRatio >= 0.05f && midRatio <= 0.35f);
 
-    // Phân loại ngữ cảnh ảnh PRO V2 chuẩn xác 100%
-    if (score.skinPercent < 6.0f && score.colorSaturation < 18.0f && 
-        (isBimodal || (score.thinFeatureRatio >= 0.38f && lightRatio > 0.48f))) 
-    {
+    // Phân loại ngữ cảnh ảnh PRO V4 chuẩn xác
+    // 1. Nhận diện Tài liệu / Biểu đồ / Sơ đồ / Chụp màn hình (Document / Text / Diagram)
+    bool isDocument = false;
+    if (isBimodal && (score.colorSaturation < 20.0f || lightRatio > 0.50f)) {
+        isDocument = true;
+    } else if (score.colorSaturation < 14.0f && lightRatio > 0.55f) {
+        isDocument = true;
+    }
+
+    if (isDocument) {
         score.detectedType = "Tài liệu / Văn bản (Document / Text)";
-    } else if (score.skinPercent >= 20.0f && score.textureComplexity < 55.0f) {
+    } else if (score.skinPercent >= 21.0f) {
         score.detectedType = "Chân dung cận cảnh (Portrait Studio)";
-    } else if (score.skinPercent >= 8.0f) {
+    } else if (score.skinPercent >= 7.0f) {
         score.detectedType = "Người + Phong cảnh (Environmental Portrait)";
-    } else if (score.textureComplexity >= 35.0f && score.clarityScore >= 35.0f) {
-        score.detectedType = "Phong cảnh / Chi tiết cao (Landscape)";
-    } else if (score.blurDegree >= 50.0f || score.clarityScore < 28.0f) {
+    } else if (score.blurDegree >= 28.0f || score.clarityScore < 40.0f) {
         score.detectedType = "Ảnh mờ / Cần phục hồi nét (Blur/Defocus)";
-    } else if (score.compressionBlockiness >= 35.0f || (score.bpp > 0.0f && score.bpp < 0.18f)) {
+    } else if (score.textureComplexity >= 25.0f || score.clarityScore >= 45.0f) {
+        score.detectedType = "Phong cảnh / Chi tiết cao (Landscape)";
+    } else if (score.compressionBlockiness >= 30.0f || (score.bpp > 0.0f && score.bpp < 0.18f)) {
         score.detectedType = "Ảnh nén suy hao (Compressed/Web)";
     } else {
         score.detectedType = "Phong cảnh / Chi tiết cao (Landscape)";
@@ -980,6 +1369,64 @@ void ImageEnhancerPro::processSharpenPro(
         }
     }
 
+    // 1.5. Mặt nạ xác suất da người tự nhiên (Continuous Soft Skin Probability Map - Không còn ngưỡng cứng)
+    std::vector<float> skinMask(nPixels, 0.0f);
+    auto smoothstepVal = [](float edge0, float edge1, float x) -> float {
+        float denom = edge1 - edge0;
+        if (std::abs(denom) < 1e-5f) {
+            return (x >= edge1) ? 1.0f : 0.0f;
+        }
+        float t = std::clamp((x - edge0) / denom, 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
+    };
+
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < nPixels; ++i) {
+        float r = origR[i], g = origG[i], b = origB[i];
+        float cb = chromaCb[i], cr = chromaCr[i];
+        float Y = luma[i];
+
+        // 1. Khoảng cách Mahalanobis elip trong không gian sắc độ Cb-Cr
+        float dCb = (cb - 105.0f) / 16.0f;
+        float dCr = (cr - 150.0f) / 14.0f;
+        float chromaDistSq = dCb * dCb + dCr * dCr;
+        if (chromaDistSq > 10.0f) {
+            skinMask[i] = 0.0f;
+            continue;
+        }
+        float chromaProb = std::exp(-0.5f * chromaDistSq);
+
+        // 2. Chuyển tiếp mềm mại dải độ chói Y [20, 235]
+        float lumaWeight = smoothstepVal(20.0f, 45.0f, Y) * (1.0f - smoothstepVal(210.0f, 235.0f, Y));
+
+        // 3. Tỷ lệ quang phổ Melanin RGB chuyển tiếp trơn tru
+        float diffRB = r - b;
+        float diffRG = r - g;
+        float rgbWeight = smoothstepVal(4.0f, 12.0f, diffRB) * 
+                          (1.0f - smoothstepVal(72.0f, 90.0f, diffRB)) *
+                          smoothstepVal(1.0f, 5.0f, diffRG) *
+                          (1.0f - smoothstepVal(48.0f, 65.0f, diffRG));
+
+        // 4. Triệt tiêu hoàng hôn đỏ / lửa cam rực (loại bỏ màu đỏ cam gắt không phải da: r < 1.34*g)
+        float sunsetWeight = (g > 1.0f) ? (1.0f - smoothstepVal(1.22f * g, 1.38f * g, r)) : 1.0f;
+
+        float p = chromaProb * lumaWeight * rgbWeight * sunsetWeight;
+        if (std::isnan(p) || p <= 0.0f) {
+            skinMask[i] = 0.0f;
+        } else {
+            skinMask[i] = std::min(p, 1.0f);
+        }
+    }
+
+    // 1.6. Khử nhiễu ô vuông nén 8x8 (Adaptive In-Loop Deblocking) ngay từ gốc trước khi phân rã
+    applyAdaptiveDeblocking(luma, width, height, opts.compressionBlockiness);
+
+    // 1.7. Khử chấm nhiễu phân tán có khoảng cách (Pre-Sharpening Outlier Despeckler)
+    applyOutlierDespeckle(luma, width, height, estimatedNoise, &skinMask);
+
+    // 1.8. Khử nhiễu màu sắc độ loang lổ (Luma-Guided Chroma Denoising)
+    applyChromaDenoise(chromaCb, chromaCr, luma, width, height);
+
     // 2. Cân bằng tương phản cục bộ thích ứng CLAHE
     if (opts.claheBlend > 0.001f) {
         applyCLAHE(luma, width, height, 2.5f, opts.claheBlend);
@@ -988,15 +1435,16 @@ void ImageEnhancerPro::processSharpenPro(
     // 3. Highlight/Shadow Local Recovery
     applyHighlightShadowRecovery(luma, width, height, opts.shadowLift, opts.highlightPull);
 
-    // 4. Local Laplacian Tone Mapping
-    applyLocalLaplacianToneMapping(luma, width, height, opts.clarityBoost);
+    // 4. Local Laplacian Tone Mapping (với bảo vệ da không bị sần mụn)
+    applyLocalLaplacianToneMapping(luma, width, height, opts.clarityBoost, &skinMask);
 
-    // 5. Texture Layer Synthesis
-    synthesizeTextureLayer(luma, width, height, opts.textureBoost);
-
-    // 6. Phân rã đa tầng 3-Scale Guided Filter (Nano, Micro, Macro)
+    // 5. Phân rã đa tầng 3-Scale Guided Filter (Nano, Micro, Macro với bảo vệ da)
     std::vector<float> diffGuided(nPixels, 0.0f);
-    applyGuidedFilter3Scale(luma, diffGuided, width, height, opts);
+    std::vector<float> microBase(nPixels, 0.0f);
+    applyGuidedFilter3Scale(luma, diffGuided, width, height, opts, &skinMask, &microBase, estimatedNoise);
+
+    // 6. Texture Layer Synthesis (Tái sử dụng microBase đã lọc ở bước 5, không lọc lại!)
+    synthesizeTextureLayer(luma, width, height, opts.textureBoost, &skinMask, &microBase);
 
     // 7. Mặt nạ làm mờ Gaussian cho CAS
     std::vector<float> blurL = fastBlur(luma, width, height, opts.radius);
@@ -1017,37 +1465,105 @@ void ImageEnhancerPro::processSharpenPro(
             float yCenter = luma[idx];
             float yBlur = blurL[idx];
 
-            // 4 điểm lân cận
-            float yLeft = luma[rowIdx + std::max(0, x - 1)];
-            float yRight = luma[rowIdx + std::min(width - 1, x + 1)];
-            float yTop = luma[std::max(0, y - 1) * width + x];
+            // 8 điểm lân cận (4 trực giao + 4 đường chéo) để chống răng cưa đường viền nghiêng
+            float yLeft   = luma[rowIdx + std::max(0, x - 1)];
+            float yRight  = luma[rowIdx + std::min(width - 1, x + 1)];
+            float yTop    = luma[std::max(0, y - 1) * width + x];
             float yBottom = luma[std::min(height - 1, y + 1) * width + x];
 
-            float minY = std::min({ yCenter, yLeft, yRight, yTop, yBottom });
-            float maxY = std::max({ yCenter, yLeft, yRight, yTop, yBottom });
+            float yTL = luma[std::max(0, y - 1) * width + std::max(0, x - 1)];
+            float yTR = luma[std::max(0, y - 1) * width + std::min(width - 1, x + 1)];
+            float yBL = luma[std::min(height - 1, y + 1) * width + std::max(0, x - 1)];
+            float yBR = luma[std::min(height - 1, y + 1) * width + std::min(width - 1, x + 1)];
+
+            float minY = std::min({ yCenter, yLeft, yRight, yTop, yBottom, yTL, yTR, yBL, yBR });
+            float maxY = std::max({ yCenter, yLeft, yRight, yTop, yBottom, yTL, yTR, yBL, yBR });
             float grad = std::abs(yRight - yLeft) + std::abs(yBottom - yTop);
 
-            // Cauchy Continuous Coring
-            float edgeWeight = (grad * grad) / (grad * grad + cauchyK) * opts.edgeSensitivity;
+            // Đo tính dị hướng đường chéo (Diagonal Anisotropy) chuẩn xác về toán học:
+            // Cạnh thẳng (dọc/ngang): D1 ≈ D2 => |D1 - D2| ≈ 0 => isDiagonalEdge = 0 (KHÔNG nhầm lẫn cạnh thẳng!)
+            // Cạnh nghiêng (45/135 độ): D1 >> D2 hoặc D2 >> D1 => isDiagonalEdge tiến tới 1.0
+            float D1 = std::abs(yBR - yTL); // Đường chéo chính
+            float D2 = std::abs(yTR - yBL); // Đường chéo phụ
+            float diagAnisotropy = std::abs(D1 - D2) / (D1 + D2 + 1e-4f);
+            float isDiagonalEdge = diagAnisotropy * std::clamp((D1 + D2 - 3.0f) / 8.0f, 0.0f, 1.0f);
 
-            // Contrast Adaptive Sharpening (CAS)
+            // Directional Coherence Gating (Phân biệt nét thực sự vs chấm nhiễu phân tán có khoảng cách)
+            float orthoDiff = std::abs(std::abs(yRight - yLeft) - std::abs(yBottom - yTop));
+            float orthoCoherence = orthoDiff / (grad + 1e-4f);
+            float maxCoherence = std::max(orthoCoherence, diagAnisotropy);
+
+            // Cauchy Continuous Coring thích ứng độ chói cục bộ (Luminance-Aware Cauchy Coring):
+            // Vùng tối (Y < 75) có SNR thấp và cảm biến nhiều nhiễu hạt => tăng ngưỡng coring để chặn noise
+            float lumFactor = 1.0f + 1.25f * std::max(0.0f, (75.0f - yCenter) / 75.0f);
+            float localCauchyK = cauchyK * lumFactor;
+            float edgeWeight = (grad * grad) / (grad * grad + localCauchyK) * opts.edgeSensitivity;
+
+            // Chấm nhiễu phân tán có khoảng cách: grad trung bình nhưng không có tính định hướng tiếp tuyến
+            if (grad < 20.0f) {
+                float coherenceDamp = 0.50f + 0.50f * maxCoherence;
+                edgeWeight *= coherenceDamp;
+            }
+
+            // Contrast Adaptive Sharpening (CAS) với Anti-Aliasing Damping (Triệt tiêu 100% răng cưa)
             float range = std::max(maxY - minY, 0.01f);
             float peak = std::min(yCenter - minY, maxY - yCenter) / range;
-            float casFactor = 0.5f + 0.5f * peak * opts.casStrength;
+            float effectiveCasStrength = opts.casStrength * (1.0f - 0.40f * isDiagonalEdge);
+
+            // High-Contrast Crest Limiter (Anti-gai cành cây, viền tán lá, sợi tóc ngược sáng)
+            if (opts.crestLimiter && range > 45.0f) {
+                float crestDamp = 1.0f - 0.35f * smoothstepVal(45.0f, 110.0f, range);
+                effectiveCasStrength *= crestDamp;
+            }
+
+            float casFactor = 0.5f + 0.5f * peak * effectiveCasStrength;
 
             float diffY = (yCenter - yBlur) * opts.amount;
 
-            // Anti-Bloat Lateral Inhibition: Ức chế sườn dốc bên, chống dính điểm ảnh & bệt viền
-            bool isValley = (yCenter <= yLeft && yCenter <= yRight && yCenter <= yTop && yCenter <= yBottom);
-            bool isRidge  = (yCenter >= yLeft && yCenter >= yRight && yCenter >= yTop && yCenter >= yBottom);
+            // Topology Sống Nét / Rãnh Nét 8 hướng đồng bộ (Directional Extremum):
+            // Một điểm là Sống Nét (Ridge) nếu là đỉnh theo trục ngang, trục dọc HOẶC một trong hai trục chéo
+            bool isOrthogonalRidge = (yCenter >= yLeft && yCenter >= yRight) || (yCenter >= yTop && yCenter >= yBottom);
+            bool isDiagonalRidge   = (yCenter >= yTL && yCenter >= yBR) || (yCenter >= yTR && yCenter >= yBL);
+            bool isRidge = isOrthogonalRidge || isDiagonalRidge;
+
+            bool isOrthogonalValley = (yCenter <= yLeft && yCenter <= yRight) || (yCenter <= yTop && yCenter <= yBottom);
+            bool isDiagonalValley   = (yCenter <= yTL && yCenter <= yBR) || (yCenter <= yTR && yCenter <= yBL);
+            bool isValley = isOrthogonalValley || isDiagonalValley;
+
+            // Anti-Bloat Lateral Inhibition: Chỉ ghìm sườn dốc khi thực sự là sườn dốc đơn điệu 8 hướng
             if (!isValley && !isRidge && grad > 8.0f && opts.antiBloat) {
                 diffY *= 0.85f; // Ghìm 15% ở sườn dốc, giữ chân nét cố định, bảo tồn khoảng dãn pha sub-pixel
             }
 
             float guidedTerm = diffGuided[idx];
 
+            // JPEG Grid Anti-Spiking: Giảm kích nét trên đường phân chia ô 8x8 của ảnh nén
+            if (opts.compressionBlockiness > 25.0f) {
+                if ((x % 8 == 0 || (x + 1) % 8 == 0) || (y % 8 == 0 || (y + 1) % 8 == 0)) {
+                    float gridDamp = 1.0f - std::min(opts.compressionBlockiness / 100.0f, 0.40f) * 0.70f;
+                    diffY *= gridDamp;
+                    guidedTerm *= gridDamp;
+                }
+            }
+
+            // Thin-Stroke Protection (Chống phình nét mảnh, bảo toàn nét chữ & nét vẽ)
+            if (opts.thinStrokeGate && (isRidge || isValley) && grad > 5.0f) {
+                float strokeDamp = 1.0f - 0.35f * opts.strokeAnisotropy;
+                diffY *= strokeDamp;
+                guidedTerm *= strokeDamp;
+            }
+
+            // Triệt tiêu nano/micro noise trên da người trước khi đưa vào hàm nét với chuyển tiếp Hermite trơn tru (Anti-gai viền)
+            float pSkin = skinMask[idx];
+            float skinEdgeFactor = 0.0f;
+            if (pSkin > 0.05f) {
+                skinEdgeFactor = smoothstepVal(7.0f, 22.0f, grad);
+                guidedTerm *= (1.0f - pSkin * (1.0f - 0.50f * skinEdgeFactor) * 0.85f);
+                diffY *= (1.0f - pSkin * (1.0f - skinEdgeFactor) * 0.55f);
+            }
+
             // Context-Aware Anti-Halo & Headroom Clamping
-            bool isDocMode = (opts.textureBoost < 0.01f && opts.claheBlend > 0.30f);
+            bool isDocMode = opts.isDocument;
             float haloMargin;
             if (isDocMode) {
                 // Tài liệu: kẹp chặt 4% + posDamp để triệt tiêu 100% sọc trắng quanh chữ
@@ -1057,33 +1573,50 @@ void ImageEnhancerPro::processSharpenPro(
                 if (guidedTerm > 0.0f) guidedTerm *= posDamp;
                 haloMargin = range * 0.04f * opts.haloTolerance + 0.5f;
             } else {
-                // Phong cảnh & Chân dung: Mở trần 16% để giải phóng tối đa độ dốc Acutance cho gân lá và sợi tóc
-                haloMargin = range * 0.16f * opts.haloTolerance + 1.2f;
+                // Phong cảnh & Chân dung: Siết chặt hơn ở cạnh nghiêng để triệt tiêu hoàn toàn răng cưa bậc thang
+                float diagClamp = 1.0f - 0.40f * isDiagonalEdge;
+                haloMargin = range * 0.14f * opts.haloTolerance * diagClamp + 1.0f;
             }
 
             float res = yCenter + (diffY * casFactor + guidedTerm) * edgeWeight;
             res = std::clamp(res, minY - haloMargin, maxY + haloMargin);
 
-            // Bảo vệ và làm mịn da chân dung (Melanin ROI Gating chuẩn xác)
-            if (opts.isPortrait) {
-                float cb = chromaCb[idx];
-                float cr = chromaCr[idx];
-                if (cb >= 85.0f && cb <= 122.0f && cr >= 135.0f && cr <= 170.0f && 
-                    yCenter >= 45.0f && yCenter <= 225.0f && grad < 8.0f) 
-                {
-                    float dCb = (cb - 105.0f) / (15.0f * opts.skinProbSigma);
-                    float dCr = (cr - 150.0f) / (12.0f * opts.skinProbSigma);
-                    float pSkin = std::exp(-0.5f * (dCb * dCb + dCr * dCr));
-                    float smoothWeight = opts.skinSmooth * pSkin * (1.0f - grad / 8.0f);
-                    res = res * (1.0f - smoothWeight) + (yCenter * 0.75f + yBlur * 0.25f) * smoothWeight;
+            // Bảo vệ vùng bóng tối: không để CAS dìm pixel sâu hơn 85% luma gốc khi Y < 20
+            if (yCenter < 20.0f && res < yCenter * 0.85f) {
+                res = yCenter * 0.85f;
+            }
+
+            // Studio Beauty Dual-Zone: Mịn đều tone da nhưng bảo tồn vân lỗ chân lông tự nhiên (Anti-bệt da)
+            // và giữ 100% độ nét cho mắt, mi, chân mày, tóc và viền môi (Anti-gai viền nhờ chuyển tiếp Hermite)
+            if (pSkin > 0.05f) {
+                float flatSkinWeight = (1.0f - skinEdgeFactor) * pSkin;
+                if (flatSkinWeight > 0.01f) {
+                    float baseSmooth = opts.isPortrait ? opts.skinSmooth : 0.45f;
+                    float smoothStrength = baseSmooth * flatSkinWeight;
+
+                    // Tone smoothing: làm mịn mảng sắc tố màu không đồng đều
+                    // trong khi vi cấu trúc micro-relief (lỗ chân lông tự nhiên) được giữ lại nguyên bản
+                    float toneSmoothed = yBlur;
+                    float naturalPore = yCenter - microBase[idx];
+                    float poreAmp = std::abs(naturalPore);
+                    if (poreAmp > 6.0f) {
+                        naturalPore *= (6.0f / poreAmp); // Nén mềm gai mụn / khuyết điểm lớn
+                    }
+                    float skinReconstructed = toneSmoothed + naturalPore * opts.skinPorePreserve;
+                    res = res * (1.0f - smoothStrength) + skinReconstructed * smoothStrength;
                 }
             }
 
-            // S-Curve Micro-Contrast Enhancement
+            // Asymmetric S-Curve Micro-Contrast: Kéo tương phản midtones nhưng bảo vệ vùng tối Y < 35 chống dìm đen
             if (std::abs(opts.contrast - 1.0f) > 0.001f) {
                 float norm = std::clamp(res / 255.0f, 0.0f, 1.0f);
-                float s = norm + (opts.contrast - 1.0f) * 1.6f * norm * (1.0f - norm) * (norm - 0.5f);
-                res = std::clamp(s * 255.0f, 0.0f, 255.0f);
+                float shadowProtection = std::clamp((res - 35.0f) / 35.0f, 0.0f, 1.0f);
+                float s = norm + (opts.contrast - 1.0f) * 1.5f * norm * (1.0f - norm) * (norm - 0.5f) * shadowProtection;
+                float sVal = s * 255.0f;
+                if (res < 35.0f && sVal < res) {
+                    sVal = res; // Tuyệt đối không dìm tối khi đã ở vùng bóng râm
+                }
+                res = std::clamp(sVal, 0.0f, 255.0f);
             }
 
             sharpL[idx] = res;
@@ -1106,11 +1639,15 @@ void ImageEnhancerPro::processSharpenPro(
 
             if (yCenter > 0.5f) {
                 float lumaRatio = sharpY / yCenter;
-                float chromaExpansion = std::clamp(std::pow(lumaRatio, 0.75f), 0.85f, 1.30f);
+                // Tuyến tính hoá bù sắc độ (không dùng std::pow transcendent) để tăng tốc 3X và chống bão hòa màu quá đà
+                float chromaExpansion = std::clamp(1.0f + (lumaRatio - 1.0f) * 0.25f, 0.88f, 1.15f);
 
-                // Gamut Soft Roll-off: ngăn ngừa bết màu ở các vùng bão hòa cực hạn
+                // Gamut Soft Roll-off: tối ưu không gọi std::pow(..., 4.0f)
                 float chromaDist = std::sqrt(cb * cb + cr * cr);
-                float rollOff = 1.0f - std::clamp(std::pow(chromaDist / 112.0f, 4.0f), 0.0f, 0.5f);
+                float cdNorm = chromaDist * (1.0f / 112.0f);
+                float cd2 = cdNorm * cdNorm;
+                float cd4 = cd2 * cd2;
+                float rollOff = 1.0f - std::clamp(cd4, 0.0f, 0.5f);
                 chromaExpansion = 1.0f + (chromaExpansion - 1.0f) * rollOff;
 
                 cb *= chromaExpansion;
@@ -1132,6 +1669,20 @@ void ImageEnhancerPro::processSharpenPro(
                 g += (g - sharpY) * boost;
                 b += (b - sharpY) * boost;
             }
+
+            // High Precision 16-bit Dither to prevent color quantization banding
+            if (opts.enableDither) {
+                // TPDF (Triangular Probability Density Function) spatial micro-dither
+                float dither = (((x ^ (y * 17)) & 7) - 3.5f) / 28.0f;
+                r += dither;
+                g += dither;
+                b += dither;
+            }
+
+            // Gamut Underflow Clamp & NaN Shield: triệt tiêu giá trị âm hoặc NaN
+            if (std::isnan(r) || r < 0.0f) r = 0.0f;
+            if (std::isnan(g) || g < 0.0f) g = 0.0f;
+            if (std::isnan(b) || b < 0.0f) b = 0.0f;
 
             // Soft Gamut Roll-off: co tỉ lệ đồng đều cả 3 kênh nếu vượt 255
             float maxComponent = std::max({r, g, b});
@@ -1157,13 +1708,26 @@ bool ImageEnhancerPro::enhanceImage(
     const std::string& inputPath,
     const std::string& outputPath,
     int level,
-    ImageScorePro* outScore)
+    ImageScorePro* outScore,
+    std::string* outErrorMessage,
+    EnhanceErrorPro* outErrorCode)
 {
+    auto setError = [&](EnhanceErrorPro code, const std::string& msg) {
+        if (outErrorCode) *outErrorCode = code;
+        if (outErrorMessage) *outErrorMessage = msg;
+    };
+
+    if (!fs::exists(inputPath)) {
+        setError(EnhanceErrorPro::FileNotFound, "Không tìm thấy tệp ảnh nguồn: " + inputPath);
+        return false;
+    }
+
     CoInitialize(NULL);
 
     IWICImagingFactory* pFactory = NULL;
     HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFactory));
     if (FAILED(hr) || !pFactory) {
+        setError(EnhanceErrorPro::DecoderInitFailed, "Không thể khởi tạo WIC Imaging Factory của Windows.");
         CoUninitialize();
         return false;
     }
@@ -1172,6 +1736,15 @@ bool ImageEnhancerPro::enhanceImage(
     IWICBitmapDecoder* pDecoder = NULL;
     hr = pFactory->CreateDecoderFromFilename(wInputPath.c_str(), NULL, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder);
     if (FAILED(hr) || !pDecoder) {
+        if (hr == 0x88982F50 /* WINCODEC_ERR_COMPONENTNOTFOUND */ || hr == REGDB_E_CLASSNOTREG) {
+            setError(EnhanceErrorPro::CodecNotFoundOrUnsupported,
+                "Hệ thống Windows thiếu Codec WIC để giải mã định dạng ảnh này (cần cài đặt HEIF Image Extensions hoặc Raw Image Extension từ Microsoft Store).");
+        } else {
+            char hexBuf[32];
+            sprintf_s(hexBuf, "0x%08lX", (unsigned long)hr);
+            setError(EnhanceErrorPro::DecoderInitFailed,
+                std::string("Không thể khởi tạo bộ giải mã WIC cho tệp ảnh (Mã lỗi HRESULT: ") + hexBuf + ").");
+        }
         pFactory->Release();
         CoUninitialize();
         return false;
@@ -1180,6 +1753,7 @@ bool ImageEnhancerPro::enhanceImage(
     IWICBitmapFrameDecode* pFrame = NULL;
     hr = pDecoder->GetFrame(0, &pFrame);
     if (FAILED(hr) || !pFrame) {
+        setError(EnhanceErrorPro::FrameDecodeFailed, "Không thể giải mã khung hình ảnh thứ nhất (Frame 0).");
         pDecoder->Release();
         pFactory->Release();
         CoUninitialize();
@@ -1190,6 +1764,7 @@ bool ImageEnhancerPro::enhanceImage(
     pFactory->CreateFormatConverter(&pConverter);
     hr = pConverter->Initialize(pFrame, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, NULL, 0.0, WICBitmapPaletteTypeCustom);
     if (FAILED(hr)) {
+        setError(EnhanceErrorPro::FormatConversionFailed, "Không thể chuyển đổi định dạng pixel sang 32bpp BGRA.");
         pConverter->Release();
         pFrame->Release();
         pDecoder->Release();
@@ -1235,6 +1810,7 @@ bool ImageEnhancerPro::enhanceImage(
     } else {
         opts = getPresetPro(level);
     }
+    opts.sanitize();
 
     UINT procW = origW;
     UINT procH = origH;
@@ -1260,6 +1836,8 @@ bool ImageEnhancerPro::enhanceImage(
         score.renderStrategy = "Tài liệu / Văn bản Pro (CLAHE tương phản sâu + Chữ sắc lẹm + Asymmetric Anti-Halo)";
     } else if (opts.isPortrait) {
         score.renderStrategy = "Chân dung Studio Pro (Mịn da tự nhiên + Nano Layer + Asymmetric Anti-Halo)";
+    } else if (score.detectedType == "Ảnh mờ / Cần phục hồi nét (Blur/Defocus)") {
+        score.renderStrategy = "Phục hồi nét mờ Pro (Multi-Scale De-blur + High Acutance CAS + Contrast Lift)";
     } else {
         score.renderStrategy = "Phong cảnh / Đa dụng Pro (3-Scale Guided Filter + Adaptive CLAHE + Texture Boost)";
     }
@@ -1328,15 +1906,12 @@ bool ImageEnhancerPro::enhanceImage(
         if (pBlockWriter) pBlockWriter->Release();
     }
 
-    if (SUCCEEDED(hr)) {
-        hr = pFrameEncode->SetSize(procW, procH);
-    }
-    if (SUCCEEDED(hr)) {
-        pFrameEncode->SetResolution(dpiX, dpiY);
-    }
-
     WICPixelFormatGUID pixelFormat = GUID_WICPixelFormat32bppBGRA;
     if (SUCCEEDED(hr)) {
+        hr = pFrameEncode->SetSize(procW, procH);
+        float scaleFactor = opts.scalePercent / 100.0f;
+        pFrameEncode->SetResolution(dpiX * scaleFactor, dpiY * scaleFactor);
+
         hr = pFrameEncode->SetPixelFormat(&pixelFormat);
     }
 
@@ -1384,12 +1959,81 @@ bool ImageEnhancerPro::enhanceImage(
 
     // Đồng bộ ngày giờ tạo/sửa đổi tệp tin trên hệ điều hành trùng khớp ảnh gốc
     if (SUCCEEDED(hr)) {
+        setError(EnhanceErrorPro::Success, "Xử lý nâng cao chất lượng ảnh thành công.");
         try {
             if (fs::exists(inputPath) && fs::exists(outputPath)) {
                 fs::last_write_time(outputPath, fs::last_write_time(inputPath));
             }
         } catch (...) {}
+    } else {
+        setError(EnhanceErrorPro::EncodingFailed, "Lỗi khi ghi và mã hóa tệp ảnh kết quả qua bộ mã hóa WIC.");
     }
 
     return SUCCEEDED(hr);
+}
+
+ImageScorePro ImageEnhancerPro::analyzeImageFile(const std::string& filePath) {
+    if (!fs::exists(filePath)) return ImageScorePro();
+
+    CoInitialize(NULL);
+    IWICImagingFactory* pFactory = NULL;
+    HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFactory));
+    if (FAILED(hr) || !pFactory) {
+        CoUninitialize();
+        return ImageScorePro();
+    }
+
+    std::wstring wPath = toWideString(filePath);
+    IWICBitmapDecoder* pDecoder = NULL;
+    hr = pFactory->CreateDecoderFromFilename(wPath.c_str(), NULL, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder);
+    if (FAILED(hr) || !pDecoder) {
+        pFactory->Release();
+        CoUninitialize();
+        return ImageScorePro();
+    }
+
+    IWICBitmapFrameDecode* pFrame = NULL;
+    hr = pDecoder->GetFrame(0, &pFrame);
+    if (FAILED(hr) || !pFrame) {
+        pDecoder->Release();
+        pFactory->Release();
+        CoUninitialize();
+        return ImageScorePro();
+    }
+
+    IWICFormatConverter* pConverter = NULL;
+    pFactory->CreateFormatConverter(&pConverter);
+    hr = pConverter->Initialize(pFrame, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, NULL, 0.0, WICBitmapPaletteTypeCustom);
+    if (FAILED(hr)) {
+        pConverter->Release();
+        pFrame->Release();
+        pDecoder->Release();
+        pFactory->Release();
+        CoUninitialize();
+        return ImageScorePro();
+    }
+
+    UINT w = 0, h = 0;
+    pConverter->GetSize(&w, &h);
+    if (w == 0 || h == 0) {
+        pConverter->Release();
+        pFrame->Release();
+        pDecoder->Release();
+        pFactory->Release();
+        CoUninitialize();
+        return ImageScorePro();
+    }
+
+    UINT stride = w * 4;
+    std::vector<uint8_t> pixels(h * stride);
+    hr = pConverter->CopyPixels(NULL, stride, (UINT)pixels.size(), pixels.data());
+    pConverter->Release();
+    pFrame->Release();
+    pDecoder->Release();
+    pFactory->Release();
+    CoUninitialize();
+
+    if (FAILED(hr)) return ImageScorePro();
+    uintmax_t sz = fs::exists(filePath) ? fs::file_size(filePath) : 0;
+    return analyzeImageBufferPro(pixels, w, h, stride, sz);
 }

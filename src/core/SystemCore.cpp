@@ -31,9 +31,8 @@ SystemCore::~SystemCore() {
 
 // Tiện ích cơ bản
 void SystemCore::cls() {
-    std::cout << std::flush;
-    std::fflush(stdout);
-    system("cls"); 
+    // ANSI escape: clear screen + move cursor to home (no subprocess spawn)
+    std::cout << "\x1b[2J\x1b[H" << std::flush;
 }
 
 std::string SystemCore::getTime(bool includeDate) {
@@ -171,9 +170,12 @@ std::string SystemCore::urlDecode(const std::string& str) {
     for (size_t i = 0; i < str.length(); ++i) {
         if (str[i] == '%') {
             if (i + 2 < str.length()) {
-                int value;
-                sscanf(str.substr(i + 1, 2).c_str(), "%x", &value);
-                decoded += static_cast<char>(value);
+                int value = 0;
+                if (sscanf(str.substr(i + 1, 2).c_str(), "%x", &value) == 1 && value >= 0 && value <= 255) {
+                    decoded += static_cast<char>(static_cast<unsigned char>(value));
+                } else {
+                    decoded += '%'; // Invalid hex sequence, keep literal '%'
+                }
                 i += 2;
             }
         } else if (str[i] == '+') {
@@ -201,7 +203,7 @@ bool SystemCore::runBatchAsAdmin(const std::string& batContent, const std::strin
 }
 
 void SystemCore::waitEnter() {
-    std::cout << "\nNhấn Enter để tiếp tục...";
+    std::cout << "\nNhấn Enter để tiếp tục";
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
 
@@ -231,7 +233,7 @@ int SystemCore::readInt(const std::string &prompt) {
         try {
             return std::stoi(line);
         } catch (...) {
-            std::cout << "Vui lòng nhập số hợp lệ.\n";
+            std::cout << "Vui lòng nhập số hợp lệ\n";
         }
     }
 }
@@ -303,12 +305,12 @@ bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
     }
 
     if (!silent) {
-        std::string answer;
         std::cout << "Chạy quyền Admin cho lệnh [" << cmd << "] (Y/N): ";
-        std::cin >> answer;
-        std::cin.ignore();
+        std::string answer;
+        std::getline(std::cin, answer);
+        answer = trim(answer);
         if (answer != "y" && answer != "Y") {
-            std::cout << "Bỏ qua lệnh.\n";
+            std::cout << "Bỏ qua lệnh\n";
             return false;
         }
     }
@@ -326,7 +328,7 @@ bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
     sei.fMask     = SEE_MASK_NOCLOSEPROCESS;
 
     if (ShellExecuteExW(&sei)) {
-        std::cout << "Đang chạy lệnh với quyền Admin...\n";
+        std::cout << "Đang chạy lệnh với quyền Admin\n";
         if (sei.hProcess) {
             WaitForSingleObject(sei.hProcess, INFINITE);
             CloseHandle(sei.hProcess);
@@ -335,7 +337,7 @@ bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
     } else {
         DWORD err = GetLastError();
         if (err == ERROR_CANCELLED) {
-            std::cout << "Người dùng từ chối cấp quyền Admin.\n";
+            std::cout << "Người dùng từ chối cấp quyền Admin\n";
         } else {
             std::cout << "Không thể lấy quyền Admin (Mã lỗi: " << err << ")\n";
         }
@@ -389,7 +391,12 @@ void SystemCore::pressCtrlV() {
 }
 
 void SystemCore::pressEnter() {
-    keybd_event(VK_RETURN, 0, 0, 0);
-    keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0);
+    INPUT inputs[2] = {};
+    inputs[0].type = INPUT_KEYBOARD;
+    inputs[0].ki.wVk = VK_RETURN;
+    inputs[1].type = INPUT_KEYBOARD;
+    inputs[1].ki.wVk = VK_RETURN;
+    inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
+    SendInput(2, inputs, sizeof(INPUT));
 }
 

@@ -346,7 +346,7 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
         }
     }
 
-    cout << "\n [*] Đang mở trạm phát..." << std::flush;
+    cout << "\n [*] Đang mở trạm phát" << std::flush;
 
     uintmax_t fileSizeBytes = fs::file_size(targetPath);
     string fileName = fs::path(targetPath).filename().u8string();
@@ -415,7 +415,7 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
 
     string qrDisplay = "";
     if (!isSecure) {
-        cout << "\n [*] Đang tạo mã QR..." << std::flush;
+        cout << "\n [*] Đang tạo mã QR" << std::flush;
         qrDisplay = fetchQrCodeApi(homeUrl);
         if (qrDisplay.empty()) {
             qrDisplay = "  [!] Không thể kết nối API tạo QR (Không sao cả!)\n"
@@ -448,8 +448,8 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
     }
 
     // Vẽ giao diện Dashboard ban đầu (Chỉ vẽ khi có sự kiện lớn, không vẽ lại từng frame tránh chớp nháy)
-    auto renderDashboard = [&](const string &connectedDevice = "Chờ kết nối...", 
-                                const string &statusText = "Chờ kết nối...") {
+    auto renderDashboard = [&](const string &connectedDevice = "Chờ kết nối", 
+                                const string &statusText = "Chờ kết nối") {
         sc.cls();
         if (!isSecure) {
             cout << "\n --- CÔNG KHAI: WEB DROP QR ---\n"
@@ -463,7 +463,7 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
             cout << "\n --- BẢO MẬT: BẮN FILE P2P ---\n"
                  << " [*] File : \x1b[93m" << fileName << " (" << fileSizeFormatted << ")\x1b[0m\n"
                  << " [*] Kênh : Sóng Beacon ngầm (Chỉ tool CMD Box nhận diện)\n"
-                 << " [!] Đang phát tín hiệu ngầm tới máy nhận... (Phím 0: Thoát)\n\n"
+                 << " [!] Đang phát tín hiệu ngầm tới máy nhận (Phím 0: Thoát)\n\n"
                  << " [*] Thiết bị nhận: \x1b[96m" << connectedDevice << "\x1b[0m\n"
                  << " [*] Tiến độ : " << statusText << "\n" << std::flush;
         }
@@ -539,7 +539,7 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
         
         // Nếu người dùng truy cập trang chủ / bằng trình duyệt điện thoại -> phục vụ Web Portal
         if (!isDownload && req.find("GET / ") != string::npos) {
-            renderDashboard(deviceStr, "Đang xem trang chủ...");
+            renderDashboard(deviceStr, "Đang xem trang chủ");
 
             std::ostringstream html;
             html << "<!DOCTYPE html><html lang=\"vi\"><head><meta charset=\"UTF-8\">"
@@ -588,7 +588,7 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
         }
 
         // Vẽ Dashboard 1 lần duy nhất khi bắt đầu tải file
-        renderDashboard(deviceStr, "Bắt đầu truyền...");
+        renderDashboard(deviceStr, "Bắt đầu truyền");
 
         // Gửi HTTP Response Headers
         std::ostringstream respHeader;
@@ -667,7 +667,7 @@ client_disconnected:
             cout << "\r [*] Tiến độ : [████████████████████] 100.0% \x1b[92m[HOÀN TẤT]\x1b[0m ("
                  << fixed << setprecision(1) << currentSpeedMBps << " MB/s)   \n"
                  << " \x1b[92m[✓] Đã gửi thành công tới " << deviceStr << "!\x1b[0m\n\n"
-                 << " [*] Sẵn sàng cho lượt tải tiếp theo (Phím 0: Thoát)...\n" << std::flush;
+                 << " [*] Sẵn sàng cho lượt tải tiếp theo (Phím 0: Thoát)\n" << std::flush;
         } else {
             cout << "\n \x1b[93m[*] Ngắt kết nối. Sẵn sàng nhận lượt mới (Phím 0: Thoát).\x1b[0m\n" << std::flush;
         }
@@ -698,7 +698,7 @@ client_disconnected:
 void LocalDrop::startReceiver() {
     sc.cls();
     cout << "\n --- BẢO MẬT: NHẬN FILE P2P ---\n"
-         << " [*] Đang dò sóng Beacon ngầm từ tool phát... (Phím 0: Thoát)\n\n";
+         << " [*] Đang dò sóng Beacon ngầm từ tool phát (Phím 0: Thoát)\n\n";
 
     SOCKET recvUdp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (recvUdp == INVALID_SOCKET) {
@@ -788,7 +788,7 @@ void LocalDrop::startReceiver() {
             }
         }
 
-        cout << "\r " << radarFrames[animFrame % 4] << " Đang dò sóng... (Phím 0: Thoát)" << std::flush;
+        cout << "\r " << radarFrames[animFrame % 4] << " Đang dò sóng (Phím 0: Thoát)" << std::flush;
         animFrame++;
         Sleep(100);
     }
@@ -976,7 +976,7 @@ void LocalDrop::startReceiver() {
 
     int postChoice = sc.readInt("");
     if (postChoice == 1) {
-        string explorerCmd = "explorer /select,\"" + savePath.u8string() + "\"";
-        system(explorerCmd.c_str());
+        string param = "/select,\"" + savePath.string() + "\"";
+        ShellExecuteA(NULL, "open", "explorer.exe", param.c_str(), NULL, SW_SHOWNORMAL);
     }
 }

@@ -16,8 +16,7 @@
 
 using namespace std;
 
-const string UpdateManager::CURRENT_VERSION = "0.1.0";
-const string UpdateManager::GITHUB_REPO = "huii404/CMD_BOX";
+const string UpdateManager::CURRENT_VERSION = "0.2.40";
 const string UpdateManager::API_RELEASES_URL = "https://api.github.com/repos/huii404/CMD_BOX/releases/latest";
 
 static const long long UPDATE_COOLDOWN_SECONDS = 2 * 24 * 3600; // 2 ngày (48 giờ)
@@ -71,9 +70,28 @@ static string extractJsonField(const string& json, const string& field) {
     if (pos == string::npos) return "";
     pos = json.find("\"", pos + 1);
     if (pos == string::npos) return "";
-    size_t endPos = json.find("\"", pos + 1);
-    if (endPos == string::npos) return "";
-    return json.substr(pos + 1, endPos - pos - 1);
+
+    // Handle escaped quotes inside the value
+    string result;
+    for (size_t i = pos + 1; i < json.length(); ++i) {
+        if (json[i] == '\\' && i + 1 < json.length()) {
+            // Escaped character: \" \\  \/ \n \r \t etc.
+            char next = json[i + 1];
+            if (next == '"')       result += '"';
+            else if (next == '\\') result += '\\';
+            else if (next == '/')  result += '/';
+            else if (next == 'n')  result += '\n';
+            else if (next == 'r')  result += '\r';
+            else if (next == 't')  result += '\t';
+            else { result += '\\'; result += next; }
+            ++i;
+        } else if (json[i] == '"') {
+            break; // Unescaped quote = end of value
+        } else {
+            result += json[i];
+        }
+    }
+    return result;
 }
 
 static string extractCleanVersion(const string& raw) {
@@ -202,19 +220,15 @@ void UpdateManager::checkUpdateAsync() {
     // 2. Chưa có cache hoặc đã quá 2 ngày -> khởi chạy thread ngầm kiểm tra GitHub
     thread([]() {
         ReleaseInfo rel = fetchLatestRelease();
+        lock_guard<mutex> lock(g_versionMutex);
         if (rel.valid) {
-            lock_guard<mutex> lock(g_versionMutex);
             g_remoteVersion = rel.version;
             if (!rel.htmlUrl.empty()) g_releaseUrl = rel.htmlUrl;
-            if (isNewer(CURRENT_VERSION, rel.version)) {
-                g_hasNewVersion = true;
-            } else {
-                g_hasNewVersion = false;
-            }
+            g_hasNewVersion = isNewer(CURRENT_VERSION, rel.version);
             // Lưu cache mới kèm mốc thời gian
             saveCache(static_cast<long long>(time(nullptr)), rel.version, g_releaseUrl);
         }
-        g_checkFinished = true;
+        g_checkFinished = true; // Inside lock: ensures happens-before with string reads
     }).detach();
 }
 
@@ -273,7 +287,11 @@ void UpdateManager::showUpdateMenu() {
         if (choice == 0) return;
 
         if (choice == 1) {
-            string openUrl = g_releaseUrl;
+            string openUrl;
+            {
+                lock_guard<mutex> lock(g_versionMutex);
+                openUrl = g_releaseUrl;
+            }
             ShellExecuteA(NULL, "open", openUrl.c_str(), NULL, NULL, SW_SHOWNORMAL);
             Sleep(800);
         } else if (choice == 2) {
