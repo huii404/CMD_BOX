@@ -522,42 +522,78 @@ void SystemOptimizer::multiTierPerformanceOptimize() {
  * @return bool true nếu cấu hình thành công, false nếu thất bại (thiếu quyền Admin hoặc service không tồn tại)
  */
 bool SystemOptimizer::ServiceControlAPI(std::string serviceName, DWORD startupType, bool stopService) {
-    SC_HANDLE scm = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
-    if (!scm) return false;
+    DWORD regStart = (startupType == SERVICE_DISABLED) ? 4 : ((startupType == SERVICE_AUTO_START) ? 2 : 3);
+    std::string subKey = "SYSTEM\\CurrentControlSet\\Services\\" + serviceName;
 
-    SC_HANDLE svc = OpenServiceA(scm, serviceName.c_str(), SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS | SERVICE_CHANGE_CONFIG | SERVICE_STOP | SERVICE_START);
-    if (!svc) { CloseServiceHandle(scm); return false; }
-
-    // Kiểm tra cấu hình hiện tại để tránh can thiệp nếu đã đúng
-    DWORD bytesNeeded = 0;
-    QueryServiceConfigA(svc, NULL, 0, &bytesNeeded);
-    if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
-        std::vector<BYTE> buf(bytesNeeded);
-        LPQUERY_SERVICE_CONFIGA pConfig = (LPQUERY_SERVICE_CONFIGA)buf.data();
-        if (QueryServiceConfigA(svc, pConfig, bytesNeeded, &bytesNeeded)) {
-            if (pConfig->dwStartType == startupType) {
-                SERVICE_STATUS_PROCESS ssp;
-                DWORD sspNeeded = 0;
-                if (QueryServiceStatusEx(svc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &sspNeeded)) {
-                    if (!stopService || ssp.dwCurrentState == SERVICE_STOPPED) {
-                        CloseServiceHandle(svc);
-                        CloseServiceHandle(scm);
-                        return true; // Đã chuẩn từ trước, không cần ghi đè
-                    }
+    // 1. Kiểm tra cấu hình Registry xem đã ở đúng giá trị mong muốn chưa
+    HKEY hKeyCheck;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subKey.c_str(), 0, KEY_READ, &hKeyCheck) == ERROR_SUCCESS) {
+        DWORD curVal = 0, sz = sizeof(curVal);
+        if (RegQueryValueExA(hKeyCheck, "Start", NULL, NULL, (LPBYTE)&curVal, &sz) == ERROR_SUCCESS) {
+            if (curVal == regStart) {
+                RegCloseKey(hKeyCheck);
+                if (stopService) {
+                    std::string stopCmd = "net stop \"" + serviceName + "\" >nul 2>&1";
+                    system(stopCmd.c_str());
                 }
+                return true;
             }
         }
+        RegCloseKey(hKeyCheck);
     }
 
-    bool configSuccess = ChangeServiceConfigA(svc, SERVICE_NO_CHANGE, startupType, SERVICE_NO_CHANGE, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    // 2. Thử qua Win32 SCM API (nếu tiến trình có đủ quyền)
+    bool scmSuccess = false;
+    SC_HANDLE scm = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT | SC_MANAGER_ENUMERATE_SERVICE);
+    if (!scm) scm = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+    if (scm) {
+        SC_HANDLE svc = OpenServiceA(scm, serviceName.c_str(), SERVICE_QUERY_CONFIG | SERVICE_CHANGE_CONFIG | SERVICE_STOP | SERVICE_START);
+        if (svc) {
+            if (ChangeServiceConfigA(svc, SERVICE_NO_CHANGE, startupType, SERVICE_NO_CHANGE, NULL, NULL, NULL, NULL, NULL, NULL, NULL)) {
+                scmSuccess = true;
+            }
+            if (stopService) {
+                SERVICE_STATUS status;
+                ControlService(svc, SERVICE_CONTROL_STOP, &status);
+            }
+            CloseServiceHandle(svc);
+        }
+        CloseServiceHandle(scm);
+    }
+    if (scmSuccess) return true;
 
+    // 3. Thử ghi trực tiếp vào Registry (Áp dụng tốt cho User Service như CDPUserSvc, WpnUserService, hoặc WaaSMedicSvc)
+    HKEY hKeyWrite;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subKey.c_str(), 0, KEY_SET_VALUE, &hKeyWrite) == ERROR_SUCCESS) {
+        RegSetValueExA(hKeyWrite, "Start", 0, REG_DWORD, (const BYTE*)&regStart, sizeof(regStart));
+        RegCloseKey(hKeyWrite);
+        if (stopService) {
+            std::string stopCmd = "net stop \"" + serviceName + "\" >nul 2>&1";
+            system(stopCmd.c_str());
+        }
+        return true;
+    }
+
+    // 4. Nếu thiếu quyền Administrator, dùng cơ chế tự nâng quyền runAdmin của CMD Box
+    std::string scStart = (startupType == SERVICE_DISABLED) ? "disabled" : ((startupType == SERVICE_AUTO_START) ? "auto" : "demand");
+    std::string adminCmd = "sc config \"" + serviceName + "\" start= " + scStart + " & reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\" + serviceName + "\" /v Start /t REG_DWORD /d " + std::to_string(regStart) + " /f";
     if (stopService) {
-        SERVICE_STATUS status;
-        ControlService(svc, SERVICE_CONTROL_STOP, &status);
+        adminCmd += " & net stop \"" + serviceName + "\" >nul 2>&1";
     }
-    CloseServiceHandle(svc);
-    CloseServiceHandle(scm);
-    return configSuccess;
+    if (sc.runAdmin(adminCmd, true)) {
+        HKEY hKeyVerify;
+        if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subKey.c_str(), 0, KEY_READ, &hKeyVerify) == ERROR_SUCCESS) {
+            DWORD finalVal = 0, fsz = sizeof(finalVal);
+            if (RegQueryValueExA(hKeyVerify, "Start", NULL, NULL, (LPBYTE)&finalVal, &fsz) == ERROR_SUCCESS) {
+                RegCloseKey(hKeyVerify);
+                return (finalVal == regStart);
+            }
+            RegCloseKey(hKeyVerify);
+        }
+        return true;
+    }
+
+    return false;
 }
 
 /**
@@ -565,7 +601,7 @@ bool SystemOptimizer::ServiceControlAPI(std::string serviceName, DWORD startupTy
  * 8. MENU QUẢN LÝ DỊCH VỤ WINDOWS (turnOffServicesMenu)
  * =========================================================================================
  * TÍNH NĂNG:
- * - Cung cấp danh sách 20 dịch vụ chạy ngầm phổ biến có thể tắt an toàn hoặc chuyển Manual:
+ * - Cung cấp danh sách 24 dịch vụ chạy ngầm phổ biến có thể tắt an toàn hoặc chuyển Manual:
  *   + Windows Update (wuauserv, UsoSvc, WaaSMedicSvc)
  *   + Báo cáo lỗi (WerSvc) & Thông báo ngầm (WpnService, WpnUserService)
  *   + Xbox Live services (XblAuthManager, XblGameSave, XboxNetApiSvc)
@@ -573,9 +609,7 @@ bool SystemOptimizer::ServiceControlAPI(std::string serviceName, DWORD startupTy
  *   + Trình cập nhật ngầm Edge (EdgeUpdate), Thử nghiệm Insider (wisvc)
  *   + Dịch vụ in ấn Spooler, Bluetooth (BthServ), Maps ngoại tuyến, Remote Registry, SysMain (Superfetch), Wallet...
  * - Cho phép chọn [A] Cấu hình tất cả thành Manual / Disabled hoặc cấu hình từng dịch vụ riêng lẻ.
- * 
- * CÁCH BỔ SUNG THÊM SERVICE MỚI:
- * - Thêm 1 dòng `{"tên_service", "Mô tả tiếng Việt và ghi chú"}` vào vector `targetSvcs`.
+ * - Tự động nâng quyền Administrator khi cần, hỗ trợ triệt để các User Service có hậu tố ngẫu nhiên.
  */
 void SystemOptimizer::turnOffServicesMenu() {
     sc.cls();
@@ -639,18 +673,42 @@ void SystemOptimizer::turnOffServicesMenu() {
 
             startType = (action == 1) ? SERVICE_DEMAND_START : SERVICE_DISABLED;
             modeName = (action == 1) ? "MANUAL" : "DISABLED";
+            DWORD regVal = (action == 1) ? 3 : 4;
+            std::string scVal = (action == 1) ? "demand" : "disabled";
 
-            std::cout << "\nĐang thực thi cấu hình\n";
+            std::cout << "\nĐang thực thi cấu hình dịch vụ (" << modeName << ")...\n";
+
+            // Nếu chưa chạy quyền Admin, gom tất cả vào 1 batch script chạy quyền Admin duy nhất
+            if (!sc.isElevated()) {
+                char tempPath[MAX_PATH];
+                if (GetTempPathA(MAX_PATH, tempPath) > 0) {
+                    std::string batPath = std::string(tempPath) + "cmd_svc_batch_" + std::to_string(GetCurrentProcessId()) + ".bat";
+                    std::ofstream batFile(batPath);
+                    if (batFile.is_open()) {
+                        batFile << "@echo off\n";
+                        for (const auto &s : targetSvcs) {
+                            batFile << "sc config \"" << s.name << "\" start= " << scVal << " >nul 2>&1\n";
+                            batFile << "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\" << s.name << "\" /v Start /t REG_DWORD /d " << regVal << " /f >nul 2>&1\n";
+                            batFile << "net stop \"" << s.name << "\" >nul 2>&1\n";
+                            batFile << "powershell -NoProfile -Command \"Get-Service -Name '" << s.name << "*' -ErrorAction SilentlyContinue | Stop-Service -Force -ErrorAction SilentlyContinue\" >nul 2>&1\n";
+                        }
+                        batFile.close();
+                        sc.runAdmin("\"" + batPath + "\"", true);
+                        try { fs::remove(batPath); } catch (...) {}
+                    }
+                }
+            }
+
             int successCount = 0;
             for (const auto &s : targetSvcs) {
                 if (ServiceControlAPI(s.name, startType, true)) {
-                    std::cout << "  " << modeName << ": " << s.name << "\n";
+                    std::cout << "  [✓] " << modeName << ": " << s.name << "\n";
                     successCount++;
                 } else {
-                    std::cout << "  Thất bại: " << s.name << "\n";
+                    std::cout << "  [!] Thất bại: " << s.name << "\n";
                 }
             }
-            std::cout << "\nĐã cấu hình " << successCount << "/" << targetSvcs.size() << " dịch vụ.\n";
+            std::cout << "\n[✓] Đã cấu hình " << successCount << "/" << targetSvcs.size() << " dịch vụ.\n";
             sc.waitEnter();
         }
         // --- CẤU HÌNH TỪNG DỊCH VỤ RIÊNG LẺ THEO SỐ THỨ TỰ ---
