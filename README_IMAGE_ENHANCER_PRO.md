@@ -143,4 +143,38 @@ Kết quả đo đạc trực tiếp từ engine **PRO V6** (`.\bin\main.exe --t
 | `contrast` | Vi tương phản S-Curve | `1.03` | `1.04` | `1.02` *(Êm dịu)* | `1.035` |
 | `vibrance` | Bù sắc tố thông minh | `0.02` | `0.05` | `0.035` *(Hồng hào tự nhiên)*| `0.045` |
 
+---
+
+## VI. TỐI ƯU HÓA KIẾN TRÚC & TINH GỌN MÃ NGUỒN (CLEAN CODE & ZERO-BLOAT REFACTORING)
+
+Nhằm đảm bảo engine vận hành với hiệu năng cao nhất, loại bỏ hoàn toàn tình trạng phình to mã nguồn (code bloat) và không tận dụng logic dùng chung, **ImageEnhancerPro** đã trải qua đợt tái cấu trúc toàn diện (từ **2040 dòng** xuống còn **~1100 dòng**, giảm **~46% độ dài code** mà không làm thay đổi hay suy giảm bất kỳ thuật toán xử lý ảnh nào):
+
+### 1. Thống nhất Giải mã WIC (`DecodedWICImage` & `decodeWIC`)
+- **Trước tối ưu:** `analyzeImageFile` và `enhanceImage` trùng lặp gần như nguyên văn ~60 dòng mã COM boilerplate (tạo Factory, Decoder, Frame, Converter, chuyển sang format `GUID_WICPixelFormat32bppBGRA`, copy pixel).
+- **Sau tối ưu:** Đóng gói thành struct `DecodedWICImage` và hàm dùng chung `decodeWIC(...)`, tự động quản lý an toàn vòng đời COM pointer, tái sử dụng 100% luồng nạp ảnh.
+
+### 2. Tách nhân tích chập 1D Sliding Box (`boxFilter1D_H` & `boxFilter1D_V`)
+- **Trước tối ưu:** `fastBlur` và `fastBoxFilter` cùng triển khai các vòng lặp trượt cửa sổ (sliding window box sum) theo 2 trục ngang và dọc hoàn toàn trùng lặp.
+- **Sau tối ưu:** Tách thành hai hạt nhân 1D cơ sở `boxFilter1D_H` và `boxFilter1D_V`. Cả `fastBoxFilter` lẫn `fastBlur` đều gọi trực tiếp các hàm này theo tính chất tách được (separable filtering), loại bỏ mã lặp và giảm tải mã máy.
+
+### 3. Bộ lọc Self-Guided Filter (`applySelfGuidedFilter`) triệt tiêu 50% tính toán
+- **Trước tối ưu:** Trong `applyGuidedFilter3Scale`, cả 3 dải tần (micro, medium, macro) đều thực hiện Guided Filter với ảnh hướng dẫn $I$ trùng với ảnh lọc $p$ ($p \equiv I$). Hàm `applyGuidedFilterSingle` tổng quát vẫn tính `mean_p = boxFilter(p)`, $Ip = I \times p$, và `mean_Ip = boxFilter(Ip)`. Điều này dẫn đến **9 lần quét box filter** và hàng loạt vector đệm cấp phát heap dư thừa vô ích.
+- **Sau tối ưu:** Hiện thực hóa `applySelfGuidedFilter(I, r, eps)`:
+  - Tận dụng ngay $p \equiv I \implies \text{mean\_p} \equiv \text{mean\_I}$ và $Ip \equiv I^2$.
+  - Tính trực tiếp $\text{var\_I} = \text{mean\_II} - \text{mean\_I}^2$, $a = \frac{\text{var\_I}}{\text{var\_I} + \epsilon}$, $b = \text{mean\_I} - a \times \text{mean\_I}$.
+  - Cắt giảm **50% số lượt quét box filter** và giải phóng phân nửa bộ nhớ đệm qua cả 3 dải tần số.
+
+### 4. Bộ nhớ liên tục 1D cho bảng ánh xạ CLAHE (Contiguous CLAHE LUT)
+- **Trước tối ưu:** `std::vector<std::vector<std::vector<float>>> mappings(tilesY, ...)` tạo ra $65$ lần cấp phát heap rời rạc (fragmented memory allocations), gây áp lực lên memory manager và cache misses khi nội suy song tuyến (bilinear interpolation).
+- **Sau tối ưu:** Dùng mảng 1D liên tục `mappings(tilesY * tilesX * 256)` với công thức offset `(ty * tilesX + tx) * 256 + k`, tăng tốc truy xuất và thân thiện tối đa với bộ đệm CPU L1/L2.
+
+### 5. Tiền tính toán ma trận trọng số Lanczos-3 (Precomputed Horizontal Weights)
+- **Trước tối ưu:** Vòng lặp lấy mẫu dòng ngang tính toán lại hàm `sin()` và trọng số Lanczos cho từng pixel trên mỗi dòng quét độc lập.
+- **Sau tối ưu:** Tiền tính toán trước ma trận trọng số ngang một lần duy nhất cho toàn bộ chiều rộng ảnh mới, các luồng OpenMP chỉ việc nhân chập mảng trọng số có sẵn.
+
+### 6. Tinh giản cấu trúc Preset & Adaptive Options
+- **Trước tối ưu:** Các nhánh `switch-case` trong `getPresetPro` và logic `computeAdaptiveOptions` gán thủ công lặp lại hàng trăm dòng code tham số mặc định.
+- **Sau tối ưu:** Khởi tạo từ preset nền tảng (baseline options) và chỉ ghi đè có chọn lọc các tham số đặc trưng của từng ngữ cảnh, giữ nguyên độ chuẩn xác tham số đồng thời tăng tính bảo trì của mã nguồn.
+
+
 

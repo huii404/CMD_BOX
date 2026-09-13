@@ -121,6 +121,8 @@ private:
         const std::vector<uint8_t>& src, int srcW, int srcH, int srcStride,
         int dstW, int dstH, int dstStride);
 
+    static void boxFilter1D_H(const float* src, float* dst, int width, int height, int radius, float invScale = 1.0f);
+    static void boxFilter1D_V(const float* src, float* dst, int width, int height, int radius, float invScale = 1.0f);
     static std::vector<float> fastBoxFilter(const std::vector<float>& src, int width, int height, int radius);
     static std::vector<float> fastBlur(const std::vector<float>& src, int width, int height, int radius);
 
@@ -138,6 +140,8 @@ private:
     static std::vector<float> applyGuidedFilterSingle(
         const std::vector<float>& p, const std::vector<float>& I,
         int width, int height, int radius, float eps);
+    static std::vector<float> applySelfGuidedFilter(
+        const std::vector<float>& I, int width, int height, int radius, float eps);
 
     static void applyGuidedFilter3Scale(
         const std::vector<float>& luma,
