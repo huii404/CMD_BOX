@@ -11,6 +11,7 @@
 #include <atomic>
 #include <vector>
 #include <mutex>
+#include <limits>
 
 
 class SystemCore {
@@ -26,7 +27,7 @@ public:
     static void waitEnter();
     static bool confirm(const std::string& prompt);
     static std::string trim(const std::string& str);
-    static int readInt(const std::string &prompt);
+    static int readInt(const std::string &prompt, int defaultValue = std::numeric_limits<int>::min());
     static std::string formatSize(long long b);
     static bool runRawCommand(const std::string& command);
     static std::vector<std::string> parsePaths(const std::string& rawInput);

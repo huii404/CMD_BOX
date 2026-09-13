@@ -51,6 +51,7 @@ Chương trình được phân tách thành 4 phân hệ chính theo từng lĩn
 - **Lá chắn bảo mật toàn diện (Full Security Shield):** Kích hoạt Windows Defender, cập nhật mẫu mã độc, bật tường lửa toàn diện, kích hoạt bảo vệ chống Ransomware (Controlled Folder Access), đóng các cổng dịch vụ mạng nguy hiểm (445, 139, 135, 137, 138) và cấu hình Cloudflare DoH `1.1.1.1`.
 - **Kiểm tra trạng thái bảo mật:** Rà soát đánh giá trạng thái Defender, Firewall, dịch vụ RDP và tính hợp lệ của DNS.
 - **Trích xuất mật khẩu Wi-Fi:** Liệt kê toàn bộ hồ sơ Wi-Fi đã lưu trên máy, hiển thị tên mạng (SSID), chuẩn bảo mật và mật khẩu rõ ràng.
+- **Trạm truyền file P2P nội bộ (Local Web Drop):** Truyền file trực tiếp giữa PC và điện thoại/máy tính khác qua mạng cục bộ (LAN / Wi-Fi) bằng TCP Stream và UDP Broadcast Beacon. Không phụ thuộc đám mây trung gian (Zero-Cloud), không sinh file tạm (Zero-Temp-File). *(Yêu cầu kỹ thuật bắt buộc: Cả hai thiết bị phải kết nối chung một mạng nội bộ; nếu một trong hai máy mất mạng thì gói tin bị ngắt và không thể truyền dữ liệu).*
 
 ### 3. Công cụ Tự động & Tiện ích (`UtilityTools`)
 - **Tự động nhấp chuột (Auto Click):** Mô phỏng thao tác nhấp chuột theo tọa độ cố định hoặc vị trí con trỏ hiện tại với tần suất mili-giây tùy chỉnh, phím ngắt khẩn cấp (`ESC` / `F6`).

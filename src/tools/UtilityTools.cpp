@@ -33,13 +33,13 @@ void UtilityTools::autoClickPoint() {
     int times = sc.readInt("Số lần click: ");
     if (times <= 0) return;
     
-    int intervalMs = sc.readInt("Delay các lần (ms) [100]: ");
+    int intervalMs = sc.readInt("Delay các lần (ms) [100]: ", 100);
     if (intervalMs <= 0) intervalMs = 100;
     
-    int clickType = sc.readInt("Kiểu click: [1] Trái | [2] Phải | [3] Đúp trái: ");
+    int clickType = sc.readInt("Kiểu click: [1] Trái | [2] Phải | [3] Đúp trái: ", 1);
     if (clickType < 1 || clickType > 3) clickType = 1;
 
-    int delaySec = sc.readInt("Thời gian chờ di chuột (giây) [3]: ");
+    int delaySec = sc.readInt("Thời gian chờ di chuột (giây) [3]: ", 3);
     if (delaySec <= 0) delaySec = 3;
     
     cout << "\nDi chuột đến vị trí cần click\n";
@@ -47,6 +47,7 @@ void UtilityTools::autoClickPoint() {
         cout << " " << i; cout.flush(); 
         if (sleepWithEmergencyCheck(1000)) {
             cout << "\nĐã hủy.\n";
+            sc.waitEnter();
             return;
         }
     }
@@ -80,8 +81,13 @@ void UtilityTools::autoClickPoint() {
         }
         executed++;
         
-        if (times > 20 && i % (times / 20) == 0) {
-            cout << "\rTiến độ: " << (i * 100 / times) << "% ";
+        if (times >= 20) {
+            if (i % (times / 20) == 0 || i == times - 1) {
+                cout << "\rTiến độ: " << ((i + 1) * 100 / times) << "% ";
+                cout.flush();
+            }
+        } else {
+            cout << "\rĐã click: " << (i + 1) << "/" << times << " ";
             cout.flush();
         }
         
@@ -112,7 +118,7 @@ void UtilityTools::spamText() {
     int times = sc.readInt("Số lần gửi: ");
     if (times <= 0) return;
     
-    int delayMs = sc.readInt("Delay (ms) [100]: ");
+    int delayMs = sc.readInt("Delay (ms) [100]: ", 100);
     if (delayMs <= 0) delayMs = 100;
     
     cout << "Tự động click vào ô nhập? (y/n): ";
@@ -155,7 +161,7 @@ void UtilityTools::spamText() {
         sc.pressEnter();
         executed++;
         
-        if ((i + 1) % 10 == 0 || i == times - 1) {
+        if (times <= 10 || (i + 1) % 10 == 0 || i == times - 1) {
             cout << "\rĐã gửi: " << (i + 1) << "/" << times << " ";
             cout.flush();
         }
@@ -181,7 +187,7 @@ void UtilityTools::autoPasteData() {
     int n = sc.readInt("Số dòng dữ liệu: ");
     if (n <= 0) return;
     
-    int delayMs = sc.readInt("Delay giữa các dòng (ms) [200]: ");
+    int delayMs = sc.readInt("Delay giữa các dòng (ms) [200]: ", 200);
     if (delayMs <= 0) delayMs = 200;
     
     vector<string> dataList(n);
@@ -189,9 +195,6 @@ void UtilityTools::autoPasteData() {
     for (int i = 0; i < n; i++) { 
         cout << "  [" << i + 1 << "]: "; 
         getline(cin, dataList[i]);
-        if (dataList[i].empty()) {
-            dataList[i] = "(empty)";
-        }
     }
     
     cout << "Tự động click vào ô nhập? (y/n): ";

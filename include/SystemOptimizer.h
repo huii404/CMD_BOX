@@ -18,9 +18,11 @@ public:
     // --- HỆ THỐNG ĐIỀU PHỐI DỌN RÁC & TỐI ƯU ---
     // 1. Quản lý Dọn rác Hệ thống
     void multiTierDiskClean();
+    void runCleanChoice(int choice);
 
     // 2. Quản lý Tăng tốc & Tối ưu Hệ thống
     void multiTierPerformanceOptimize();
+    void runOptimizeChoice(int choice);
 
     // --- CÁC HÀM DỌN RÁC THEO NHIỆM VỤ (TASK-BASED) ---
     // Dọn rác tạm bề mặt & cache người dùng (Temp, CrashDumps, WER User, INetCache, RecycleBin, Flush DNS)

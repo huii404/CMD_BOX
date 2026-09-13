@@ -21,7 +21,7 @@ static const int DEFAULT_TCP_PORT = 8888;
 static const int DEFAULT_UDP_BEACON_PORT = 53318;
 static const int CHUNK_SIZE = 262144; // 256 KB (Tối ưu thông lượng LAN & Wi-Fi)
 
-// Gọi API miễn phí (qrenco.de) để lấy mã QR hiển thị trên console (timeout 1-2s tránh nghẽn)
+//API (qrenco.de) lấy mã QR trên console (timeout 1-2s tránh nghẽn)
 static string fetchQrCodeApi(const string &targetUrl) {
     string cmd = "curl.exe -s --connect-timeout 1 --max-time 2 \"qrenco.de/" + targetUrl + "\"";
     FILE *pipe = _popen(cmd.c_str(), "r");
@@ -128,7 +128,7 @@ string LocalDrop::detectBestLANIP() {
             if (pCurr->OperStatus != IfOperStatusUp) continue;
             if (pCurr->IfType == IF_TYPE_SOFTWARE_LOOPBACK) continue;
 
-            // Kiểm tra tên mô tả card mạng để loại bỏ card ảo
+            // Kiểm tra tên card để loại bỏ card ảo
             wstring descW = pCurr->Description ? pCurr->Description : L"";
             wstring friendlyW = pCurr->FriendlyName ? pCurr->FriendlyName : L"";
             string desc(descW.begin(), descW.end());
@@ -146,11 +146,11 @@ string LocalDrop::detectBestLANIP() {
             if (desc.find("wsl") != string::npos || friendly.find("wsl") != string::npos) continue;
             if (desc.find("bluetooth") != string::npos || friendly.find("bluetooth") != string::npos) continue;
 
-            // Kiểm tra có Gateway hay không
+            // Kiểm tra Gateway
             bool hasGateway = (pCurr->FirstGatewayAddress != NULL);
             if (!hasGateway) continue;
 
-            // Duyệt danh sách địa chỉ Unicast IPv4
+            // Lấy địa chỉ Unicast IPv4
             for (PIP_ADAPTER_UNICAST_ADDRESS pUni = pCurr->FirstUnicastAddress; pUni != NULL; pUni = pUni->Next) {
                 if (pUni->Address.lpSockaddr->sa_family == AF_INET) {
                     sockaddr_in *sa_in = reinterpret_cast<sockaddr_in*>(pUni->Address.lpSockaddr);
@@ -229,7 +229,7 @@ string LocalDrop::parseDeviceName(const string &userAgent, const string &clientI
     } else if (userAgent.find("Linux") != string::npos) {
         name = "Linux Device";
     } else if (userAgent.find("CMDBOX_CLI") != string::npos) {
-        name = "CMD Box Client";
+        name = "CMD Box";
     } else {
         name = "Thiết bị mạng";
     }

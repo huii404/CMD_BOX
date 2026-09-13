@@ -31,8 +31,9 @@ SystemCore::~SystemCore() {
 
 // Tiện ích cơ bản
 void SystemCore::cls() {
-    // ANSI escape: clear screen + move cursor to home (no subprocess spawn)
-    std::cout << "\x1b[2J\x1b[H" << std::flush;
+    std::cout << std::flush;
+    system("cls");
+    std::cout << "\x1b[3J\x1b[H" << std::flush;
 }
 
 std::string SystemCore::getTime(bool includeDate) {
@@ -215,7 +216,7 @@ bool SystemCore::confirm(const std::string& prompt) {
     return (choice == "y" || choice == "Y");
 }
 
-int SystemCore::readInt(const std::string &prompt) {
+int SystemCore::readInt(const std::string &prompt, int defaultValue) {
     std::string line;
     while (true) {
         if (!prompt.empty()) {
@@ -228,7 +229,12 @@ int SystemCore::readInt(const std::string &prompt) {
         }
         
         line = SystemCore::trim(line);
-        if (line.empty()) continue;  
+        if (line.empty()) {
+            if (defaultValue != std::numeric_limits<int>::min()) {
+                return defaultValue;
+            }
+            continue;
+        }
         
         try {
             return std::stoi(line);

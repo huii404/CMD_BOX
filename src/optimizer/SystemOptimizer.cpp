@@ -173,6 +173,63 @@ long long SystemOptimizer::cleanDevArtifactsAndCaches() {
     return (after > before) ? (after - before) : 0;
 }
 
+// Thực thi một nhiệm vụ Dọn rác cụ thể
+void SystemOptimizer::runCleanChoice(int choice) {
+    if (choice < 1 || choice > 6) return;
+
+    sc.cls();
+    cout << "\n\n";
+    long long totalFreed = 0;
+
+    if (choice == 1 || choice == 5 || choice == 6) {
+        cout << " [*] Nhiệm vụ 1: Đang dọn rác tạm & cache người dùng\n"
+             << "     ├── Dọn Temp, Recent, ShaderCache, Cryptnet, INetCache\n"
+             << "     ├── Dọn User CrashDumps, WER Reports (User & System)\n"
+             << "     ├── Xóa sạch Thùng rác (Recycle Bin) & Flush DNS\n";
+        long long f1 = cleanSurfaceAndUserTemp();
+        totalFreed += f1;
+        cout << "     └── [✓] " << (f1 > 0 ? ("Giải phóng " + SystemCore::formatSize(f1)) : "Đã sạch sẽ từ trước") << "\n\n";
+    }
+
+    if (choice == 2 || choice == 5 || choice == 6) {
+        cout << " [*] Nhiệm vụ 2: Đang dọn rác Trình duyệt & Ứng dụng\n"
+             << "     ├── Dọn cache Chrome, Edge, Brave, CocCoc, Opera, Firefox\n"
+             << "     ├── Dọn cache Discord, Telegram, NVIDIA GLCache, Thumbnails\n";
+        long long f2 = cleanBrowserAndAppCache();
+        totalFreed += f2;
+        cout << "     └── [✓] " << (f2 > 0 ? ("Giải phóng " + SystemCore::formatSize(f2)) : "Đã sạch sẽ từ trước") << "\n\n";
+    }
+
+    if (choice == 3 || choice == 5 || choice == 6) {
+        cout << " [*] Nhiệm vụ 3: Đang dọn dẹp Chuyên sâu Hệ thống & Tồn dư Cập nhật\n"
+             << "     ├── Dọn tồn dư cập nhật bản lớn ($WINDOWS.~BT, $WINDOWS.~WS, Windows.old)\n"
+             << "     ├── Chạy DISM WinSxS ResetBase, dọn Windows Update kẹt & Delivery Optimization\n"
+             << "     ├── Xóa LiveKernelReports, CBS Logs, Panther Logs, Windows Error Reports\n"
+             << "     ├── Xóa toàn bộ Windows Event Logs, giải phóng file ngủ đông (hiberfil)\n";
+        long long f3 = cleanDeepSystemAndUpdates();
+        totalFreed += f3;
+        cout << "     └── [✓] " << (f3 > 0 ? ("Giải phóng " + SystemCore::formatSize(f3)) : "Đã sạch sẽ từ trước") << "\n\n";
+    }
+
+    if (choice == 4 || choice == 6) {
+        cout << " [*] Nhiệm vụ 4: Đang dọn rác Môi trường lập trình (Dev Caches & Artifacts)\n"
+             << "     ├── Dọn cache npm, yarn, pnpm, pip, nuget, gradle, cargo, go\n"
+             << "     ├── Dọn cache VS Code, Cursor workspace storage\n"
+             << "     ├── Quét & giải phóng node_modules, build cache trong workspace\n";
+        long long f4 = cleanDevArtifactsAndCaches();
+        totalFreed += f4;
+        cout << "     └── [✓] " << (f4 > 0 ? ("Giải phóng " + SystemCore::formatSize(f4)) : "Đã sạch sẽ từ trước") << "\n\n";
+    }
+
+    cout << "\n\n";
+    if (totalFreed > 0) {
+        cout << "[✓] Đã giải phóng: " << SystemCore::formatSize(totalFreed) << "\n\n";
+    } else {
+        cout << "[✓] Hệ thống đã rất sạch sẽ.\n\n";
+    }
+    sc.waitEnter();
+}
+
 // Menu điều phối Dọn rác
 void SystemOptimizer::multiTierDiskClean() {
     while (true) {
@@ -189,58 +246,7 @@ void SystemOptimizer::multiTierDiskClean() {
 
         int choice = sc.readInt("");
         if (choice == 0) break;
-
-        sc.cls();
-        cout << "\n\n";
-        long long totalFreed = 0;
-
-        if (choice == 1 || choice == 5 || choice == 6) {
-            cout << " [*] Nhiệm vụ 1: Đang dọn rác tạm & cache người dùng\n"
-                 << "     ├── Dọn Temp, Recent, ShaderCache, Cryptnet, INetCache\n"
-                 << "     ├── Dọn User CrashDumps, WER Reports (User & System)\n"
-                 << "     ├── Xóa sạch Thùng rác (Recycle Bin) & Flush DNS\n";
-            long long f1 = cleanSurfaceAndUserTemp();
-            totalFreed += f1;
-            cout << "     └── [✓] " << (f1 > 0 ? ("Giải phóng " + SystemCore::formatSize(f1)) : "Đã sạch sẽ từ trước") << "\n\n";
-        }
-
-        if (choice == 2 || choice == 5 || choice == 6) {
-            cout << " [*] Nhiệm vụ 2: Đang dọn rác Trình duyệt & Ứng dụng\n"
-                 << "     ├── Dọn cache Chrome, Edge, Brave, CocCoc, Opera, Firefox\n"
-                 << "     ├── Dọn cache Discord, Telegram, NVIDIA GLCache, Thumbnails\n";
-            long long f2 = cleanBrowserAndAppCache();
-            totalFreed += f2;
-            cout << "     └── [✓] " << (f2 > 0 ? ("Giải phóng " + SystemCore::formatSize(f2)) : "Đã sạch sẽ từ trước") << "\n\n";
-        }
-
-        if (choice == 3 || choice == 5 || choice == 6) {
-            cout << " [*] Nhiệm vụ 3: Đang dọn dẹp Chuyên sâu Hệ thống & Tồn dư Cập nhật\n"
-                 << "     ├── Dọn tồn dư cập nhật bản lớn ($WINDOWS.~BT, $WINDOWS.~WS, Windows.old)\n"
-                 << "     ├── Chạy DISM WinSxS ResetBase, dọn Windows Update kẹt & Delivery Optimization\n"
-                 << "     ├── Xóa LiveKernelReports, CBS Logs, Panther Logs, Windows Error Reports\n"
-                 << "     ├── Xóa toàn bộ Windows Event Logs, giải phóng file ngủ đông (hiberfil)\n";
-            long long f3 = cleanDeepSystemAndUpdates();
-            totalFreed += f3;
-            cout << "     └── [✓] " << (f3 > 0 ? ("Giải phóng " + SystemCore::formatSize(f3)) : "Đã sạch sẽ từ trước") << "\n\n";
-        }
-
-        if (choice == 4 || choice == 6) {
-            cout << " [*] Nhiệm vụ 4: Đang dọn rác Môi trường lập trình (Dev Caches & Artifacts)\n"
-                 << "     ├── Dọn cache npm, yarn, pnpm, pip, nuget, gradle, cargo, go\n"
-                 << "     ├── Dọn cache VS Code, Cursor workspace storage\n"
-                 << "     ├── Quét & giải phóng node_modules, build cache trong workspace\n";
-            long long f4 = cleanDevArtifactsAndCaches();
-            totalFreed += f4;
-            cout << "     └── [✓] " << (f4 > 0 ? ("Giải phóng " + SystemCore::formatSize(f4)) : "Đã sạch sẽ từ trước") << "\n\n";
-        }
-
-        cout << "\n\n";
-        if (totalFreed > 0) {
-            cout << "[✓] Đã giải phóng: " << SystemCore::formatSize(totalFreed) << "\n\n";
-        } else {
-            cout << "[✓] Hệ thống đã rất sạch sẽ.\n\n";
-        }
-        sc.waitEnter();
+        runCleanChoice(choice);
     }
 }
 
@@ -1112,6 +1118,44 @@ bool SystemOptimizer::optimizeVisualEffectsAndUI() {
     return false;
 }
 
+// Thực thi một nhiệm vụ Tăng tốc & Tối ưu cụ thể
+void SystemOptimizer::runOptimizeChoice(int choice) {
+    if (choice == 5) {
+        turnOffServicesMenu();
+        return;
+    }
+    if (choice < 1 || choice > 4) return;
+
+    sc.cls();
+    cout << "\n\n";
+
+    if (choice == 1 || choice == 4) {
+        cout << " [*] Nhiệm vụ 1: Đang quét và tắt ứng dụng khởi động làm chậm máy\n";
+        int count = optimizeStartupApps();
+        cout << "     └── [✓] " << (count > 0 ? ("Đã tắt " + to_string(count) + " app làm chậm máy") : "Tất cả ứng dụng khởi động đã tối ưu") << "\n\n";
+    }
+
+    if (choice == 2 || choice == 4) {
+        cout << " [*] Nhiệm vụ 2: Đang vô hiệu hóa các dịch vụ chạy ngầm vô ích\n";
+        int count = optimizeBackgroundServices();
+        cout << "     └── [✓] Đã tối ưu " << count << " dịch vụ ngầm (Maps, Wallet, Telemetry, ErrorReporting)\n\n";
+    }
+
+    if (choice == 3 || choice == 4) {
+        cout << " [*] Nhiệm vụ 3: Kiểm tra và tối ưu Giao diện & Taskbar\n";
+        bool restarted = optimizeVisualEffectsAndUI();
+        if (restarted) {
+            cout << "     └── [✓] Đã áp dụng tinh chỉnh mới và làm mới Explorer.\n\n";
+        } else {
+            cout << "     └── [✓] Taskbar & Giao diện đã tinh gọn từ trước (Bỏ qua reset Explorer, tránh chớp màn hình).\n\n";
+        }
+    }
+
+    cout << "\n\n";
+    cout << "[✓] Hoàn tất: Hệ thống đã sẵn sàng với hiệu năng tối đa.\n\n";
+    sc.waitEnter();
+}
+
 // Menu điều phối Tăng tốc & Tối ưu Đa Tầng
 void SystemOptimizer::multiTierPerformanceOptimize() {
     while (true) {
@@ -1127,40 +1171,7 @@ void SystemOptimizer::multiTierPerformanceOptimize() {
 
         int choice = sc.readInt("");
         if (choice == 0) break;
-
-        if (choice == 5) {
-            turnOffServicesMenu();
-            continue;
-        }
-
-        sc.cls();
-        cout << "\n\n";
-
-        if (choice == 1 || choice == 4) {
-            cout << " [*] Nhiệm vụ 1: Đang quét và tắt ứng dụng khởi động làm chậm máy\n";
-            int count = optimizeStartupApps();
-            cout << "     └── [✓] " << (count > 0 ? ("Đã tắt " + to_string(count) + " app làm chậm máy") : "Tất cả ứng dụng khởi động đã tối ưu") << "\n\n";
-        }
-
-        if (choice == 2 || choice == 4) {
-            cout << " [*] Nhiệm vụ 2: Đang vô hiệu hóa các dịch vụ chạy ngầm vô ích\n";
-            int count = optimizeBackgroundServices();
-            cout << "     └── [✓] Đã tối ưu " << count << " dịch vụ ngầm (Maps, Wallet, Telemetry, ErrorReporting)\n\n";
-        }
-
-        if (choice == 3 || choice == 4) {
-            cout << " [*] Nhiệm vụ 3: Kiểm tra và tối ưu Giao diện & Taskbar\n";
-            bool restarted = optimizeVisualEffectsAndUI();
-            if (restarted) {
-                cout << "     └── [✓] Đã áp dụng tinh chỉnh mới và làm mới Explorer.\n\n";
-            } else {
-                cout << "     └── [✓] Taskbar & Giao diện đã tinh gọn từ trước (Bỏ qua reset Explorer, tránh chớp màn hình).\n\n";
-            }
-        }
-
-        cout << "\n\n";
-        cout << "[✓] Hoàn tất: Hệ thống đã sẵn sàng với hiệu năng tối đa.\n\n";
-        sc.waitEnter();
+        runOptimizeChoice(choice);
     }
 }
 

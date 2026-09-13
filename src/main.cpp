@@ -108,18 +108,41 @@ public:
             case 1:
                 while (true) {
                     cls();
-                    cout << " [1] Dọn rác Đa Tầng\n"
-                         << " [2] Tăng tốc & Tối ưu Đa Tầng\n"
-                         << " [3] Sửa lỗi kẹt Windows Update\n"
-                         << " [0] Quay lại\n\n"
+                    cout << "\n"
+                         << " ─── [ DỌN RÁC & LÀM SẠCH ] ────────────────────────────────────────\n\n"
+                         << "  [1]  Dọn rác bề mặt & Cache người dùng (Temp, CrashDumps, WER, DNS)\n"
+                         << "  [2]  Dọn rác Trình duyệt & Ứng dụng (Chrome, Edge, Discord...)\n"
+                         << "  [3]  Dọn dẹp Chuyên sâu & Tồn dư Cập nhật (DISM, Windows.old, Logs)\n"
+                         << "  [4]  Dọn rác Môi trường lập trình (node_modules, Pip, VS Code...)\n"
+                         << "  [5]  [⚡] Dọn toàn diện Hệ thống (Mục 1 + 2 + 3)\n"
+                         << "  [6]  [🚀] Dọn tất cả (Cả 4 mục - Bao gồm cả rác Dev)\n\n"
+                         << " ─── [ TĂNG TỐC & TỐI ƯU ] ─────────────────────────────────────────\n\n"
+                         << "  [7]  Tối ưu Khởi động (Tắt app làm chậm, giữ Bộ gõ & Driver)\n"
+                         << "  [8]  Tối ưu Dịch vụ ngầm (Telemetry, DiagTrack, Maps, Wallet)\n"
+                         << "  [9]  Tối ưu Giao diện & Taskbar (Bỏ trễ UI, tinh gọn Taskbar)\n"
+                         << "  [10] [⚡] Tối ưu liên hoàn hiệu năng (Mục 7 + 8 + 9)\n\n"
+                         << " ─── [ CÔNG CỤ HỆ THỐNG ] ──────────────────────────────────────────\n\n"
+                         << "  [11] Sửa lỗi kẹt Windows Update\n"
+                         << "  [12] Quản lý Dịch vụ Windows nâng cao\n"
+                         << " ───────────────────────────────────────────────────────────────────\n\n"
+                         << "  [0]  Quay lại\n\n"
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;
                     
                     switch (sub) {
-                    case 1:  getOptimizer().multiTierDiskClean(); break;
-                    case 2:  getOptimizer().multiTierPerformanceOptimize(); break;
-                    case 3:  getOptimizer().fixWindowsUpdate(); break;
+                    case 1:  getOptimizer().runCleanChoice(1); break;
+                    case 2:  getOptimizer().runCleanChoice(2); break;
+                    case 3:  getOptimizer().runCleanChoice(3); break;
+                    case 4:  getOptimizer().runCleanChoice(4); break;
+                    case 5:  getOptimizer().runCleanChoice(5); break;
+                    case 6:  getOptimizer().runCleanChoice(6); break;
+                    case 7:  getOptimizer().runOptimizeChoice(1); break;
+                    case 8:  getOptimizer().runOptimizeChoice(2); break;
+                    case 9:  getOptimizer().runOptimizeChoice(3); break;
+                    case 10: getOptimizer().runOptimizeChoice(4); break;
+                    case 11: getOptimizer().fixWindowsUpdate(); break;
+                    case 12: getOptimizer().turnOffServicesMenu(); break;
                     default: Sleep(300); break;
                     }
                 }
@@ -217,203 +240,19 @@ public:
     }
 };
 
-#include "ImageEnhancerPro.h"
-#include <algorithm>
-#include <cmath>
-#include <chrono>
-#include <iomanip>
-
-int runEnhanceTestPro(const std::string& folderPath) {
-    fs::path inDir = fs::u8path(folderPath);
-    if (!fs::exists(inDir) || !fs::is_directory(inDir)) {
-        std::cerr << "Lỗi: Thư mục không tồn tại: " << folderPath << "\n";
-        return 1;
-    }
-
-    fs::path outDir = inDir / "pro_output";
-    if (!fs::exists(outDir)) {
-        fs::create_directories(outDir);
-    }
-
-    std::vector<std::string> validExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff" };
-    std::vector<fs::path> files;
-    for (const auto& entry : fs::directory_iterator(inDir)) {
-        if (entry.is_regular_file()) {
-            std::string ext = entry.path().extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-            if (std::find(validExts.begin(), validExts.end(), ext) != validExts.end()) {
-                files.push_back(entry.path());
-            }
-        }
-    }
-
-    if (files.empty()) {
-        std::cout << "Không tìm thấy file ảnh nào trong " << folderPath << "\n";
-        return 0;
-    }
-
-    std::cout << "\n========================================================================================\n";
-    std::cout << "       CMD BOX: BENCHMARK & EVALUATION SUITE FOR IMAGE ENHANCER PRO (7 GÓC ĐỘ)\n";
-    std::cout << "========================================================================================\n";
-    std::cout << "Tổng số ảnh phát hiện: " << files.size() << "\n\n";
-
-    struct ImageBenchRecord {
-        std::string filename;
-        int origW, origH;
-        int procW, procH;
-        std::string detectedType;
-        float origClarity, enhancedClarity, clarityGain;
-        float origEdge, enhancedEdge;
-        float origNoise, enhancedNoise, noiseMultiplier;
-        float origBlur, enhancedBlur;
-        float origDr, enhancedDr;
-        float origShadowClip, enhancedShadowClip;
-        float origHighlightClip, enhancedHighlightClip;
-        float skinPercent;
-        double elapsedMs;
-        bool success;
-    };
-
-    std::vector<ImageBenchRecord> records;
-
-    for (size_t i = 0; i < files.size(); ++i) {
-        const auto& filePath = files[i];
-        std::string fname = filePath.filename().string();
-        std::string ext = filePath.extension().string();
-        fs::path outFilePath = outDir / (filePath.stem().string() + "_pro" + ext);
-
-        std::cout << "[" << (i + 1) << "/" << files.size() << "] Đang xử lý: " << fname << "... " << std::flush;
-
-        ImageScorePro inScore;
-        std::string errMsg;
-        EnhanceErrorPro errCode = EnhanceErrorPro::Success;
-
-        auto tStart = std::chrono::high_resolution_clock::now();
-        bool ok = ImageEnhancerPro::enhanceImage(filePath.string(), outFilePath.string(), 0, &inScore, &errMsg, &errCode);
-        auto tEnd = std::chrono::high_resolution_clock::now();
-        double ms = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-
-        if (!ok) {
-            std::cout << "THẤT BẠI: " << errMsg << "\n";
-            records.push_back({ fname, 0, 0, 0, 0, "ERROR", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ms, false });
-            continue;
-        }
-
-        ImageScorePro outScore = ImageEnhancerPro::analyzeImageFile(outFilePath.string());
-
-        float clarityGain = (inScore.clarityScore > 0.01f) ?
-            ((outScore.clarityScore - inScore.clarityScore) / inScore.clarityScore * 100.0f) : 0.0f;
-        float noiseMult = (inScore.noiseFloor > 0.01f) ? (outScore.noiseFloor / inScore.noiseFloor) : 1.0f;
-
-        std::cout << "Xong (" << std::fixed << std::setprecision(1) << ms << "ms) | Ngữ cảnh: " 
-                  << inScore.detectedType << " | Nét: " << inScore.clarityScore << " -> " << outScore.clarityScore 
-                  << " (" << (clarityGain >= 0 ? "+" : "") << clarityGain << "%) | Nhiễu: " << noiseMult 
-                  << "x | Da: " << (int)inScore.skinPercent << "% | Sat: " << (int)inScore.colorSaturation 
-                  << " | Thin: " << std::setprecision(2) << inScore.thinFeatureRatio
-                  << " | Blur: " << std::setprecision(1) << inScore.blurDegree
-                  << " | DR: " << (int)inScore.dynamicRange << "\n";
-
-        records.push_back({
-            fname,
-            inScore.origW, inScore.origH,
-            inScore.procW, inScore.procH,
-            inScore.detectedType,
-            inScore.clarityScore, outScore.clarityScore, clarityGain,
-            inScore.edgeSharpness, outScore.edgeSharpness,
-            inScore.noiseFloor, outScore.noiseFloor, noiseMult,
-            inScore.blurDegree, outScore.blurDegree,
-            inScore.dynamicRange, outScore.dynamicRange,
-            inScore.shadowClipPercent, outScore.shadowClipPercent,
-            inScore.highlightClipPercent, outScore.highlightClipPercent,
-            inScore.skinPercent,
-            ms,
-            true
-        });
-    }
-
-    // In bảng tổng hợp 7 góc độ chi tiết
-    std::cout << "\n====================================================================================================================================================================\n";
-    std::cout << "                                               BẢNG ĐÁNH GIÁ 7 GÓC ĐỘ CHẤT LƯỢNG ẢNH CHI TIẾT (BEFORE -> AFTER)\n";
-    std::cout << "====================================================================================================================================================================\n";
-    std::cout << std::left << std::setw(28) << "Tên Tệp Ảnh"
-              << std::setw(11) << "Kích Thước"
-              << std::setw(26) << "Ngữ Cảnh Nhận Diện"
-              << std::setw(7)  << "Da %"
-              << std::setw(15) << "Acutance(Edge)"
-              << std::setw(15) << "Độ Nhòe Blur"
-              << std::setw(14) << "Noise (MAD)"
-              << std::setw(14) << "Dải Sáng DR"
-              << std::setw(14) << "Bết Tối Shadow"
-              << std::setw(10) << "Thời Gian"
-              << "\n";
-    std::cout << "--------------------------------------------------------------------------------------------------------------------------------------------------------------------\n";
-
-    double avgEdgeBefore = 0, avgEdgeAfter = 0;
-    double avgNoiseBefore = 0, avgNoiseAfter = 0;
-    double avgBlurBefore = 0, avgBlurAfter = 0;
-    double avgMs = 0.0;
-    int countOk = 0;
-
-    for (const auto& r : records) {
-        if (!r.success) continue;
-        std::string resStr = std::to_string(r.origW) + "x" + std::to_string(r.origH);
-        std::string edgeStr = std::to_string((int)r.origEdge) + "->" + std::to_string((int)r.enhancedEdge);
-        std::string blurStr = std::to_string((int)r.origBlur) + "->" + std::to_string((int)r.enhancedBlur);
-        std::string noiseStr = std::to_string(r.origNoise).substr(0,4) + "->" + std::to_string(r.enhancedNoise).substr(0,4);
-        std::string drStr = std::to_string((int)r.origDr) + "->" + std::to_string((int)r.enhancedDr);
-        std::string shadowStr = std::to_string(r.origShadowClip).substr(0,4) + "%->" + std::to_string(r.enhancedShadowClip).substr(0,4) + "%";
-
-        std::cout << std::left << std::setw(28) << (r.filename.size() > 26 ? r.filename.substr(0, 25) + ".." : r.filename)
-                  << std::setw(11) << resStr
-                  << std::setw(26) << (r.detectedType.size() > 24 ? r.detectedType.substr(0, 23) + ".." : r.detectedType)
-                  << std::setw(7)  << (std::to_string((int)r.skinPercent) + "%")
-                  << std::setw(15) << edgeStr
-                  << std::setw(15) << blurStr
-                  << std::setw(14) << noiseStr
-                  << std::setw(14) << drStr
-                  << std::setw(14) << shadowStr
-                  << std::setw(10) << (std::to_string((int)std::round(r.elapsedMs)) + "ms")
-                  << "\n";
-
-        avgEdgeBefore += r.origEdge; avgEdgeAfter += r.enhancedEdge;
-        avgBlurBefore += r.origBlur; avgBlurAfter += r.enhancedBlur;
-        avgNoiseBefore += r.origNoise; avgNoiseAfter += r.enhancedNoise;
-        avgMs += r.elapsedMs;
-        countOk++;
-    }
-
-    if (countOk > 0) {
-        std::cout << "--------------------------------------------------------------------------------------------------------------------------------------------------------------------\n";
-        std::string edgeSum = std::to_string((int)(avgEdgeBefore/countOk)) + "->" + std::to_string((int)(avgEdgeAfter/countOk)) +
-                              " (+" + std::to_string((int)std::round((avgEdgeAfter - avgEdgeBefore)/avgEdgeBefore * 100.0)) + "%)";
-        std::string blurSum = std::to_string((int)(avgBlurBefore/countOk)) + "->" + std::to_string((int)(avgBlurAfter/countOk));
-        std::string noiseSum = std::to_string(avgNoiseBefore/countOk).substr(0,4) + "->" + std::to_string(avgNoiseAfter/countOk).substr(0,4);
-
-        std::cout << std::left << std::setw(28) << "TRUNG BÌNH TOÀN DIỆN"
-                  << std::setw(11) << "-"
-                  << std::setw(26) << "-"
-                  << std::setw(7)  << "-"
-                  << std::setw(15) << edgeSum
-                  << std::setw(15) << blurSum
-                  << std::setw(14) << noiseSum
-                  << std::setw(14) << "-"
-                  << std::setw(14) << "-"
-                  << std::setw(10) << (std::to_string((int)std::round(avgMs / countOk)) + "ms")
-                  << "\n";
-    }
-    std::cout << "====================================================================================================================================================================\n";
-
-    return 0;
-}
-
 int main(int argc, char* argv[]) {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
     std::ios::sync_with_stdio(false);
 
-    if (argc >= 2 && std::string(argv[1]) == "--test-pro") {
-        std::string targetDir = (argc >= 3) ? argv[2] : "images_test";
-        return runEnhanceTestPro(targetDir);
+    // Kích hoạt Virtual Terminal Processing cho Console Windows
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE && hOut != NULL) {
+        DWORD dwMode = 0;
+        if (GetConsoleMode(hOut, &dwMode)) {
+            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(hOut, dwMode);
+        }
     }
 
     AppUI app;
