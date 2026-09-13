@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <string>
 #include <vector>
+#include <unordered_set>
 #include <atomic>
 #include <memory>
 #include "SystemCore.h"
@@ -17,6 +18,7 @@ private:
     SOCKET beaconUdpSocket{INVALID_SOCKET};
 
     static std::string detectBestLANIP();
+    static std::unordered_set<std::string> getAllLocalIPs();
     static void addFirewallRule(int port);
     static void removeFirewallRule();
     static std::string parseDeviceName(const std::string &userAgent, const std::string &clientIP);
