@@ -13,18 +13,25 @@
 #include <thread>
 #include <chrono>
 #include <unordered_set>
+#include <map>
 
 using namespace std;
 namespace fs = std::filesystem;
 
 DiskCleaner::DiskCleaner(SystemCore &core) : sc(core) {}
 
+// ----------------------------------------------------------------------------------
+// CÁC HÀM TIỆN ÍCH XÓA DỮ LIỆU CẤP THẤP
+// ----------------------------------------------------------------------------------
+
 void DiskCleaner::wipeFolderContents(const fs::path &dirPath) {
-    if (!fs::exists(dirPath)) return;
+    std::error_code ec;
+    if (!fs::exists(dirPath, ec)) return;
     try {
-        for (const auto &entry : fs::directory_iterator(dirPath)) {
+        for (const auto &entry : fs::directory_iterator(dirPath, fs::directory_options::skip_permission_denied, ec)) {
             try {
-                fs::remove_all(entry.path());
+                SetFileAttributesA(entry.path().string().c_str(), FILE_ATTRIBUTE_NORMAL);
+                fs::remove_all(entry.path(), ec);
             } catch (...) {}
         }
     } catch (...) {}
@@ -32,14 +39,27 @@ void DiskCleaner::wipeFolderContents(const fs::path &dirPath) {
 
 bool DiskCleaner::forceDeleteFolder(const fs::path &path) {
     std::error_code ec;
-    if (!fs::exists(path, ec)) return false;
+    if (!fs::exists(path, ec)) return true;
 
+    // Gỡ thuộc tính Read-Only toàn bộ cây thư mục
+    try {
+        for (auto it = fs::recursive_directory_iterator(path, fs::directory_options::skip_permission_denied, ec);
+             it != fs::recursive_directory_iterator();) {
+            if (ec) { ec.clear(); try { it++; } catch (...) { break; } continue; }
+            try {
+                SetFileAttributesA(it->path().string().c_str(), FILE_ATTRIBUTE_NORMAL);
+            } catch (...) {}
+            it.increment(ec);
+        }
+    } catch (...) {}
+
+    SetFileAttributesA(path.string().c_str(), FILE_ATTRIBUTE_NORMAL);
     fs::remove_all(path, ec);
     if (!ec && !fs::exists(path, ec)) return true;
 
-    // Fallback qua lệnh rd /s /q
-    string cmd = "cmd /c rd /s /q \"" + path.string() + "\" 2>nul";
-    SystemCore::runRawCommand(cmd);
+    // Fallback lệnh rd /s /q
+    string cmd = "cmd.exe /d /c \"rd /s /q \"" + path.string() + "\"\" >nul 2>&1";
+    system(cmd.c_str());
     return !fs::exists(path, ec);
 }
 
@@ -55,35 +75,49 @@ int DiskCleaner::cleanDirectoryArtifacts(const fs::path &rootPath,
     vector<fs::path> filesToDelete;
 
     try {
-        auto it = fs::recursive_directory_iterator(rootPath, 
-            fs::directory_options::skip_permission_denied, ec);
-        auto end = fs::recursive_directory_iterator();
+        for (auto it = fs::recursive_directory_iterator(rootPath, 
+                 fs::directory_options::skip_permission_denied, ec);
+             it != fs::recursive_directory_iterator();) {
+            if (ec) { ec.clear(); try { it++; } catch (...) { break; } continue; }
 
-        while (it != end && !ec) {
-            const auto &entry = *it;
-            string filename = entry.path().filename().string();
+            try {
+                const auto &entry = *it;
+                string filename = entry.path().filename().string();
 
-            if (entry.is_directory(ec)) {
-                bool matchDir = false;
-                for (const auto &td : targetDirNames) {
-                    if (_stricmp(filename.c_str(), td.c_str()) == 0) {
-                        matchDir = true;
-                        break;
+                // TUYỆT ĐỐI BẢO VỆ .git, .github, .gitignore
+                if (_stricmp(filename.c_str(), ".git") == 0 || 
+                    _stricmp(filename.c_str(), ".github") == 0 ||
+                    _stricmp(filename.c_str(), ".gitignore") == 0 ||
+                    _stricmp(filename.c_str(), ".gitattributes") == 0) {
+                    if (entry.is_directory(ec)) {
+                        it.disable_recursion_pending();
+                    }
+                    it.increment(ec);
+                    continue;
+                }
+
+                if (entry.is_directory(ec)) {
+                    bool matchDir = false;
+                    for (const auto &td : targetDirNames) {
+                        if (_stricmp(filename.c_str(), td.c_str()) == 0) {
+                            matchDir = true;
+                            break;
+                        }
+                    }
+                    if (matchDir) {
+                        dirsToDelete.push_back(entry.path());
+                        it.disable_recursion_pending();
+                    }
+                } else if (entry.is_regular_file(ec)) {
+                    string ext = entry.path().extension().string();
+                    for (const auto &te : targetExtensions) {
+                        if (_stricmp(ext.c_str(), te.c_str()) == 0) {
+                            filesToDelete.push_back(entry.path());
+                            break;
+                        }
                     }
                 }
-                if (matchDir) {
-                    dirsToDelete.push_back(entry.path());
-                    it.disable_recursion_pending();
-                }
-            } else if (entry.is_regular_file(ec)) {
-                string ext = entry.path().extension().string();
-                for (const auto &te : targetExtensions) {
-                    if (_stricmp(ext.c_str(), te.c_str()) == 0) {
-                        filesToDelete.push_back(entry.path());
-                        break;
-                    }
-                }
-            }
+            } catch (...) {}
             it.increment(ec);
         }
     } catch (...) {}
@@ -91,6 +125,7 @@ int DiskCleaner::cleanDirectoryArtifacts(const fs::path &rootPath,
     for (const auto &f : filesToDelete) {
         try {
             uintmax_t sz = fs::file_size(f, ec);
+            SetFileAttributesA(f.string().c_str(), FILE_ATTRIBUTE_NORMAL);
             if (fs::remove(f, ec)) {
                 freedBytes += sz;
                 deletedCount++;
@@ -103,7 +138,7 @@ int DiskCleaner::cleanDirectoryArtifacts(const fs::path &rootPath,
             uintmax_t dirSize = 0;
             try {
                 for (const auto &sub : fs::recursive_directory_iterator(d, fs::directory_options::skip_permission_denied, ec)) {
-                    if (sub.is_regular_file(ec)) dirSize += fs::file_size(sub, ec);
+                    if (!ec && sub.is_regular_file(ec)) dirSize += sub.file_size(ec);
                 }
             } catch (...) {}
 
@@ -118,7 +153,7 @@ int DiskCleaner::cleanDirectoryArtifacts(const fs::path &rootPath,
 }
 
 // ----------------------------------------------------------------------------------
-// HELPERS DỌN DẸP DOWNLOADS (EXE & DUPLICATES)
+// HELPERS THÔNG MINH CHO DỌN DOWNLOADS (EXE & DUPLICATES)
 // ----------------------------------------------------------------------------------
 
 string DiskCleaner::getDownloadsPath() {
@@ -134,22 +169,35 @@ string DiskCleaner::getDownloadsPath() {
     return "";
 }
 
+// Chuẩn hóa tên ứng dụng thành các từ khóa có nghĩa
 string DiskCleaner::cleanAppName(const string &raw) {
     string s = raw;
     transform(s.begin(), s.end(), s.begin(), ::tolower);
     
-    // Gỡ bỏ các từ khóa đuôi phổ biến trong file cài đặt
-    static const vector<string> junkTokens = {
-        "setup", "installer", "install", "x64", "x86", "win64", "win32", 
-        "64bit", "32bit", "user", "portable", "standalone", "full"
+    // Gỡ bỏ kiến trúc và hậu tố installer phổ biến
+    static const vector<string> junkPatterns = {
+        "-x64", "_x64", " x64", ".x64",
+        "-x86", "_x86", " x86", ".x86",
+        "-win64", "_win64", " win64",
+        "-win32", "_win32", " win32",
+        "-amd64", "_amd64", " amd64",
+        "-arm64", "_arm64", " arm64",
+        "64-bit", "32-bit", "64bit", "32bit",
+        "-setup", "_setup", " setup",
+        "-installer", "_installer", " installer",
+        "-install", "_install", " install",
+        "standalone", "portable", "full"
     };
-    for (const auto &jt : junkTokens) {
-        size_t pos = s.find(jt);
-        if (pos != string::npos) {
-            s.replace(pos, jt.length(), " ");
+
+    for (const auto &jp : junkPatterns) {
+        size_t pos = 0;
+        while ((pos = s.find(jp, pos)) != string::npos) {
+            s.replace(pos, jp.length(), " ");
+            pos += 1;
         }
     }
 
+    // Giữ lại chữ và số, biến ký tự đặc biệt thành dấu cách
     string res = "";
     for (char c : s) {
         if (isalnum((unsigned char)c)) res += c;
@@ -180,7 +228,8 @@ unordered_set<string> DiskCleaner::getInstalledAppNames() {
                         name = SystemCore::trim(name);
                         if (!name.empty()) {
                             installed.insert(name);
-                            installed.insert(cleanAppName(name));
+                            string cleaned = cleanAppName(name);
+                            if (!cleaned.empty()) installed.insert(cleaned);
                         }
                     }
                     RegCloseKey(hSubKey);
@@ -201,7 +250,7 @@ unordered_set<string> DiskCleaner::getInstalledAppNames() {
     return installed;
 }
 
-// Lấy ProductName từ Version Resource của tệp exe qua version.dll
+// Lấy ProductName và FileDescription từ PE Header qua version.dll (LoadLibrary runtime)
 string DiskCleaner::getExeProductName(const string &exePath) {
     HMODULE hVer = LoadLibraryA("version.dll");
     if (!hVer) return "";
@@ -239,34 +288,64 @@ string DiskCleaner::getExeProductName(const string &exePath) {
     UINT cbTranslate = 0;
 
     string productName = "";
-    if (pQueryVal(data.data(), "\\VarFileInfo\\Translation", (LPVOID*)&lpTranslate, &cbTranslate) && cbTranslate >= sizeof(struct LANGANDCODEPAGE)) {
+    string fileDescription = "";
+
+    auto queryField = [&](const char *blockFormat, WORD lang, WORD cp, const char *field) -> string {
         char subBlock[128];
-        sprintf_s(subBlock, sizeof(subBlock), "\\StringFileInfo\\%04x%04x\\ProductName", lpTranslate[0].wLanguage, lpTranslate[0].wCodePage);
+        sprintf_s(subBlock, sizeof(subBlock), blockFormat, lang, cp, field);
         LPVOID lpBuffer = NULL;
         UINT sizeStr = 0;
         if (pQueryVal(data.data(), subBlock, &lpBuffer, &sizeStr) && lpBuffer && sizeStr > 0) {
-            productName = (char*)lpBuffer;
+            return string((char*)lpBuffer);
         }
+        return "";
+    };
+
+    if (pQueryVal(data.data(), "\\VarFileInfo\\Translation", (LPVOID*)&lpTranslate, &cbTranslate) && 
+        cbTranslate >= sizeof(struct LANGANDCODEPAGE)) {
+        WORD lang = lpTranslate[0].wLanguage;
+        WORD cp = lpTranslate[0].wCodePage;
+        productName = queryField("\\StringFileInfo\\%04x%04x\\%s", lang, cp, "ProductName");
+        fileDescription = queryField("\\StringFileInfo\\%04x%04x\\%s", lang, cp, "FileDescription");
     }
 
+    // Fallbacks
     if (productName.empty()) {
-        static const char* fallbackBlocks[] = {
-            "\\StringFileInfo\\040904b0\\ProductName",
-            "\\StringFileInfo\\040904e4\\ProductName",
-            "\\StringFileInfo\\000004b0\\ProductName"
+        static const struct { WORD lang; WORD cp; } fbList[] = {
+            {0x0409, 0x04b0}, {0x0409, 0x04e4}, {0x0000, 0x04b0}, {0x0400, 0x04b0}
         };
-        for (const char* fb : fallbackBlocks) {
-            LPVOID lpBuffer = NULL;
-            UINT sizeStr = 0;
-            if (pQueryVal(data.data(), fb, &lpBuffer, &sizeStr) && lpBuffer && sizeStr > 0) {
-                productName = (char*)lpBuffer;
-                break;
-            }
+        for (const auto &fb : fbList) {
+            if (productName.empty()) productName = queryField("\\StringFileInfo\\%04x%04x\\%s", fb.lang, fb.cp, "ProductName");
+            if (fileDescription.empty()) fileDescription = queryField("\\StringFileInfo\\%04x%04x\\%s", fb.lang, fb.cp, "FileDescription");
+            if (!productName.empty()) break;
         }
     }
 
     FreeLibrary(hVer);
-    return SystemCore::trim(productName);
+
+    // Lọc bỏ tên các bộ đóng gói installer chung chung
+    auto isGenericEngine = [](const string &val) -> bool {
+        string lower = val;
+        transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        static const vector<string> genericEngines = {
+            "inno setup", "nullsoft", "nsis", "installshield", "advanced installer",
+            "wise installation", "wix toolset", "7-zip self-extracting", "winrar sfx",
+            "bootstrap", "setup application", "installer"
+        };
+        for (const auto &ge : genericEngines) {
+            if (lower.find(ge) != string::npos) return true;
+        }
+        return false;
+    };
+
+    if (!productName.empty() && !isGenericEngine(productName)) {
+        return SystemCore::trim(productName);
+    }
+    if (!fileDescription.empty() && !isGenericEngine(fileDescription)) {
+        return SystemCore::trim(fileDescription);
+    }
+
+    return "";
 }
 
 // ----------------------------------------------------------------------------------
@@ -319,35 +398,54 @@ long long DiskCleaner::cleanBrowserAndAppCache() {
     return (after > before) ? (after - before) : 0;
 }
 
-// 3. Dọn dẹp Chuyên sâu & Tồn dư Cập nhật
+// 3. Dọn dẹp Chuyên sâu & Tồn dư Cập nhật (DISM, WinSxS, Windows.old, Event Logs)
 long long DiskCleaner::cleanDeepSystemAndUpdates() {
     long long before = 0, after = 0;
     try { before = fs::space("C:\\").available; } catch (...) {}
 
-    string batContent = "";
+    string batContent = "@echo off\nchcp 65001 >nul\n";
     batContent += "net stop wuauserv 2>nul\n";
     batContent += "net stop bits 2>nul\n";
-    batContent += "del /f /s /q %windir%\\SoftwareDistribution\\Download\\* 2>nul\n";
+    batContent += "del /f /s /q \"%systemroot%\\SoftwareDistribution\\Download\\*\" 2>nul\n";
     batContent += "net start bits 2>nul\n";
     batContent += "net start wuauserv 2>nul\n";
-    batContent += "del /f /s /q %windir%\\Logs\\CBS\\* 2>nul\n";
-    batContent += "del /f /s /q %windir%\\Logs\\DISM\\* 2>nul\n";
-    batContent += "del /f /s /q %windir%\\LiveKernelReports\\* 2>nul\n";
-    batContent += "del /f /s /q %windir%\\Minidump\\* 2>nul\n";
-    batContent += "del /f /q %windir%\\MEMORY.DMP 2>nul\n";
-    batContent += "takeown /F \"%SystemDrive%\\$WINDOWS.~BT\" /A /R /D Y 2>nul\n";
-    batContent += "icacls \"%SystemDrive%\\$WINDOWS.~BT\" /grant Administrators:F /T /C /Q 2>nul\n";
-    batContent += "rd /s /q \"%SystemDrive%\\$WINDOWS.~BT\" 2>nul\n";
-    batContent += "takeown /F \"%SystemDrive%\\$WINDOWS.~WS\" /A /R /D Y 2>nul\n";
-    batContent += "icacls \"%SystemDrive%\\$WINDOWS.~WS\" /grant Administrators:F /T /C /Q 2>nul\n";
-    batContent += "rd /s /q \"%SystemDrive%\\$WINDOWS.~WS\" 2>nul\n";
-    batContent += "takeown /F \"%SystemDrive%\\Windows.old\" /A /R /D Y 2>nul\n";
-    batContent += "icacls \"%SystemDrive%\\Windows.old\" /grant Administrators:F /T /C /Q 2>nul\n";
-    batContent += "rd /s /q \"%SystemDrive%\\Windows.old\" 2>nul\n";
-    batContent += "del /f /q %windir%\\WindowsUpdate.log 2>nul\n";
+
+    batContent += "mkdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
+    batContent += "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\temp\" /mir /w:0 /r:0 /log:nul\n";
+    batContent += "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\Prefetch\" /mir /w:0 /r:0 /log:nul\n";
+
+    // Tồn dư cập nhật bản lớn (Dùng SID *S-1-5-32-544:F để tương thích 100% mọi ngôn ngữ Windows)
+    batContent += "if exist \"%SystemDrive%\\$WINDOWS.~BT\" (\n";
+    batContent += "    takeown /F \"%SystemDrive%\\$WINDOWS.~BT\" /A /R /D Y >nul 2>&1\n";
+    batContent += "    icacls \"%SystemDrive%\\$WINDOWS.~BT\" /grant *S-1-5-32-544:F /T /C /Q >nul 2>&1\n";
+    batContent += "    rd /s /q \"%SystemDrive%\\$WINDOWS.~BT\" 2>nul\n";
+    batContent += ")\n";
+
+    batContent += "if exist \"%SystemDrive%\\$WINDOWS.~WS\" (\n";
+    batContent += "    takeown /F \"%SystemDrive%\\$WINDOWS.~WS\" /A /R /D Y >nul 2>&1\n";
+    batContent += "    icacls \"%SystemDrive%\\$WINDOWS.~WS\" /grant *S-1-5-32-544:F /T /C /Q >nul 2>&1\n";
+    batContent += "    rd /s /q \"%SystemDrive%\\$WINDOWS.~WS\" 2>nul\n";
+    batContent += ")\n";
+
+    batContent += "if exist \"%SystemDrive%\\Windows.old\" (\n";
+    batContent += "    takeown /F \"%SystemDrive%\\Windows.old\" /A /R /D Y >nul 2>&1\n";
+    batContent += "    icacls \"%SystemDrive%\\Windows.old\" /grant *S-1-5-32-544:F /T /C /Q >nul 2>&1\n";
+    batContent += "    rd /s /q \"%SystemDrive%\\Windows.old\" 2>nul\n";
+    batContent += ")\n";
+
+    batContent += "del /f /s /q \"%SystemRoot%\\Panther\\*.*\" 2>nul\n";
+    batContent += "del /f /s /q \"%SystemRoot%\\LiveKernelReports\\*.*\" 2>nul\n";
+    batContent += "del /f /s /q \"%SystemRoot%\\Minidump\\*.*\" 2>nul\n";
+    batContent += "del /f /q \"%SystemRoot%\\MEMORY.DMP\" 2>nul\n";
+    batContent += "del /f /s /q \"%SystemRoot%\\Logs\\CBS\\*.*\" 2>nul\n";
+    batContent += "del /f /s /q \"%SystemRoot%\\Logs\\DISM\\*.*\" 2>nul\n";
+    batContent += "del /f /q \"%SystemRoot%\\WindowsUpdate.log\" 2>nul\n";
     batContent += "del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\ReportQueue\\*\" 2>nul\n";
     batContent += "del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\ReportArchive\\*\" 2>nul\n";
-    batContent += "powershell -Command \"Get-DeliveryOptimizationStatus | Remove-DeliveryOptimizationCache -Confirm:$false\" 2>nul\n";
+
+    // Chuẩn dọn dẹp DISM WinSxS & Delivery Optimization
+    batContent += "dism /online /cleanup-image /startcomponentcleanup /resetbase\n";
+    batContent += "powershell -NoProfile -Command \"Get-DeliveryOptimizationStatus | Remove-DeliveryOptimizationCache -Confirm:$false\" 2>nul\n";
     batContent += "for /f \"tokens=*\" %%a in ('wevtutil el 2^>nul') do wevtutil cl \"%%a\" 2>nul\n";
     batContent += "powercfg -h off\n";
     batContent += "cleanmgr /sagerun:1\n";
@@ -359,7 +457,7 @@ long long DiskCleaner::cleanDeepSystemAndUpdates() {
     return (after > before) ? (after - before) : 0;
 }
 
-// 4. Dọn rác Môi trường lập trình (Dev Artifacts)
+// 4. Dọn rác Môi trường lập trình (Dev Artifacts & Caches)
 long long DiskCleaner::cleanDevArtifactsAndCaches() {
     auto getTotalDrivesFreeSpace = []() -> long long {
         long long total = 0;
@@ -382,7 +480,7 @@ long long DiskCleaner::cleanDevArtifactsAndCaches() {
     return (after > before) ? (after - before) : 0;
 }
 
-// 5. Dọn file cài đặt Exe & Rác tải về trong Downloads (CHỈ ÁP DỤNG CHO EXE/MSI & CRDOWNLOAD)
+// 5. Dọn file cài đặt Exe & Rác tải về trong Downloads (KHÔNG RECYCLE BIN, CHỈ EXE/MSI, KIỂM TRA REGISTRY CHÍNH XÁC)
 long long DiskCleaner::cleanDownloadsExesAndDuplicates() {
     string dlPath = getDownloadsPath();
     if (dlPath.empty() || !fs::exists(dlPath)) {
@@ -399,106 +497,175 @@ long long DiskCleaner::cleanDownloadsExesAndDuplicates() {
     cout << "     ├── Đang quét danh mục phần mềm đã cài đặt trên Windows...\n";
     unordered_set<string> installed = getInstalledAppNames();
 
-    // Regex phát hiện file trùng lặp: tên (1).exe, tên (2).msi
-    regex dupRegex(R"(^(.+)\s\(([0-9]+)\)\.(exe|msi)$)", regex::icase);
+    // A. DỌN FILE TẢI DỞ DANG (.crdownload, .part, .tmp cũ hơn 24 giờ qua Win32 API chính xác)
+    ULARGE_INTEGER nowTime;
+    GetSystemTimeAsFileTime((LPFILETIME)&nowTime);
 
-    vector<fs::path> allFiles;
-    for (const auto &entry : fs::directory_iterator(dlPath, ec)) {
-        if (entry.is_regular_file(ec)) {
-            allFiles.push_back(entry.path());
-        }
-    }
+    for (const auto &entry : fs::directory_iterator(dlPath, fs::directory_options::skip_permission_denied, ec)) {
+        if (!entry.is_regular_file(ec)) continue;
 
-    // A. Dọn file tải hỏng / dở dang (.crdownload, .part, .tmp cũ hơn 24 giờ)
-    auto now = fs::file_time_type::clock::now();
-    for (const auto &p : allFiles) {
-        string ext = p.extension().string();
+        string ext = entry.path().extension().string();
         transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
         if (ext == ".crdownload" || ext == ".part" || ext == ".tmp") {
-            try {
-                auto writeTime = fs::last_write_time(p, ec);
-                auto ageHours = std::chrono::duration_cast<std::chrono::hours>(now - writeTime).count();
-                if (ageHours >= 24) {
-                    uintmax_t sz = fs::file_size(p, ec);
-                    if (fs::remove(p, ec)) { // Xóa trực tiếp vĩnh viễn (không dùng Recycle Bin)
-                        freedBytes += sz;
-                        deletedCorruptCount++;
+            WIN32_FILE_ATTRIBUTE_DATA fad;
+            if (GetFileAttributesExA(entry.path().string().c_str(), GetFileExInfoStandard, &fad)) {
+                ULARGE_INTEGER fileTime;
+                fileTime.LowPart = fad.ftLastWriteTime.dwLowDateTime;
+                fileTime.HighPart = fad.ftLastWriteTime.dwHighDateTime;
+                if (nowTime.QuadPart > fileTime.QuadPart) {
+                    ULONGLONG diffSeconds = (nowTime.QuadPart - fileTime.QuadPart) / 10000000ULL;
+                    if (diffSeconds >= 24 * 3600) { // Cũ hơn 24 giờ
+                        uintmax_t sz = entry.file_size(ec);
+                        SetFileAttributesA(entry.path().string().c_str(), FILE_ATTRIBUTE_NORMAL);
+                        if (fs::remove(entry.path(), ec)) {
+                            freedBytes += sz;
+                            deletedCorruptCount++;
+                        }
                     }
                 }
-            } catch (...) {}
+            }
         }
     }
 
-    // B. Dọn các file cài đặt .exe / .msi trùng lặp & đã cài đặt
-    for (const auto &p : allFiles) {
-        string ext = p.extension().string();
+    // B. CẤU TRÚC PHÂN TÍCH FILE CÀI ĐẶT (.EXE / .MSI)
+    struct ExeItem {
+        fs::path fullPath;
+        string filename;
+        string ext;
+        string baseStem;
+        int copyIndex;       // 0: bản gốc (setup.exe), >=1: bản trùng lặp (setup (1).exe)
+        uintmax_t size;
+        bool isInstalled;
+    };
+
+    // Regex phát hiện bản sao Windows: "app (1).exe", "app(2).msi"
+    regex dupRegex(R"(^(.+?)\s*\(([0-9]+)\)\.(exe|msi)$)", regex::icase);
+
+    // Thu thập và nhóm các file cài đặt theo tên gốc
+    map<string, vector<ExeItem>> groups;
+
+    for (const auto &entry : fs::directory_iterator(dlPath, fs::directory_options::skip_permission_denied, ec)) {
+        if (!entry.is_regular_file(ec)) continue;
+
+        string ext = entry.path().extension().string();
         transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
         if (ext != ".exe" && ext != ".msi") continue;
 
-        string filename = p.filename().string();
-        string stem = p.stem().string();
-        uintmax_t sz = fs::file_size(p, ec);
+        string filename = entry.path().filename().string();
+        string stem = entry.path().stem().string();
+        uintmax_t sz = entry.file_size(ec);
 
-        bool isDuplicate = false;
         string baseStem = stem;
+        int copyIndex = 0;
         smatch match;
         if (regex_match(filename, match, dupRegex)) {
-            isDuplicate = true;
             baseStem = match[1].str();
+            try { copyIndex = stoi(match[2].str()); } catch (...) { copyIndex = 1; }
         }
 
-        // 1. Kiểm tra xem phần mềm này đã cài đặt trên máy chưa
-        string prodName = getExeProductName(p.string());
+        // Khóa định danh nhóm: chữ thường chuẩn hóa của baseStem + extension
+        string groupKey = cleanAppName(baseStem) + ext;
+        if (groupKey.empty()) groupKey = filename;
+
+        groups[groupKey].push_back({entry.path(), filename, ext, baseStem, copyIndex, sz, false});
+    }
+
+    // C. KIỂM TRA CÀI ĐẶT & XỬ LÝ TRÙNG LẶP CHO TỪNG NHÓM
+    for (auto &pair : groups) {
+        auto &fileList = pair.second;
+        if (fileList.empty()) continue;
+
+        // Trích xuất ứng viên tên phần mềm đại diện cho nhóm
+        string prodName = "";
+        for (const auto &item : fileList) {
+            if (item.ext == ".exe") {
+                string pName = getExeProductName(item.fullPath.string());
+                if (!pName.empty()) {
+                    prodName = pName;
+                    break;
+                }
+            }
+        }
+
         string cleanedProd = cleanAppName(prodName);
-        string cleanedStem = cleanAppName(baseStem);
+        string cleanedBase = cleanAppName(fileList[0].baseStem);
 
-        bool isAlreadyInstalled = false;
+        // Danh sách từ khóa cấm so khớp (tránh false-positive)
+        static const unordered_set<string> genericBlacklist = {
+            "setup", "installer", "install", "update", "updater", "app", "application",
+            "win", "windows", "tool", "tools", "patch", "package", "download", "temp",
+            "x64", "x86", "64bit", "32bit", "full", "free", "beta", "portable"
+        };
 
-        // So khớp với danh sách phần mềm đã cài trong Registry
-        for (const auto &inst : installed) {
-            if (!cleanedProd.empty() && cleanedProd.length() >= 3 && inst.find(cleanedProd) != string::npos) {
-                isAlreadyInstalled = true;
-                break;
+        bool groupInstalled = false;
+
+        auto matchCandidate = [&](const string &candidate) -> bool {
+            if (candidate.empty() || candidate.length() < 3) return false;
+            if (genericBlacklist.find(candidate) != genericBlacklist.end()) return false;
+
+            // 1. So khớp cụm từ chính xác với DisplayName trong Registry
+            for (const auto &inst : installed) {
+                if (inst == candidate) return true;
+
+                // Tìm cụm từ có ranh giới từ (whole token / phrase)
+                size_t pos = inst.find(candidate);
+                if (pos != string::npos) {
+                    bool leftOk = (pos == 0 || !isalnum((unsigned char)inst[pos - 1]));
+                    bool rightOk = (pos + candidate.length() == inst.length() || !isalnum((unsigned char)inst[pos + candidate.length()]));
+                    if (leftOk && rightOk) return true;
+                }
             }
-            if (!cleanedStem.empty() && cleanedStem.length() >= 3 && inst.find(cleanedStem) != string::npos) {
-                isAlreadyInstalled = true;
-                break;
-            }
+            return false;
+        };
+
+        if (matchCandidate(cleanedProd) || matchCandidate(cleanedBase)) {
+            groupInstalled = true;
         }
 
-        // Logic xử lý (Theo đúng yêu cầu của người dùng):
-        // - Nếu đã cài đặt -> Xóa sạch file cài đặt thừa này!
-        // - Nếu chưa cài đặt nhưng là file lặp (dạng file (1).exe, file (2).exe) -> Xóa bản sao lặp, giữ lại file gốc!
-        if (isAlreadyInstalled) {
-            if (fs::remove(p, ec)) {
-                freedBytes += sz;
-                deletedExeCount++;
+        // ÁP DỤNG QUY TẮC XỬ LÝ (Theo yêu cầu người dùng)
+        if (groupInstalled) {
+            // Phần mềm ĐÃ CÀI ĐẶT trên hệ thống -> Xóa tất cả các bản cài đặt trong nhóm!
+            for (const auto &item : fileList) {
+                SetFileAttributesA(item.fullPath.string().c_str(), FILE_ATTRIBUTE_NORMAL);
+                if (fs::remove(item.fullPath, ec)) { // Xóa vĩnh viễn (không dùng Recycle Bin)
+                    freedBytes += item.size;
+                    deletedExeCount++;
+                }
             }
-        } else if (isDuplicate) {
-            // Kiểm tra xem file gốc có tồn tại không: vd Setup.exe bên cạnh Setup (1).exe
-            fs::path originalFile = p.parent_path() / (baseStem + ext);
-            if (fs::exists(originalFile, ec)) {
-                if (fs::remove(p, ec)) {
-                    freedBytes += sz;
-                    deletedDuplicateCount++;
+        } else {
+            // Phần mềm CHƯA CÀI ĐẶT -> Giữ lại bản gốc, xóa các bản sao trùng lặp (1), (2)...
+            if (fileList.size() > 1) {
+                // Sắp xếp theo copyIndex tăng dần (0 sẽ đứng đầu nếu có bản gốc)
+                sort(fileList.begin(), fileList.end(), [](const ExeItem &a, const ExeItem &b) {
+                    return a.copyIndex < b.copyIndex;
+                });
+
+                // Giữ lại phần tử đầu tiên (bản gốc setup.exe hoặc bản copy thấp nhất)
+                for (size_t i = 1; i < fileList.size(); ++i) {
+                    SetFileAttributesA(fileList[i].fullPath.string().c_str(), FILE_ATTRIBUTE_NORMAL);
+                    if (fs::remove(fileList[i].fullPath, ec)) {
+                        freedBytes += fileList[i].size;
+                        deletedDuplicateCount++;
+                    }
                 }
             }
         }
     }
 
-    cout << "     ├── [✓] Đã xóa " << deletedExeCount << " file cài đặt (.exe/.msi) đã hoàn tất cài đặt\n";
+    cout << "     ├── [✓] Đã xóa " << deletedExeCount << " file cài đặt (.exe/.msi) của ứng dụng đã cài đặt trên máy\n";
     cout << "     ├── [✓] Đã dọn " << deletedDuplicateCount << " file cài đặt tải trùng lặp (1), (2)\n";
     if (deletedCorruptCount > 0) {
-        cout << "     ├── [✓] Đã dọn " << deletedCorruptCount << " file tải dở dang bị kẹt (.crdownload)\n";
+        cout << "     ├── [✓] Đã dọn " << deletedCorruptCount << " file tải dở dang kẹt lại (.crdownload/.part)\n";
     }
 
     return freedBytes;
 }
 
 // ----------------------------------------------------------------------------------
-// DỌN CACHE DEV NÂNG CAO
+// DỌN DẸP CACHE DEV CHI TIẾT
 // ----------------------------------------------------------------------------------
+
 void DiskCleaner::cleanDevCaches(bool interactive) {
     char *localAppData = std::getenv("LOCALAPPDATA");
     char *appData = std::getenv("APPDATA");
@@ -555,7 +722,7 @@ void DiskCleaner::cleanDevCaches(bool interactive) {
         }
     }
 
-    // Python
+    // 1. Python
     bool hasPython = SystemCore::runRawCommand("where python >nul 2>nul") || 
                      SystemCore::runRawCommand("where py >nul 2>nul") ||
                      (!baseLocal.empty() && fs::exists(baseLocal + "\\pip\\cache"));
@@ -571,26 +738,43 @@ void DiskCleaner::cleanDevCaches(bool interactive) {
         }
     }
 
-    // Node.js & npm
+    // 2. Node.js / JavaScript
     if (!baseLocal.empty()) {
         wipeFolderContents(baseLocal + "\\npm-cache");
+        wipeFolderContents(baseLocal + "\\Yarn\\Cache");
+        wipeFolderContents(baseLocal + "\\pnpm\\store");
         wipeFolderContents(baseLocal + "\\pnpm\\cache");
+        wipeFolderContents(baseLocal + "\\electron\\Cache");
+        wipeFolderContents(baseLocal + "\\Microsoft\\TypeScript");
+        wipeFolderContents(baseLocal + "\\deno\\deps");
     }
     if (!baseApp.empty()) {
         wipeFolderContents(baseApp + "\\npm-cache");
     }
     if (!baseUser.empty()) {
-        wipeFolderContents(baseUser + "\\.yarn\\cache");
+        wipeFolderContents(baseUser + "\\.turbo");
+        wipeFolderContents(baseUser + "\\.npm");
+        wipeFolderContents(baseUser + "\\.yarn");
+        wipeFolderContents(baseUser + "\\.pnpm-store");
     }
 
-    // Java Gradle & Maven
+    long long nodeFreed = 0;
+    for (const auto &sr : scanRoots) {
+        cleanDirectoryArtifacts(sr, 
+            {"node_modules", "node_module", ".turbo", ".next", ".nuxt", ".parcel-cache", ".svelte-kit", ".cache"}, 
+            {}, 
+            nodeFreed);
+    }
+
+    // 3. Java Gradle & Maven
     if (!baseUser.empty()) {
         wipeFolderContents(baseUser + "\\.gradle\\caches");
         wipeFolderContents(baseUser + "\\.gradle\\daemon");
+        wipeFolderContents(baseUser + "\\.android\\cache");
         wipeFolderContents(baseUser + "\\.m2\\repository");
     }
 
-    // VS Code, Cursor, NuGet, Rust, Go
+    // 4. VS Code, Cursor, NuGet, Rust, Go
     if (!baseApp.empty()) {
         wipeFolderContents(baseApp + "\\Code\\Cache");
         wipeFolderContents(baseApp + "\\Code\\CachedData");
@@ -610,7 +794,16 @@ void DiskCleaner::cleanDevCaches(bool interactive) {
         wipeFolderContents(baseUser + "\\.nuget\\packages");
         wipeFolderContents(baseUser + "\\.rustup\\downloads");
     }
+
+    if (interactive) {
+        cout << "\n [✓] Hoàn tất dọn dẹp các môi trường phát triển (Dev)!\n";
+        sc.waitEnter();
+    }
 }
+
+// ----------------------------------------------------------------------------------
+// DỌN DẸP TOÀN DIỆN TRÌNH DUYỆT (MULTI-PROFILE CHROMIUM & FIREFOX)
+// ----------------------------------------------------------------------------------
 
 void DiskCleaner::clearBrowserCache() {
     char *localAppData = std::getenv("LOCALAPPDATA");
@@ -620,24 +813,89 @@ void DiskCleaner::clearBrowserCache() {
     string baseLocal = localAppData ? string(localAppData) : "";
     string baseApp   = appData ? string(appData) : "";
 
-    vector<string> cacheTargets = {
-        baseLocal + "\\Google\\Chrome\\User Data\\Default\\Cache",
-        baseLocal + "\\Google\\Chrome\\User Data\\Default\\Code Cache",
-        baseLocal + "\\Microsoft\\Edge\\User Data\\Default\\Cache",
-        baseLocal + "\\Microsoft\\Edge\\User Data\\Default\\Code Cache",
-        baseLocal + "\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Cache",
-        baseLocal + "\\CocCoc\\Browser\\User Data\\Default\\Cache",
-        baseApp + "\\Opera Software\\Opera Stable\\Cache"
+    vector<string> chromiumBases = {
+        baseLocal + "\\Google\\Chrome\\User Data",
+        baseLocal + "\\Microsoft\\Edge\\User Data",
+        baseLocal + "\\CocCoc\\Browser\\User Data",
+        baseLocal + "\\BraveSoftware\\Brave-Browser\\User Data",
+        baseLocal + "\\Vivaldi\\User Data",
+        baseLocal + "\\Opera Software\\Opera Stable",
+        baseLocal + "\\Opera Software\\Opera GX Stable"
     };
 
-    for (const auto &path : cacheTargets) {
-        wipeFolderContents(path);
+    if (!baseApp.empty()) {
+        chromiumBases.push_back(baseApp + "\\Opera Software\\Opera Stable");
+        chromiumBases.push_back(baseApp + "\\Opera Software\\Opera GX Stable");
+    }
+
+    static const vector<string> cacheFolderNames = {
+        "Cache", "Code Cache", "GPUCache", "DawnCache", "ShaderCache", 
+        "GrShaderCache", "GraphiteDawnCache", "Service Worker\\CacheStorage", 
+        "Service Worker\\ScriptCache"
+    };
+
+    // Duyệt đa profile Chromium
+    for (const string &baseDir : chromiumBases) {
+        std::error_code ec;
+        if (!fs::exists(baseDir, ec)) continue;
+
+        try {
+            for (const auto &entry : fs::directory_iterator(baseDir, fs::directory_options::skip_permission_denied, ec)) {
+                if (!entry.is_directory(ec)) continue;
+                string dirName = entry.path().filename().string();
+                
+                bool isProfile = (dirName == "Default" || dirName.rfind("Profile", 0) == 0 || 
+                                  dirName == "Guest Profile" || dirName == "System Profile");
+                
+                if (isProfile) {
+                    for (const auto &cacheName : cacheFolderNames) {
+                        fs::path targetCache = entry.path() / cacheName;
+                        wipeFolderContents(targetCache);
+                    }
+                } else if (dirName == "ShaderCache" || dirName == "GrShaderCache" || dirName == "DawnCache") {
+                    wipeFolderContents(entry.path());
+                }
+            }
+        } catch (...) {}
+    }
+
+    // Mozilla Firefox (Roaming & Local)
+    if (!baseApp.empty()) {
+        string ffPath = baseApp + "\\Mozilla\\Firefox\\Profiles";
+        std::error_code ec;
+        if (fs::exists(ffPath, ec)) {
+            try {
+                for (const auto &profile : fs::directory_iterator(ffPath, fs::directory_options::skip_permission_denied, ec)) {
+                    if (profile.is_directory(ec)) {
+                        wipeFolderContents(profile.path() / "cache2");
+                        wipeFolderContents(profile.path() / "startupCache");
+                        wipeFolderContents(profile.path() / "jumpListCache");
+                    }
+                }
+            } catch (...) {}
+        }
+    }
+
+    if (!baseLocal.empty()) {
+        string ffLocal = baseLocal + "\\Mozilla\\Firefox\\Profiles";
+        std::error_code ec;
+        if (fs::exists(ffLocal, ec)) {
+            try {
+                for (const auto &profile : fs::directory_iterator(ffLocal, fs::directory_options::skip_permission_denied, ec)) {
+                    if (profile.is_directory(ec)) {
+                        wipeFolderContents(profile.path() / "cache2");
+                        wipeFolderContents(profile.path() / "startupCache");
+                    }
+                }
+            } catch (...) {}
+        }
     }
 }
 
 // ----------------------------------------------------------------------------------
-// ĐIỀU PHỐI THỰC THI DỌN RÁC
+// ĐIỀU PHỐI THỰC THI DỌN RÁC THEO LỰA CHỌN MENU
 // ----------------------------------------------------------------------------------
+
 void DiskCleaner::runCleanChoice(int choice) {
     if (choice < 1 || choice > 7) return;
 

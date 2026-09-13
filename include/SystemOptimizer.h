@@ -48,7 +48,7 @@ public:
     inline int runOptimizeTier2() { return optimizeBackgroundServices(); }
     inline bool runOptimizeTier3() { return optimizeVisualEffectsAndUI(); }
     void runOptimizeChoice(int choice);
-    void multiTierOptimize();
+    void multiTierPerformanceOptimize();
 
     // 3. Sửa lỗi kẹt cập nhật Windows Update
     void fixWindowsUpdate();
