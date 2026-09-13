@@ -23,6 +23,8 @@ private:
                                        const std::vector<std::string> &targetExtensions, 
                                        long long &freedBytes);
     static bool forceDeleteFolder(const std::filesystem::path &path);
+    static std::string getSystemDriveRoot();
+    static bool moveToRecycleBin(const std::filesystem::path &filePath);
 
     // Helpers cho Dọn dẹp thư mục Downloads (chỉ áp dụng cho file exe/msi và rác tải hỏng)
     static std::string getDownloadsPath();

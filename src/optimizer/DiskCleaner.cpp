@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <windows.h>
 #include <shlobj.h>
+#include <shellapi.h>
 #include <filesystem>
 #include <vector>
 #include <string>
@@ -61,6 +62,42 @@ bool DiskCleaner::forceDeleteFolder(const fs::path &path) {
     string cmd = "cmd.exe /d /c \"rd /s /q \"" + path.string() + "\"\" >nul 2>&1";
     system(cmd.c_str());
     return !fs::exists(path, ec);
+}
+
+string DiskCleaner::getSystemDriveRoot() {
+    char sysDrive[MAX_PATH] = {0};
+    if (GetEnvironmentVariableA("SystemDrive", sysDrive, sizeof(sysDrive)) > 0) {
+        string drive = sysDrive;
+        if (!drive.empty() && drive.back() != '\\') {
+            drive += "\\";
+        }
+        return drive;
+    }
+    char winDir[MAX_PATH] = {0};
+    if (GetWindowsDirectoryA(winDir, sizeof(winDir)) > 0) {
+        if (strlen(winDir) >= 2 && winDir[1] == ':') {
+            return string(winDir, 2) + "\\";
+        }
+    }
+    return "C:\\";
+}
+
+bool DiskCleaner::moveToRecycleBin(const fs::path &filePath) {
+    std::string pathStr = filePath.string();
+    pathStr.push_back('\0'); // double null-terminated for SHFILEOPSTRUCT
+
+    SHFILEOPSTRUCTA fileOp = {0};
+    fileOp.wFunc = FO_DELETE;
+    fileOp.pFrom = pathStr.c_str();
+    fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+
+    int res = SHFileOperationA(&fileOp);
+    if (res == 0 && !fileOp.fAnyOperationsAborted) {
+        return true;
+    }
+    // Fallback xóa bằng std::filesystem nếu Recycle Bin không được hỗ trợ trên phân vùng này
+    std::error_code ec;
+    return fs::remove(filePath, ec);
 }
 
 int DiskCleaner::cleanDirectoryArtifacts(const fs::path &rootPath, 
@@ -354,12 +391,13 @@ string DiskCleaner::getExeProductName(const string &exePath) {
 
 // 1. Dọn rác tạm bề mặt & Cache người dùng
 long long DiskCleaner::cleanSurfaceAndUserTemp() {
+    string sysDrive = getSystemDriveRoot();
     long long before = 0, after = 0;
-    try { before = fs::space("C:\\").available; } catch (...) {}
+    try { before = fs::space(sysDrive).available; } catch (...) {}
 
     vector<thread> threads;
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /s /f /q \"%temp%\\*\" 2>nul"); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%systemroot%\\temp\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("cmd /c \"del /s /f /q \"%temp%\\*\" 2>nul & for /d %p in (\"%temp%\\*\") do rmdir /s /q \"%p\" 2>nul\""); });
+    threads.emplace_back([this]() { sc.runCMD("cmd /c \"del /f /s /q \"%systemroot%\\temp\\*\" 2>nul & for /d %p in (\"%systemroot%\\temp\\*\") do rmdir /s /q \"%p\" 2>nul\""); });
     threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\Microsoft\\Windows\\Recent\\*\" 2>nul"); });
     threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\D3DSCache\\*\" 2>nul"); });
     threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Low\\Microsoft\\CryptnetUrlCache\\*\" 2>nul"); });
@@ -374,14 +412,15 @@ long long DiskCleaner::cleanSurfaceAndUserTemp() {
 
     for (auto &t : threads) t.join();
 
-    try { after = fs::space("C:\\").available; } catch (...) {}
+    try { after = fs::space(sysDrive).available; } catch (...) {}
     return (after > before) ? (after - before) : 0;
 }
 
 // 2. Dọn rác Trình duyệt & Ứng dụng
 long long DiskCleaner::cleanBrowserAndAppCache() {
+    string sysDrive = getSystemDriveRoot();
     long long before = 0, after = 0;
-    try { before = fs::space("C:\\").available; } catch (...) {}
+    try { before = fs::space(sysDrive).available; } catch (...) {}
 
     clearBrowserCache();
 
@@ -394,14 +433,15 @@ long long DiskCleaner::cleanBrowserAndAppCache() {
 
     for (auto &t : threads) t.join();
 
-    try { after = fs::space("C:\\").available; } catch (...) {}
+    try { after = fs::space(sysDrive).available; } catch (...) {}
     return (after > before) ? (after - before) : 0;
 }
 
 // 3. Dọn dẹp Chuyên sâu & Tồn dư Cập nhật (DISM, WinSxS, Windows.old, Event Logs)
 long long DiskCleaner::cleanDeepSystemAndUpdates() {
+    string sysDrive = getSystemDriveRoot();
     long long before = 0, after = 0;
-    try { before = fs::space("C:\\").available; } catch (...) {}
+    try { before = fs::space(sysDrive).available; } catch (...) {}
 
     string batContent = "@echo off\nchcp 65001 >nul\n";
     batContent += "net stop wuauserv 2>nul\n";
@@ -411,8 +451,8 @@ long long DiskCleaner::cleanDeepSystemAndUpdates() {
     batContent += "net start wuauserv 2>nul\n";
 
     batContent += "mkdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
-    batContent += "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\temp\" /mir /w:0 /r:0 /log:nul\n";
-    batContent += "start /b robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\Prefetch\" /mir /w:0 /r:0 /log:nul\n";
+    batContent += "robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\temp\" /mir /w:0 /r:0 /log:nul >nul 2>&1\n";
+    batContent += "robocopy \"%SystemDrive%\\EmptyFolderTmp\" \"%systemroot%\\Prefetch\" /mir /w:0 /r:0 /log:nul >nul 2>&1\n";
 
     // Tồn dư cập nhật bản lớn (Dùng SID *S-1-5-32-544:F để tương thích 100% mọi ngôn ngữ Windows)
     batContent += "if exist \"%SystemDrive%\\$WINDOWS.~BT\" (\n";
@@ -448,12 +488,16 @@ long long DiskCleaner::cleanDeepSystemAndUpdates() {
     batContent += "powershell -NoProfile -Command \"Get-DeliveryOptimizationStatus | Remove-DeliveryOptimizationCache -Confirm:$false\" 2>nul\n";
     batContent += "for /f \"tokens=*\" %%a in ('wevtutil el 2^>nul') do wevtutil cl \"%%a\" 2>nul\n";
     batContent += "powercfg -h off\n";
+    // Thiết lập StateFlags0001 để cleanmgr /sagerun:1 dọn dẹp tất cả các mục VolumeCaches
+    batContent += "for /f \"tokens=*\" %%k in ('reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\" 2^>nul') do (\n";
+    batContent += "    reg add \"%%k\" /v StateFlags0001 /t REG_DWORD /d 2 /f >nul 2>&1\n";
+    batContent += ")\n";
     batContent += "cleanmgr /sagerun:1\n";
     batContent += "rmdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
 
     SystemCore::runBatchAsAdmin(batContent, "Dọn dẹp hệ thống chuyên sâu & Tồn dư cập nhật");
 
-    try { after = fs::space("C:\\").available; } catch (...) {}
+    try { after = fs::space(sysDrive).available; } catch (...) {}
     return (after > before) ? (after - before) : 0;
 }
 
@@ -604,16 +648,25 @@ long long DiskCleaner::cleanDownloadsExesAndDuplicates() {
             if (candidate.empty() || candidate.length() < 3) return false;
             if (genericBlacklist.find(candidate) != genericBlacklist.end()) return false;
 
-            // 1. So khớp cụm từ chính xác với DisplayName trong Registry
+            // 1. So khớp với DisplayName trong Registry
             for (const auto &inst : installed) {
+                // Khớp chính xác hoàn toàn tên app
                 if (inst == candidate) return true;
+
+                // Với tên ngắn (< 5 ký tự), không cho phép khớp chuỗi con để chống false-positive
+                if (candidate.length() < 5) continue;
 
                 // Tìm cụm từ có ranh giới từ (whole token / phrase)
                 size_t pos = inst.find(candidate);
                 if (pos != string::npos) {
                     bool leftOk = (pos == 0 || !isalnum((unsigned char)inst[pos - 1]));
                     bool rightOk = (pos + candidate.length() == inst.length() || !isalnum((unsigned char)inst[pos + candidate.length()]));
-                    if (leftOk && rightOk) return true;
+                    if (leftOk && rightOk) {
+                        // Đảm bảo cụm từ chiếm tỷ lệ đáng kể trong tên app thật để tránh trùng lặp tiện ích mở rộng
+                        if (candidate.length() * 10 >= inst.length() * 4) {
+                            return true;
+                        }
+                    }
                 }
             }
             return false;
@@ -623,18 +676,18 @@ long long DiskCleaner::cleanDownloadsExesAndDuplicates() {
             groupInstalled = true;
         }
 
-        // ÁP DỤNG QUY TẮC XỬ LÝ (Theo yêu cầu người dùng)
+        // ÁP DỤNG QUY TẮC XỬ LÝ AN TOÀN (Chuyển vào Recycle Bin thay vì xóa cứng vĩnh viễn)
         if (groupInstalled) {
-            // Phần mềm ĐÃ CÀI ĐẶT trên hệ thống -> Xóa tất cả các bản cài đặt trong nhóm!
+            // Phần mềm ĐÃ CÀI ĐẶT trên hệ thống -> Chuyển toàn bộ file cài đặt vào Thùng rác
             for (const auto &item : fileList) {
                 SetFileAttributesA(item.fullPath.string().c_str(), FILE_ATTRIBUTE_NORMAL);
-                if (fs::remove(item.fullPath, ec)) { // Xóa vĩnh viễn (không dùng Recycle Bin)
+                if (moveToRecycleBin(item.fullPath)) {
                     freedBytes += item.size;
                     deletedExeCount++;
                 }
             }
         } else {
-            // Phần mềm CHƯA CÀI ĐẶT -> Giữ lại bản gốc, xóa các bản sao trùng lặp (1), (2)...
+            // Phần mềm CHƯA CÀI ĐẶT -> Giữ lại bản gốc, chuyển các bản sao trùng lặp (1), (2)... vào Thùng rác
             if (fileList.size() > 1) {
                 // Sắp xếp theo copyIndex tăng dần (0 sẽ đứng đầu nếu có bản gốc)
                 sort(fileList.begin(), fileList.end(), [](const ExeItem &a, const ExeItem &b) {
@@ -644,7 +697,7 @@ long long DiskCleaner::cleanDownloadsExesAndDuplicates() {
                 // Giữ lại phần tử đầu tiên (bản gốc setup.exe hoặc bản copy thấp nhất)
                 for (size_t i = 1; i < fileList.size(); ++i) {
                     SetFileAttributesA(fileList[i].fullPath.string().c_str(), FILE_ATTRIBUTE_NORMAL);
-                    if (fs::remove(fileList[i].fullPath, ec)) {
+                    if (moveToRecycleBin(fileList[i].fullPath)) {
                         freedBytes += fileList[i].size;
                         deletedDuplicateCount++;
                     }
@@ -653,8 +706,8 @@ long long DiskCleaner::cleanDownloadsExesAndDuplicates() {
         }
     }
 
-    cout << "     ├── [✓] Đã xóa " << deletedExeCount << " file cài đặt (.exe/.msi) của ứng dụng đã cài đặt trên máy\n";
-    cout << "     ├── [✓] Đã dọn " << deletedDuplicateCount << " file cài đặt tải trùng lặp (1), (2)\n";
+    cout << "     ├── [✓] Đã chuyển vào Thùng rác " << deletedExeCount << " file cài đặt (.exe/.msi) của ứng dụng đã cài đặt trên máy\n";
+    cout << "     ├── [✓] Đã dọn vào Thùng rác " << deletedDuplicateCount << " file cài đặt tải trùng lặp (1), (2)\n";
     if (deletedCorruptCount > 0) {
         cout << "     ├── [✓] Đã dọn " << deletedCorruptCount << " file tải dở dang kẹt lại (.crdownload/.part)\n";
     }
