@@ -114,16 +114,17 @@ public:
                          << "  [2]  Dọn rác Trình duyệt & Ứng dụng (Chrome, Edge, Discord...)\n"
                          << "  [3]  Dọn dẹp Chuyên sâu & Tồn dư Cập nhật (DISM, Windows.old, Logs)\n"
                          << "  [4]  Dọn rác Môi trường lập trình (node_modules, Pip, VS Code...)\n"
-                         << "  [5]  [⚡] Dọn toàn diện Hệ thống (Mục 1 + 2 + 3)\n"
-                         << "  [6]  [🚀] Dọn tất cả (Cả 4 mục - Bao gồm cả rác Dev)\n\n"
+                         << "  [5]  Dọn tệp cài đặt Downloads (Exe đã cài đặt, installer trùng lặp)\n"
+                         << "  [6]  [⚡] Dọn toàn diện Hệ thống (Mục 1 + 2 + 3 + 5)\n"
+                         << "  [7]  [🚀] Dọn tất cả (Cả 5 mục - Bao gồm cả rác Dev)\n\n"
                          << " ─── [ TĂNG TỐC & TỐI ƯU ] ─────────────────────────────────────────\n\n"
-                         << "  [7]  Tối ưu Khởi động (Tắt app làm chậm, giữ Bộ gõ & Driver)\n"
-                         << "  [8]  Tối ưu Dịch vụ ngầm (Telemetry, DiagTrack, Maps, Wallet)\n"
-                         << "  [9]  Tối ưu Giao diện & Taskbar (Bỏ trễ UI, tinh gọn Taskbar)\n"
-                         << "  [10] [⚡] Tối ưu liên hoàn hiệu năng (Mục 7 + 8 + 9)\n\n"
+                         << "  [8]  Tối ưu Khởi động (Tắt app làm chậm, giữ Bộ gõ & Driver)\n"
+                         << "  [9]  Tối ưu Dịch vụ ngầm (Telemetry, DiagTrack, Maps, Wallet)\n"
+                         << "  [10] Tối ưu Giao diện & Taskbar (Bỏ trễ UI, tinh gọn Taskbar)\n"
+                         << "  [11] [⚡] Tối ưu liên hoàn hiệu năng (Mục 8 + 9 + 10)\n\n"
                          << " ─── [ CÔNG CỤ HỆ THỐNG ] ──────────────────────────────────────────\n\n"
-                         << "  [11] Sửa lỗi kẹt Windows Update\n"
-                         << "  [12] Quản lý Dịch vụ Windows nâng cao\n"
+                         << "  [12] Sửa lỗi kẹt Windows Update\n"
+                         << "  [13] Quản lý Dịch vụ Windows nâng cao\n"
                          << " ───────────────────────────────────────────────────────────────────\n\n"
                          << "  [0]  Quay lại\n\n"
                          << " [Chọn]: ";
@@ -137,12 +138,13 @@ public:
                     case 4:  getOptimizer().runCleanChoice(4); break;
                     case 5:  getOptimizer().runCleanChoice(5); break;
                     case 6:  getOptimizer().runCleanChoice(6); break;
-                    case 7:  getOptimizer().runOptimizeChoice(1); break;
-                    case 8:  getOptimizer().runOptimizeChoice(2); break;
-                    case 9:  getOptimizer().runOptimizeChoice(3); break;
-                    case 10: getOptimizer().runOptimizeChoice(4); break;
-                    case 11: getOptimizer().fixWindowsUpdate(); break;
-                    case 12: getOptimizer().turnOffServicesMenu(); break;
+                    case 7:  getOptimizer().runCleanChoice(7); break;
+                    case 8:  getOptimizer().runOptimizeChoice(1); break;
+                    case 9:  getOptimizer().runOptimizeChoice(2); break;
+                    case 10: getOptimizer().runOptimizeChoice(3); break;
+                    case 11: getOptimizer().runOptimizeChoice(4); break;
+                    case 12: getOptimizer().fixWindowsUpdate(); break;
+                    case 13: getOptimizer().turnOffServicesMenu(); break;
                     default: Sleep(300); break;
                     }
                 }

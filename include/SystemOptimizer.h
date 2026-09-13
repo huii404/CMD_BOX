@@ -2,42 +2,32 @@
 #define SYSTEMOPTIMIZER_H
 
 #include "SystemCore.h"
+#include "DiskCleaner.h"
 #include <string>
 
 /**
  * @brief Module Tối Ưu Hệ Thống (System Optimizer)
- * Quản lý các tính năng dọn dẹp bộ nhớ/ổ đĩa, tinh chỉnh Registry, 
- * quản lý Service, vô hiệu hóa ứng dụng khởi động và tối ưu giao diện Windows.
+ * Quản lý các tính năng tinh chỉnh Registry, quản lý Service, 
+ * vô hiệu hóa ứng dụng khởi động và tối ưu giao diện Windows.
+ * Các tác vụ dọn rác được ủy quyền sang lớp chuyên trách DiskCleaner.
  */
 class SystemOptimizer {
 private:
     SystemCore &sc;
+    DiskCleaner cleaner;
 public:
     SystemOptimizer(SystemCore &s);
 
-    // --- HỆ THỐNG ĐIỀU PHỐI DỌN RÁC & TỐI ƯU ---
-    // 1. Quản lý Dọn rác Hệ thống
-    void multiTierDiskClean();
-    void runCleanChoice(int choice);
+    // --- ỦY QUYỀN SANG DISKCLEANER (BẢO TOÀN 100% TƯƠNG THÍCH NGƯỢC) ---
+    inline void runCleanChoice(int choice) { cleaner.runCleanChoice(choice); }
+    inline long long cleanSurfaceAndUserTemp() { return cleaner.cleanSurfaceAndUserTemp(); }
+    inline long long cleanBrowserAndAppCache() { return cleaner.cleanBrowserAndAppCache(); }
+    inline long long cleanDeepSystemAndUpdates() { return cleaner.cleanDeepSystemAndUpdates(); }
+    inline long long cleanDevArtifactsAndCaches() { return cleaner.cleanDevArtifactsAndCaches(); }
+    inline long long cleanDownloadsExesAndDuplicates() { return cleaner.cleanDownloadsExesAndDuplicates(); }
+    inline void cleanDevCaches(bool interactive = false) { cleaner.cleanDevCaches(interactive); }
+    inline void clearBrowserCache() { cleaner.clearBrowserCache(); }
 
-    // 2. Quản lý Tăng tốc & Tối ưu Hệ thống
-    void multiTierPerformanceOptimize();
-    void runOptimizeChoice(int choice);
-
-    // --- CÁC HÀM DỌN RÁC THEO NHIỆM VỤ (TASK-BASED) ---
-    // Dọn rác tạm bề mặt & cache người dùng (Temp, CrashDumps, WER User, INetCache, RecycleBin, Flush DNS)
-    long long cleanSurfaceAndUserTemp();
-
-    // Dọn bộ đệm trình duyệt & ứng dụng giao tiếp (Chrome, Edge, Firefox, Discord, Telegram...)
-    long long cleanBrowserAndAppCache();
-
-    // Dọn dẹp chuyên sâu hệ thống & tồn dư cập nhật ($WINDOWS.~BT/WS, Windows.old, DISM, Logs, LiveKernelReports)
-    long long cleanDeepSystemAndUpdates();
-
-    // Dọn dẹp rác môi trường lập trình & artifacts dự án (node_modules, pip, gradle, VS Code, v.v.)
-    long long cleanDevArtifactsAndCaches();
-
-    // Alias tương thích ngược
     inline long long runCleanTier1() { return cleanSurfaceAndUserTemp(); }
     inline long long runCleanTier2() { return cleanBrowserAndAppCache(); }
     inline long long runCleanTier3() { return cleanDeepSystemAndUpdates(); }
@@ -57,13 +47,13 @@ public:
     inline int runOptimizeTier1() { return optimizeStartupApps(); }
     inline int runOptimizeTier2() { return optimizeBackgroundServices(); }
     inline bool runOptimizeTier3() { return optimizeVisualEffectsAndUI(); }
+    void runOptimizeChoice(int choice);
+    void multiTierOptimize();
 
     // 3. Sửa lỗi kẹt cập nhật Windows Update
     void fixWindowsUpdate();
 
     // 4. Các tiện ích phụ trợ & Quản lý dịch vụ
-    void clearBrowserCache();
-    void cleanDevCaches(bool interactive = false);
     bool ServiceControlAPI(std::string serviceName, DWORD startupType, bool stopService);
     void turnOffServicesMenu();
 };

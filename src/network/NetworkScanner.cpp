@@ -1157,14 +1157,13 @@ void NetworkScanner::scanConnectedDevices() {
         cout << " [*] Thời gian quét: \x1b[93m" << fixed << setprecision(2) << elapsedSec << "s\x1b[0m | "
              << "Tìm thấy \x1b[32m" << deviceList.size() << "\x1b[0m thiết bị đang kết nối mạng.\n\n";
 
-        while (true) {
-            cout << " [1] Quét lại\n"
-                 << " [0] Quay lại\n\n"
-                 << " [Chọn]: ";
-
-            int choice = sc.readInt("");
-            if (choice == 0) return;
-            if (choice == 1) break;
+        cout << " Nhấn Enter để quay lại (hoặc gõ '1' / 'r' để quét lại): ";
+        string opt;
+        getline(cin, opt);
+        opt = SystemCore::trim(opt);
+        if (opt == "1" || opt == "r" || opt == "R") {
+            continue;
         }
+        return;
     }
 }

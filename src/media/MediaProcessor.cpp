@@ -409,29 +409,76 @@ void MediaProcessor::processExtractAudioBatch() {
 }
 
 void MediaProcessor::processChangeSpeedBatch() {
-    cout << "Kéo thả các video: ";
+    cout << "\n ─── [ ĐỔI TỐC ĐỘ VIDEO ] ──────────────────────────────────────────\n\n"
+         << " Kéo thả video [kèm tốc độ nếu muốn, vd: video.mp4, 1.5]:\n"
+         << " [>] ";
     string rawInput;
     getline(cin, rawInput);
+    string trimmedInput = SystemCore::trim(rawInput);
+    if (trimmedInput.empty() || trimmedInput == "0") return;
+
+    float speed = -1.0f;
+    string speedStr = "";
+
+    // Dò tìm tham số tốc độ ở cuối chuỗi (vd: , 1.5 hoặc , 1.5x hoặc 1.5x)
+    size_t lastComma = trimmedInput.find_last_of(',');
+    if (lastComma != string::npos) {
+        string cand = SystemCore::trim(trimmedInput.substr(lastComma + 1));
+        if (!cand.empty() && (cand.back() == 'x' || cand.back() == 'X')) cand.pop_back();
+        for (char &c : cand) { if (c == ',') c = '.'; }
+        try {
+            float val = stof(cand);
+            if (val >= 0.25f && val <= 4.0f) {
+                speed = val;
+                speedStr = cand;
+                rawInput = trimmedInput.substr(0, lastComma);
+            }
+        } catch (...) {}
+    } else {
+        size_t lastSpace = trimmedInput.find_last_of(" \t");
+        if (lastSpace != string::npos) {
+            string cand = SystemCore::trim(trimmedInput.substr(lastSpace + 1));
+            if (!cand.empty() && (cand.back() == 'x' || cand.back() == 'X')) cand.pop_back();
+            for (char &c : cand) { if (c == ',') c = '.'; }
+            try {
+                float val = stof(cand);
+                if (val >= 0.25f && val <= 4.0f) {
+                    speed = val;
+                    speedStr = cand;
+                    rawInput = trimmedInput.substr(0, lastSpace);
+                }
+            } catch (...) {}
+        }
+    }
+
     std::vector<std::string> inputs = SystemCore::parsePaths(rawInput);
-    
     if (inputs.empty()) {
-        cout << "Chưa nhập file!\n";
+        cout << "Chưa nhập file hợp lệ!\n";
         SystemCore::waitEnter();
         return;
     }
 
-    cout << "Tốc độ mong muốn (0.5: Chậm, 2.0: Nhanh): ";
-    std::string speedStr;
-    getline(cin, speedStr);
-    speedStr = SystemCore::trim(speedStr);
-    for (char &c : speedStr) { if (c == ',') c = '.'; }
-    float speed = 1.0f;
-    try { speed = stof(speedStr); } catch(...) { speed = 1.0f; }
+    if (speed <= 0.0f) {
+        cout << "Tốc độ mong muốn (0.5: Chậm, 2.0: Nhanh) [Mặc định: 1.5x]: ";
+        string promptSpeed;
+        getline(cin, promptSpeed);
+        promptSpeed = SystemCore::trim(promptSpeed);
+        if (promptSpeed.empty()) {
+            speed = 1.5f;
+            speedStr = "1.5";
+        } else {
+            if (!promptSpeed.empty() && (promptSpeed.back() == 'x' || promptSpeed.back() == 'X')) promptSpeed.pop_back();
+            for (char &c : promptSpeed) { if (c == ',') c = '.'; }
+            try { speed = stof(promptSpeed); speedStr = promptSpeed; } catch(...) { speed = 1.5f; speedStr = "1.5"; }
+        }
+    }
 
-    if (speed < 0.5f || speed > 2.0f) {
-        cout << "Hệ thống hỗ trợ tốc độ từ 0.5x đến 2.0x để tiếng không bị méo!\n";
-        SystemCore::waitEnter();
-        return;
+    if (speed < 0.5f) speed = 0.5f;
+    if (speed > 2.0f) speed = 2.0f;
+    if (speedStr.empty()) {
+        ostringstream oss;
+        oss << fixed << setprecision(1) << speed;
+        speedStr = oss.str();
     }
 
     cout << "\nĐang đổi tốc độ (" << speed << "x) cho " << inputs.size() << " video\n";
@@ -1237,36 +1284,137 @@ void MediaProcessor::extractHiddenFromMedia() {
     }
 }
 
-// HÀM MẸ: ẨN FILE TRONG FILE (SUBMENU)
+// HÀM MẸ: ẨN FILE TRONG FILE & TRÍCH XUẤT THÔNG MINH
 void MediaProcessor::processAnFileTrongFile() {
-    while (true) {
-        SystemCore::cls();
-        std::cout << " [1] Giấu file bí mật vào Ảnh (<= 10MB)\n"
-                  << " [2] Giấu file bí mật vào Video (<= 100MB)\n"
-                  << " [3] Dò tìm & Trích xuất file ẩn từ Media\n"
-                  << " [0] Quay lại\n\n"
-                  << " [Chọn]: ";
+    SystemCore::cls();
+    std::cout << "\n ─── [ ẨN FILE VÀO MEDIA & TRÍCH XUẤT ] ─────────────────────────────\n\n"
+              << " * Giấu file  : Kéo thả [File nền], [File cần ẩn] (vd: anh.jpg, data.zip)\n"
+              << " * Trích xuất : Kéo thả [File đã giấu] để tự động lấy lại file ẩn\n"
+              << " (0 để quay lại)\n\n"
+              << " [>] ";
 
-        int choice = SystemCore::readInt("");
-        if (choice == 0) break;
+    std::string rawInput;
+    if (!std::getline(std::cin, rawInput)) return;
+    rawInput = SystemCore::trim(rawInput);
+    if (rawInput.empty() || rawInput == "0") return;
 
-        switch (choice) {
-        case 1:
-            hideFileInImage();
+    std::vector<std::string> paths = SystemCore::parsePaths(rawInput);
+    if (paths.empty()) {
+        std::cout << "\nChưa nhập file hợp lệ!\n";
+        SystemCore::waitEnter();
+        return;
+    }
+
+    // Trường hợp 1 file: Kiểm tra có ẩn dữ liệu không để trích xuất, hoặc hỏi file cần ẩn
+    if (paths.size() == 1) {
+        fs::path p = fs::u8path(paths[0]);
+        if (!fs::exists(p)) {
+            std::cout << "\nFile không tồn tại!\n";
             SystemCore::waitEnter();
-            break;
-        case 2:
-            hideFileInVideo();
-            SystemCore::waitEnter();
-            break;
-        case 3:
-            extractHiddenFromMedia();
-            SystemCore::waitEnter();
-            break;
-        default:
-            std::cout << "\nLựa chọn không hợp lệ!\n";
-            Sleep(300);
-            break;
+            return;
         }
+
+        // Kiểm tra chữ ký HIDE ở 4 byte cuối
+        bool hasHidden = false;
+        try {
+            uintmax_t sz = fs::file_size(p);
+            if (sz >= 8) {
+                std::ifstream f(p, std::ios::binary);
+                f.seekg(-4, std::ios::end);
+                char tag[4] = {0};
+                f.read(tag, 4);
+                if (tag[0] == 'H' && tag[1] == 'I' && tag[2] == 'D' && tag[3] == 'E') {
+                    hasHidden = true;
+                }
+            }
+        } catch (...) {}
+
+        if (hasHidden) {
+            std::cout << "\n[*] Phát hiện dữ liệu ẩn trong file: " << p.filename().string() << "\n"
+                      << "[*] Đang tiến hành trích xuất...\n";
+            long long now = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count();
+            std::string outPath = (p.parent_path() / ("extracted_" + std::to_string(now) + ".bin")).string();
+            std::string err;
+            if (extractHiddenFromMediaCore(paths[0], outPath, err)) {
+                std::cout << "\n[✓] Trích xuất thành công!\n"
+                          << "    File lưu tại : " << outPath << "\n"
+                          << "    Dung lượng   : " << SystemCore::formatSize(fs::file_size(outPath)) << "\n";
+            } else {
+                std::cout << "\n[!] Thất bại: " << err << "\n";
+            }
+            SystemCore::waitEnter();
+            return;
+        }
+
+        // Nếu chưa có dữ liệu ẩn -> Người dùng muốn giấu file vào đây
+        std::cout << "\n[*] File nền: " << p.filename().string() << "\n"
+                  << "Kéo thả File cần ẩn (zip/txt/exe): ";
+        std::string hiddenPath;
+        if (!std::getline(std::cin, hiddenPath)) return;
+        std::vector<std::string> hiddenPaths = SystemCore::parsePaths(hiddenPath);
+        if (hiddenPaths.empty()) {
+            std::cout << "\nChưa nhập file cần ẩn!\n";
+            SystemCore::waitEnter();
+            return;
+        }
+        paths.push_back(hiddenPaths[0]);
+    }
+
+    // Trường hợp giấu file (paths[0] = nền, paths[1] = file cần ẩn)
+    if (paths.size() >= 2) {
+        fs::path containerPath = fs::u8path(paths[0]);
+        fs::path hiddenPath = fs::u8path(paths[1]);
+
+        if (!fs::exists(containerPath)) {
+            std::cout << "\nFile nền không tồn tại!\n";
+            SystemCore::waitEnter();
+            return;
+        }
+        if (!fs::exists(hiddenPath)) {
+            std::cout << "\nFile cần ẩn không tồn tại!\n";
+            SystemCore::waitEnter();
+            return;
+        }
+
+        std::string ext = containerPath.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+        std::vector<std::string> imgExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp" };
+        std::vector<std::string> vidExts = { ".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm" };
+
+        bool isImg = (std::find(imgExts.begin(), imgExts.end(), ext) != imgExts.end());
+        bool isVid = (std::find(vidExts.begin(), vidExts.end(), ext) != vidExts.end());
+
+        if (!isImg && !isVid) {
+            std::cout << "\n[!] Định dạng file nền (" << ext << ") không được hỗ trợ (chỉ nhận Ảnh hoặc Video)!\n";
+            SystemCore::waitEnter();
+            return;
+        }
+
+        // Tự động sinh tên file đầu ra: <tên_gốc>_hidden<ext>
+        std::string outPath = (containerPath.parent_path() / (containerPath.stem().string() + "_hidden" + ext)).string();
+
+        std::cout << "\n[*] Đang nhúng '" << hiddenPath.filename().string() 
+                  << "' vào '" << containerPath.filename().string() << "'...\n";
+
+        std::string err;
+        bool ok = false;
+        if (isImg) {
+            ok = hideFileInImageCore(containerPath.string(), hiddenPath.string(), outPath, err);
+        } else {
+            ok = hideFileInVideoCore(containerPath.string(), hiddenPath.string(), outPath, err);
+        }
+
+        if (ok && fs::exists(outPath)) {
+            std::cout << "\n[✓] Nhúng file thành công!\n"
+                      << "    File xuất   : " << outPath << "\n"
+                      << "    Dung lượng  : " << SystemCore::formatSize(fs::file_size(outPath)) << "\n"
+                      << "    Ghi chú     : File xem bình thường. Khi cần lấy lại, kéo thả file này vào đây để trích xuất!\n";
+        } else {
+            std::cout << "\n[!] Lỗi: " << err << "\n";
+        }
+        SystemCore::waitEnter();
     }
 }

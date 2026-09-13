@@ -23,13 +23,15 @@ Dự án được xây dựng hoàn toàn bằng **C++ native**, can thiệp tr�
 
 Chương trình được phân tách thành 4 phân hệ chính theo từng lĩnh vực chuyên biệt:
 
-### 1. Bảo trì & Tối ưu Hệ thống (`SystemOptimizer`)
-- **Dọn rác Đa Tầng:**
-  - *Tầng 1 (Dọn rác bề mặt):* Tự động dọn dẹp các vùng lưu trữ tạm thời `%TEMP%`, `Windows\Temp`, `Prefetch`, bộ nhớ đệm hình thu nhỏ (`Thumbcache`) và Thùng rác (Recycle Bin).
-  - *Tầng 2 (Dọn rác Trình duyệt & Ứng dụng):* Quét và làm sạch dữ liệu đệm, cookies, lịch sử của hơn 8 trình duyệt phổ biến (Chrome, Edge, Cốc Cốc, Brave, Vivaldi, Opera, Opera GX, Firefox).
-  - *Tầng 3 (Dọn dẹp Chuyên sâu Hệ thống):* Làm sạch log bảo trì (`CBS Logs`), `Delivery Optimization` và thư mục tải về của Windows Update.
-  - *Tầng 4 (Dọn rác Môi trường lập trình):* Truy quét và dọn sạch bộ nhớ đệm lập trình: Python (`__pycache__`, `.pytest_cache`), Node.js/NPM, Yarn, Pip, Java/Gradle, Rust/Cargo, Go build cache và VS Code workspace storage.
-  - *Dọn liên hoàn:* Tùy chọn dọn liên hoàn Tầng 1+2+3 hoặc toàn bộ cả 4 tầng chỉ với 1 click.
+### 1. Bảo trì & Tối ưu Hệ thống (`SystemOptimizer` & `DiskCleaner`)
+> *Xem tài liệu kỹ thuật chi tiết tại:* [README_WINDOWS_CLEANER.md](file:///g:/Code/C++/project/CMD/README_WINDOWS_CLEANER.md)
+- **Dọn rác Đa Tầng Chuyên Trách (`DiskCleaner`):**
+  - *Tầng 1 (Rác bề mặt & User Cache):* Dọn `%TEMP%`, `Windows\Temp`, `CrashDumps`, `WER Reports`, `D3DSCache`, `INetCache`, làm sạch Thùng rác và `Flush DNS`.
+  - *Tầng 2 (Trình duyệt & Ứng dụng):* Quét đa profile tất cả trình duyệt Chromium (Chrome, Edge, Cốc Cốc, Brave, Vivaldi, Opera, Opera GX) và Firefox; dọn cache Discord, Telegram, NVIDIA Shader Cache.
+  - *Tầng 3 (Chuyên sâu Hệ thống):* Làm sạch `WinSxS` qua `DISM /ResetBase`, giải phóng `Windows.old`, `$WINDOWS.~BT`, `Delivery Optimization`, xóa logs sự kiện (`wevtutil`) và tắt `hiberfil`.
+  - *Tầng 4 (Môi trường lập trình):* Quét toàn bộ ổ đĩa dọn rác Dev: `node_modules`, cache NPM/Yarn/pnpm, Pip, Gradle, Rust/Cargo, Go build, VS Code và Cursor storage (bảo vệ 100% `.git`).
+  - *Tầng 5 (Quản lý Downloads Thông minh):* Phân tích bộ cài đặt `.exe`/`.msi` trong thư mục Downloads; đối chiếu Registry (`HKLM`, `HKCU`) để xóa bộ cài của ứng dụng đã cài đặt; khử trùng lặp `setup (1).exe` giữ lại bản gốc; dọn tệp tải dở dang >24h. Xóa vĩnh viễn thu hồi dung lượng thực tế (không đưa vào Recycle Bin).
+  - *Dọn liên hoàn:* Tùy chọn dọn toàn diện Hệ thống (Tầng 1+2+3+5) hoặc dọn tất cả cả 5 tầng chỉ với 1 click.
 - **Tăng tốc & Tối ưu Đa Tầng:**
   - *Tầng 1 (Tối ưu Khởi động):* Phân tích các khóa Registry `Run` và `RunOnce` (`HKCU` & `HKLM`). Tích hợp Whitelist thông minh bảo vệ driver phần cứng (Realtek, Waves, NVIDIA, AMD, Intel) và phần mềm điều khiển OEM (ASUS, Dell, HP, Lenovo).
   - *Tầng 2 (Tối ưu Dịch vụ ngầm):* Vô hiệu hóa các dịch vụ ngầm không thiết yếu (Windows Telemetry, Maps Broker, Xbox Services, Error Reporting Service, DiagTrack).

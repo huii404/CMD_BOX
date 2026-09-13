@@ -29,20 +29,34 @@ static bool sleepWithEmergencyCheck(int totalMs) {
 // Auto click chuột theo vị trí
 void UtilityTools::autoClickPoint() {
     sc.cls();
+    cout << "\n ─── [ AUTO CLICK CHUỘT ] ───────────────────────────────────────────\n\n"
+         << " Nhập: Số lần [delay ms, kiểu click (1:Trái, 2:Phải, 3:Đúp)]\n"
+         << "   * Mặc định: 100 lần, delay 50ms, Click Chuột Phải\n"
+         << "   * Ví dụ: Bấm Enter dùng luôn | hoặc gõ: 50 | hoặc: 200, 20, 2\n"
+         << " (0 để hủy)\n\n"
+         << " [>] ";
     
-    int times = sc.readInt("Số lần click: ");
-    if (times <= 0) return;
-    
-    int intervalMs = sc.readInt("Delay các lần (ms) [100]: ", 100);
-    if (intervalMs <= 0) intervalMs = 100;
-    
-    int clickType = sc.readInt("Kiểu click: [1] Trái | [2] Phải | [3] Đúp trái: ", 1);
-    if (clickType < 1 || clickType > 3) clickType = 1;
+    string line;
+    if (!getline(cin, line)) return;
+    line = SystemCore::trim(line);
+    if (line == "0") return;
 
-    int delaySec = sc.readInt("Thời gian chờ di chuột (giây) [3]: ", 3);
-    if (delaySec <= 0) delaySec = 3;
-    
-    cout << "\nDi chuột đến vị trí cần click\n";
+    int times = 100;
+    int intervalMs = 50;
+    int clickType = 2; // Mặc định: Bấm Chuột Phải
+    int delaySec = 3;
+
+    if (!line.empty()) {
+        for (char &c : line) { if (c == ',') c = ' '; }
+        stringstream ss(line);
+        int t = 0, d = 0, k = 0;
+        if (ss >> t && t > 0) times = t;
+        if (ss >> d && d > 0) intervalMs = d;
+        if (ss >> k && k >= 1 && k <= 3) clickType = k;
+    }
+
+    string typeName = (clickType == 1) ? "Chuột Trái" : ((clickType == 2) ? "Chuột Phải" : "Đúp Trái");
+    cout << "\nDi chuột đến vị trí cần click (" << typeName << " | " << times << " lần | Delay: " << intervalMs << "ms)\n";
     for (int i = delaySec; i > 0; i--) { 
         cout << " " << i; cout.flush(); 
         if (sleepWithEmergencyCheck(1000)) {
@@ -54,7 +68,7 @@ void UtilityTools::autoClickPoint() {
     
     POINT p; 
     GetCursorPos(&p);
-    cout << "\n\nTọa độ: (" << p.x << ", " << p.y << ") | " << times << " lần | Delay: " << intervalMs << "ms (Ngắt: ESC/F6)\n";
+    cout << "\n\nTọa độ: (" << p.x << ", " << p.y << ") | " << times << " lần | " << typeName << " | Delay: " << intervalMs << "ms (Ngắt: ESC/F6)\n";
     
     bool stopped = false;
     int executed = 0;
@@ -109,25 +123,36 @@ void UtilityTools::autoClickPoint() {
 void UtilityTools::spamText() {
     sc.cls();
     
-    cout << "Nhập text cần gửi (nhấn Enter hoặc '0' để hủy): ";
+    cout << "\n ─── [ SPAM TEXT TỰ ĐỘNG ] ─────────────────────────────────────────\n\n"
+         << " Nhập nội dung text (nhấn Enter hoặc '0' để hủy):\n"
+         << " [>] ";
     string content; 
     if (!getline(cin, content)) return;
     content = SystemCore::trim(content);
     if (content.empty() || content == "0") return;
     
-    int times = sc.readInt("Số lần gửi: ");
-    if (times <= 0) return;
+    cout << "\n Nhập: Số lần gửi [delay ms] (Mặc định: 10 lần, delay 100ms)\n"
+         << "   * Ví dụ: Bấm Enter dùng luôn | hoặc gõ: 50 | hoặc: 50, 80\n"
+         << " [>] ";
+    string optLine;
+    getline(cin, optLine);
+    optLine = SystemCore::trim(optLine);
+
+    int times = 10;
+    int delayMs = 100;
+
+    if (!optLine.empty()) {
+        for (char &c : optLine) { if (c == ',') c = ' '; }
+        stringstream ss(optLine);
+        int t = 0, d = 0;
+        if (ss >> t && t > 0) times = t;
+        if (ss >> d && d > 0) delayMs = d;
+    }
     
-    int delayMs = sc.readInt("Delay (ms) [100]: ", 100);
-    if (delayMs <= 0) delayMs = 100;
+    bool shouldClick = true; // Tự động kích hoạt con trỏ chuột vào ô nhập
     
-    cout << "Tự động click vào ô nhập? (y/n): ";
-    string autoFocus;
-    getline(cin, autoFocus);
-    bool shouldClick = (autoFocus == "y" || autoFocus == "Y");
-    
-    cout << "Phím ngắt: ESC / F6\n"
-         << "Bắt đầu sau 3 giây\n";
+    cout << "\nPhím ngắt: ESC / F6\n"
+         << "Di chuột vào ô nhập liệu (bắt đầu sau 3 giây)\n";
     for (int i = 3; i > 0; i--) { 
         cout << " " << i; cout.flush(); 
         if (sleepWithEmergencyCheck(1000)) {

@@ -141,9 +141,12 @@ std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
             }
         }
 
-        if (!inQuotes && (c == ' ' || c == '\t' || c == '\r' || c == '\n')) {
+        // Hỗ trợ phân tách bằng khoảng trắng, dấu phẩy ',' hoặc chấm phẩy ';'
+        if (!inQuotes && (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == ',' || c == ';')) {
             if (!current.empty()) {
                 std::string p = trim(current);
+                while (!p.empty() && (p.front() == ',' || p.front() == ';')) p = trim(p.substr(1));
+                while (!p.empty() && (p.back() == ',' || p.back() == ';')) p = trim(p.substr(0, p.length() - 1));
                 if (!p.empty()) {
                     if (fs::exists(p)) paths.push_back(p);
                     else std::cout << "    Không tìm thấy: " << p << "\n";
@@ -157,6 +160,8 @@ std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
 
     if (!current.empty()) {
         std::string p = trim(current);
+        while (!p.empty() && (p.front() == ',' || p.front() == ';')) p = trim(p.substr(1));
+        while (!p.empty() && (p.back() == ',' || p.back() == ';')) p = trim(p.substr(0, p.length() - 1));
         if (!p.empty()) {
             if (fs::exists(p)) paths.push_back(p);
             else std::cout << "    Không tìm thấy: " << p << "\n";

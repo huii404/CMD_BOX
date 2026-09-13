@@ -970,12 +970,12 @@ void LocalDrop::startReceiver() {
     cout << "\n\n [✓] TẢI XONG: \x1b[93m" << savePath.u8string() << "\x1b[0m (" 
          << SystemCore::formatSize(receivedBytes) << " - " 
          << fixed << setprecision(1) << avgSpeed << " MB/s)\n\n"
-         << " [1] Mở thư mục chứa file\n"
-         << " [0] Quay lại\n\n"
-         << " [Chọn]: ";
+         << " Nhấn Enter để quay lại (hoặc gõ '1' để mở thư mục chứa file): ";
 
-    int postChoice = sc.readInt("");
-    if (postChoice == 1) {
+    string postChoice;
+    getline(cin, postChoice);
+    postChoice = SystemCore::trim(postChoice);
+    if (postChoice == "1") {
         string param = "/select,\"" + savePath.string() + "\"";
         ShellExecuteA(NULL, "open", "explorer.exe", param.c_str(), NULL, SW_SHOWNORMAL);
     }
