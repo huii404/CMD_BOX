@@ -137,9 +137,6 @@ private:
         std::vector<float>& cb, std::vector<float>& cr,
         const std::vector<float>& luma, int width, int height);
 
-    static std::vector<float> applyGuidedFilterSingle(
-        const std::vector<float>& p, const std::vector<float>& I,
-        int width, int height, int radius, float eps);
     static std::vector<float> applySelfGuidedFilter(
         const std::vector<float>& I, int width, int height, int radius, float eps);
 

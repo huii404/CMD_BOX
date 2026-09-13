@@ -41,10 +41,12 @@ struct DecodedWICImage {
     IWICImagingFactory* pFactory = nullptr;
     IWICBitmapDecoder* pDecoder = nullptr;
     IWICBitmapFrameDecode* pFrame = nullptr;
+    ~DecodedWICImage() { release(); }
     void release() {
         if (pFrame) { pFrame->Release(); pFrame = nullptr; }
         if (pDecoder) { pDecoder->Release(); pDecoder = nullptr; }
         if (pFactory) { pFactory->Release(); pFactory = nullptr; }
+        CoUninitialize();
     }
 };
 
@@ -103,7 +105,15 @@ static bool decodeWIC(
     }
 
     IWICFormatConverter* pConverter = NULL;
-    pFactory->CreateFormatConverter(&pConverter);
+    hr = pFactory->CreateFormatConverter(&pConverter);
+    if (FAILED(hr) || !pConverter) {
+        setError(EnhanceErrorPro::FormatConversionFailed, "Không thể tạo bộ chuyển đổi định dạng pixel WIC.");
+        pFrame->Release();
+        pDecoder->Release();
+        pFactory->Release();
+        CoUninitialize();
+        return false;
+    }
     hr = pConverter->Initialize(pFrame, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, NULL, 0.0, WICBitmapPaletteTypeCustom);
     if (FAILED(hr)) {
         setError(EnhanceErrorPro::FormatConversionFailed, "Không thể chuyển đổi định dạng pixel sang 32bpp BGRA.");
@@ -348,6 +358,7 @@ EnhanceOptionsPro ImageEnhancerPro::computeAdaptiveOptions(const ImageScorePro& 
         opt.edgeSensitivity = 1.35f;
         opt.haloTolerance = 1.20f;
         opt.contrast = 1.04f;
+        opt.vibrance = 0.06f;
         opt.shadowLift = 0.08f;
         opt.highlightPull = 0.06f;
     } else if (isStudioPortrait) {
@@ -381,6 +392,22 @@ EnhanceOptionsPro ImageEnhancerPro::computeAdaptiveOptions(const ImageScorePro& 
         opt.strokeAnisotropy = 0.75f;
         opt.skinSmooth = 0.35f;
         opt.skinPorePreserve = 0.82f;
+    } else if (score.detectedType == "Ảnh nén suy hao (Compressed/Web)") {
+        // Ảnh nén suy hao: tăng deblocking, giảm nano detail, tăng chroma denoise
+        opt.isPortrait = false;
+        opt.amount = 1.50f;
+        opt.detailBoost = 1.45f;
+        opt.nanoDetailBoost = 1.20f;
+        opt.textureBoost = 0.08f;
+        opt.clarityBoost = 0.15f;
+        opt.casStrength = 0.90f;
+        opt.edgeSensitivity = 1.15f;
+        opt.haloTolerance = 1.15f;
+        opt.contrast = 1.03f;
+        opt.vibrance = 0.04f;
+        opt.claheBlend = 0.18f;
+        opt.shadowLift = 0.06f;
+        opt.highlightPull = 0.04f;
     } else {
         // Phong cảnh / Chi tiết cao
         opt.isPortrait = false;
@@ -907,48 +934,8 @@ void ImageEnhancerPro::applyLocalLaplacianToneMapping(
 // -------------------------------------------------------------
 // Guided Filter Implementation (Tối ưu riêng cho Self-Guided)
 // -------------------------------------------------------------
-std::vector<float> ImageEnhancerPro::applyGuidedFilterSingle(
-    const std::vector<float>& p, const std::vector<float>& I,
-    int width, int height, int radius, float eps)
-{
-    int nPixels = width * height;
-    std::vector<float> mean_I = fastBoxFilter(I, width, height, radius);
-    std::vector<float> mean_p = fastBoxFilter(p, width, height, radius);
-
-    std::vector<float> Ip(nPixels);
-    std::vector<float> II(nPixels);
-
-    #pragma omp parallel for schedule(static)
-    for (int i = 0; i < nPixels; ++i) {
-        Ip[i] = I[i] * p[i];
-        II[i] = I[i] * I[i];
-    }
-
-    std::vector<float> mean_Ip = fastBoxFilter(Ip, width, height, radius);
-    std::vector<float> mean_II = fastBoxFilter(II, width, height, radius);
-
-    std::vector<float> a(nPixels);
-    std::vector<float> b(nPixels);
-
-    #pragma omp parallel for schedule(static)
-    for (int i = 0; i < nPixels; ++i) {
-        float var_I = mean_II[i] - mean_I[i] * mean_I[i];
-        float cov_Ip = mean_Ip[i] - mean_I[i] * mean_p[i];
-        float a_val = cov_Ip / (var_I + eps);
-        a[i] = a_val;
-        b[i] = mean_p[i] - a_val * mean_I[i];
-    }
-
-    std::vector<float> mean_a = fastBoxFilter(a, width, height, radius);
-    std::vector<float> mean_b = fastBoxFilter(b, width, height, radius);
-
-    std::vector<float> q(nPixels);
-    #pragma omp parallel for schedule(static)
-    for (int i = 0; i < nPixels; ++i) {
-        q[i] = mean_a[i] * I[i] + mean_b[i];
-    }
-    return q;
-}
+// [REMOVED] applyGuidedFilterSingle: Dead code — tất cả caller đã chuyển sang applySelfGuidedFilter
+// Giữ lại comment để tham khảo nếu cần mở rộng cho trường hợp p ≠ I trong tương lai.
 
 // TỐI ƯU HÓA: Khi p == I, triệt tiêu 50% tính toán lọc hộp lặp lại (mean_p = mean_I, Ip = II)
 std::vector<float> ImageEnhancerPro::applySelfGuidedFilter(
@@ -1798,7 +1785,6 @@ bool ImageEnhancerPro::enhanceImage(
     if (pEncoder) pEncoder->Release();
     if (pStream) pStream->Release();
     decoded.release();
-    CoUninitialize();
 
     if (SUCCEEDED(hr)) {
         if (outErrorCode) *outErrorCode = EnhanceErrorPro::Success;
@@ -1826,6 +1812,5 @@ ImageScorePro ImageEnhancerPro::analyzeImageFile(const std::string& filePath) {
     uintmax_t sz = fs::exists(filePath) ? fs::file_size(filePath) : 0;
     ImageScorePro score = analyzeImageBufferPro(decoded.pixels, decoded.width, decoded.height, decoded.stride, sz);
     decoded.release();
-    CoUninitialize();
     return score;
 }

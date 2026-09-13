@@ -3,7 +3,7 @@
 > **Tài liệu chuẩn hóa kiến trúc PRO V6 (Phiên bản Toàn năng Cấp cao: Khử ô vuông nén Deblocking 8x8, Triệt tiêu chấm nhiễu phân tán, Lọc sạch nhiễu màu sắc độ Chroma, Chống gai & Chống bệt da tự nhiên)**.
 > Thiết kế chuyên sâu phục vụ khôi phục ảnh mờ mất nét, ảnh nén dung lượng thấp, ảnh tài liệu văn bản mờ mực, ảnh phong cảnh siêu phân giải và ảnh chân dung studio cao cấp.
 > **Vị trí mã nguồn:** [include/ImageEnhancerPro.h](file:///g:/Code/C++/project/CMD/include/ImageEnhancerPro.h) & [src/media/ImageEnhancerPro.cpp](file:///g:/Code/C++/project/CMD/src/media/ImageEnhancerPro.cpp)
-> **Ngôn ngữ:** C++17 Native | **Đồ họa:** Windows Imaging Component (WIC) | **Gia tốc:** OpenMP Multi-threading + AVX2 / FMA SIMD
+> **Ngôn ngữ:** C++17 Native | **Đồ họa:** Windows Imaging Component (WIC) | **Gia tốc:** OpenMP Multi-threading + Compiler Auto-Vectorization (-mavx2 -mfma)
 > **Không gian màu:** YCbCr BT.601 Studio Gamut + Luma-Guided Chroma Denoising + Constant-Saturation Chroma Tracking + Soft Gamut Roll-off
 
 ---
@@ -22,7 +22,7 @@
 | **Cứu chi tiết tối (Shadow Blackout)** | Chỉ kéo dải $Y < 22$ (tăng $< 1\%$) | **Quadratic Shadow Lift ($Y < 55$) + Asymmetric S-Curve** | Cứu sáng chi tiết bóng râm, giảm tỷ lệ bết tối từ $27.1\%$ xuống $16.9\%$ |
 | **Khử sọc trắng chữ (Anti-Halo)** | Vẫn còn quầng sáng và sọc trắng quanh chữ | **Asymmetric Anti-Halo Suppression** | Khóa trần $4\%$, triệt tiêu $100\%$ sọc trắng quanh chữ, mực đen sâu $\le 65$ |
 | **Tối ưu mã nguồn (Clean Architecture)**| Chứa biến thừa (`threshold`, `skinProbSigma`) | **Dọn dẹp sạch 100% code dư thừa, tinh gọn tối đa** | Loại bỏ hoàn toàn mã rác, cấu trúc tinh gọn, không rò rỉ bộ nhớ |
-| **Tốc độ xử lý (Performance)** | Nhanh nhưng thuật toán đơn giản | **Tối ưu hóa đa luồng OpenMP + AVX2 SIMD** | Trung bình toàn bộ 11 ảnh chỉ mất **$286\text{ms} - 312\text{ms}$** |
+| **Tốc độ xử lý (Performance)** | Nhanh nhưng thuật toán đơn giản | **Tối ưu hóa đa luồng OpenMP + Auto-Vectorization** | Trung bình toàn bộ 11 ảnh chỉ mất **$286\text{ms} - 312\text{ms}$** |
 
 ---
 
@@ -85,7 +85,7 @@ Kết quả đo đạc trực tiếp từ engine **PRO V6** (`.\bin\main.exe --t
                                      ▼
   B2: Phân tích ma trận ảnh ĐA NGỮ CẢNH (analyzeImageBufferPro)
       - Đo lường: MAD Noise, Dynamic Range, Thin Features, JPEG Blockiness, Melanin Gamut
-      - Phân loại 5 chế độ: Văn bản / Chân dung Studio / Người + Cảnh / Phong cảnh / Ảnh mờ
+      - Phân loại 6 chế độ: Văn bản / Chân dung Studio / Người + Cảnh / Phong cảnh / Ảnh mờ / Ảnh nén suy hao
                                      │
                                      ▼
   B3: Lanczos-3 Super-Sampling thích ứng theo độ phân giải và mức nhiễu
@@ -109,19 +109,22 @@ Kết quả đo đạc trực tiếp từ engine **PRO V6** (`.\bin\main.exe --t
   B9: Phục hồi cục bộ Vùng tối (Quadratic Shadow Lift) & Cháy sáng (Highlight Pull)
                                      │
                                      ▼
-  B10: Local Laplacian Clarity & Texture Synthesis (Dập tắt hoàn toàn trên Vùng da)
+  B10: Local Laplacian Clarity (Dập tắt hoàn toàn trên Vùng da)
                                      │
                                      ▼
   B11: Phân rã 3-Scale Guided Filter với Tách tần số bảo tồn lỗ chân lông tự nhiên
                                      │
                                      ▼
-  B12: Lõi Tạo Nét CAS 8 Lân Cận + Directional Coherence Gating + Crest Limiter
+  B12: Texture Layer Synthesis (Bơm chất liệu bề mặt, dập tắt trên da)
+                                     │
+                                     ▼
+  B13: Lõi Tạo Nét CAS 8 Lân Cận + Directional Coherence Gating + Crest Limiter
       - Studio Beauty Dual-Zone: Mịn tone da, giữ 88% lỗ chân lông (Anti-bệt da)
       - Chuyển tiếp Hermite C^1 (Anti-gai viền cằm/má)
       - S-Curve Micro-Contrast bất đối xứng bảo vệ vùng tối
                                      │
                                      ▼
-  B13: Bù màu Studio Chroma Tracking & Đóng gói WIC (24bpp BGR / 32bpp BGRA)
+  B14: Bù màu Studio Chroma Tracking & Đóng gói WIC (24bpp BGR / 32bpp BGRA)
 ```
 
 ---
@@ -147,7 +150,7 @@ Kết quả đo đạc trực tiếp từ engine **PRO V6** (`.\bin\main.exe --t
 
 ## VI. TỐI ƯU HÓA KIẾN TRÚC & TINH GỌN MÃ NGUỒN (CLEAN CODE & ZERO-BLOAT REFACTORING)
 
-Nhằm đảm bảo engine vận hành với hiệu năng cao nhất, loại bỏ hoàn toàn tình trạng phình to mã nguồn (code bloat) và không tận dụng logic dùng chung, **ImageEnhancerPro** đã trải qua đợt tái cấu trúc toàn diện (từ **2040 dòng** xuống còn **~1100 dòng**, giảm **~46% độ dài code** mà không làm thay đổi hay suy giảm bất kỳ thuật toán xử lý ảnh nào):
+Nhằm đảm bảo engine vận hành với hiệu năng cao nhất, loại bỏ hoàn toàn tình trạng phình to mã nguồn (code bloat) và không tận dụng logic dùng chung, **ImageEnhancerPro** đã trải qua đợt tái cấu trúc toàn diện (từ **2040 dòng** xuống còn **~1800 dòng**, giảm **~12% độ dài code** mà không làm thay đổi hay suy giảm bất kỳ thuật toán xử lý ảnh nào):
 
 ### 1. Thống nhất Giải mã WIC (`DecodedWICImage` & `decodeWIC`)
 - **Trước tối ưu:** `analyzeImageFile` và `enhanceImage` trùng lặp gần như nguyên văn ~60 dòng mã COM boilerplate (tạo Factory, Decoder, Frame, Converter, chuyển sang format `GUID_WICPixelFormat32bppBGRA`, copy pixel).
