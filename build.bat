@@ -67,14 +67,38 @@ if "!GXX!"=="" (
 
 echo %C_GREEN%  [🙏] Pháp bảo: %C_YELLOW%!GXX! %C_GREEN%[Đã khai quang và chứng giám]%C_RESET%
 
-:: 2. Thu muc bin
+:: 2. Thu muc bin va Icon resource
 if not exist "bin" mkdir "bin"
+
+set "RES_PARAM="
+set "RC_FILE="
+if exist "assets\resource.rc" (
+    set "RC_FILE=assets\resource.rc"
+) else if exist "resource.rc" (
+    set "RC_FILE=resource.rc"
+)
+
+if not "!RC_FILE!"=="" (
+    set "WINDRES="
+    where windres >nul 2>nul
+    if !errorlevel! equ 0 (
+        set "WINDRES=windres"
+    ) else if exist "C:\msys64\ucrt64\bin\windres.exe" (
+        set "WINDRES=C:\msys64\ucrt64\bin\windres.exe"
+    ) else if exist "C:\msys64\mingw64\bin\windres.exe" (
+        set "WINDRES=C:\msys64\mingw64\bin\windres.exe"
+    )
+    if not "!WINDRES!"=="" (
+        "!WINDRES!" !RC_FILE! -O coff -o bin\resource.o >nul 2>nul
+        if exist "bin\resource.o" set "RES_PARAM=bin\resource.o"
+    )
+)
 
 :: 3. Bien dich voi loading thoi gian thuc tai cho (1 file duy nhat, chu dung im so nhay)
 echo.
 if exist "%TEMP%\cmd_build_err.log" del /f /q "%TEMP%\cmd_build_err.log" 2>nul
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$e=[string][char]27; $sw=[System.Diagnostics.Stopwatch]::StartNew(); $p=Start-Process -FilePath '!GXX!' -ArgumentList '-std=c++17 -O3 -fopenmp -mavx2 -mfma -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -static-libgcc -static-libstdc++ -static -s' -NoNewWindow -PassThru -RedirectStandardError $env:TEMP\cmd_build_err.log; $frames=@('|','/','-','\'); $i=0; Write-Host -NoNewline ('  ' + $e + '[93m[🪷] Đang tụng kinh độ code:' + $e + '[0m ' + $e + '[s'); while(-not $p.HasExited){ $s=$sw.Elapsed.TotalSeconds.ToString('0.0'); $f=$frames[$i%%4]; $disp=$e+'[u'+$e+'[95m['+$f+']'+$e+'[0m '+$e+'[93m'+$s+'s'+$e+'[0m'+$e+'[K'; Write-Host -NoNewline $disp; Start-Sleep -Milliseconds 80; $i++ }; $p.WaitForExit(); $tot=$sw.Elapsed.TotalSeconds.ToString('0.0'); $ec=$p.ExitCode; if($null -eq $ec -or $ec -eq 0){ Write-Host ($e+'[u'+$e+'[42;30m [ĐẮC ĐẠO] '+$tot+'s! CODE THÀNH CHÍNH QUẢ, KHÔNG BUG '+$e+'[0m'+$e+'[K'); exit 0 } else { Write-Host ($e+'[u'+$e+'[41;97m [NGHIỆP QUẢ] ('+$tot+'s) CODE VƯỚNG BỤI TRẦN, CÒN BUG '+$e+'[0m'+$e+'[K'); exit $ec }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$e=[string][char]27; $sw=[System.Diagnostics.Stopwatch]::StartNew(); $res='!RES_PARAM!'; $args='-std=c++17 -O3 -fopenmp -mavx2 -mfma -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp ' + $res + ' -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -static-libgcc -static-libstdc++ -static -s'; $p=Start-Process -FilePath '!GXX!' -ArgumentList $args -NoNewWindow -PassThru -RedirectStandardError $env:TEMP\cmd_build_err.log; $frames=@('|','/','-','\'); $i=0; Write-Host -NoNewline ('  ' + $e + '[93m[🪷] Đang tụng kinh độ code:' + $e + '[0m ' + $e + '[s'); while(-not $p.HasExited){ $s=$sw.Elapsed.TotalSeconds.ToString('0.0'); $f=$frames[$i%%4]; $disp=$e+'[u'+$e+'[95m['+$f+']'+$e+'[0m '+$e+'[93m'+$s+'s'+$e+'[0m'+$e+'[K'; Write-Host -NoNewline $disp; Start-Sleep -Milliseconds 80; $i++ }; $p.WaitForExit(); $tot=$sw.Elapsed.TotalSeconds.ToString('0.0'); $ec=$p.ExitCode; if($null -eq $ec -or $ec -eq 0){ Write-Host ($e+'[u'+$e+'[42;30m [ĐẮC ĐẠO] '+$tot+'s! CODE THÀNH CHÍNH QUẢ, KHÔNG BUG '+$e+'[0m'+$e+'[K'); exit 0 } else { Write-Host ($e+'[u'+$e+'[41;97m [NGHIỆP QUẢ] ('+$tot+'s) CODE VƯỚNG BỤI TRẦN, CÒN BUG '+$e+'[0m'+$e+'[K'); exit $ec }"
 
 set BUILD_RET=%errorlevel%
 
