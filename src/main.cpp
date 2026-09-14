@@ -11,7 +11,6 @@
 #include "MediaProcessor.h"
 #include "ImageEnhancerPro.h"
 #include "UpdateManager.h"
-#include "TaskLog.h"
 #include <chrono>
 
 using namespace std;
@@ -86,7 +85,6 @@ public:
              << " [3] Công cụ tự động\n"
              << " [4] Xử lý Media\n"
              << " [5] Cập nhật phần mềm\n"
-             << " [6] Nhật ký tác vụ\n"
              << " [0] Thoát\n\n"
              << " [Chọn]: ";
     }
@@ -103,7 +101,7 @@ public:
             int mainChoice = readInt("");
             
             if (mainChoice == 0) break;      
-            if (mainChoice < 1 || mainChoice > 6) continue;
+            if (mainChoice < 1 || mainChoice > 5) continue;
 
             int sub;
             switch (mainChoice) {
@@ -134,8 +132,6 @@ public:
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;
-                    const char* cleanActions[] = {"Dọn cache người dùng", "Dọn cache ứng dụng", "Dọn hệ thống chuyên sâu", "Dọn cache lập trình", "Dọn Downloads", "Dọn hệ thống toàn diện", "Dọn tất cả", "Tối ưu khởi động", "Tối ưu dịch vụ", "Tối ưu giao diện", "Tối ưu liên hoàn", "Sửa Windows Update", "Quản lý dịch vụ"};
-                    if (sub >= 1 && sub <= 13) TaskLog::write(cleanActions[sub - 1], "BẮT ĐẦU");
                     
                     switch (sub) {
                     case 1:  getOptimizer().runCleanChoice(1); break;
@@ -153,7 +149,6 @@ public:
                     case 13: getOptimizer().turnOffServicesMenu(); break;
                     default: Sleep(300); break;
                     }
-                    if (sub >= 1 && sub <= 13) TaskLog::write(cleanActions[sub - 1], "ĐÃ QUAY LẠI");
                 }
                 break;
 
@@ -171,8 +166,6 @@ public:
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;
-                    const char* networkActions[] = {"Sửa mạng", "Lá chắn bảo mật", "Kiểm tra bảo mật", "Xem Wi-Fi đã lưu", "Quét thiết bị LAN", "Local Drop"};
-                    if (sub >= 1 && sub <= 6) TaskLog::write(networkActions[sub - 1], "BẮT ĐẦU");
                     
                     switch (sub) {
                     case 1:  getInternet().repairNetwork(); break;
@@ -183,7 +176,6 @@ public:
                     case 6:  getInternet().localDropMenu(); break;
                     default: Sleep(300); break;
                     }
-                    if (sub >= 1 && sub <= 6) TaskLog::write(networkActions[sub - 1], "ĐÃ QUAY LẠI");
                 }
                 break;
 
@@ -201,8 +193,6 @@ public:
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;
-                    const char* toolActions[] = {"Auto Click", "Spam Text", "Auto Paste", "Cài phần mềm", "Gỡ bloatware", "Kiểm tra pin"};
-                    if (sub >= 1 && sub <= 6) TaskLog::write(toolActions[sub - 1], "BẮT ĐẦU");
 
                     switch (sub) {
                     case 1:  getTools().autoClickPoint(); break;
@@ -213,7 +203,6 @@ public:
                     case 6:  getTools().batteryHealthDiagnostic(); break;
                     default: Sleep(300); break;
                     }
-                    if (sub >= 1 && sub <= 6) TaskLog::write(toolActions[sub - 1], "ĐÃ QUAY LẠI");
                 }
                 break;
 
@@ -232,8 +221,6 @@ public:
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break; 
-                    const char* mediaActions[] = {"Nén media", "Làm nét ảnh", "Tách MP3", "Đổi tốc độ video", "Đổi định dạng media", "Chuẩn hóa tên media", "Ẩn file trong file"};
-                    if (sub >= 1 && sub <= 7) TaskLog::write(mediaActions[sub - 1], "BẮT ĐẦU");
 
                     switch (sub) {
                     case 1:  getMedia().processMediaAuto(); break;
@@ -245,18 +232,12 @@ public:
                     case 7:  getMedia().processAnFileTrongFile(); break;
                     default: Sleep(300); break;
                     }
-                    if (sub >= 1 && sub <= 7) TaskLog::write(mediaActions[sub - 1], "ĐÃ QUAY LẠI");
                 }
                 break;
 
             // Kiểm tra cập nhật
             case 5:
-                TaskLog::write("Cập nhật phần mềm", "BẮT ĐẦU");
                 UpdateManager::showUpdateMenu();
-                TaskLog::write("Cập nhật phần mềm", "ĐÃ QUAY LẠI");
-                break;
-            case 6:
-                TaskLog::showRecent();
                 break;
             }
         }
@@ -275,6 +256,29 @@ int main(int argc, char* argv[]) {
         if (GetConsoleMode(hOut, &dwMode)) {
             dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
             SetConsoleMode(hOut, dwMode);
+        }
+    }
+
+    // Hỗ trợ chế độ dòng lệnh (CLI Mode) cho Image Enhancer và Kiểm thử Benchmark
+    if (argc >= 4 && std::string(argv[1]) == "--enhance") {
+        std::string inPath = argv[2];
+        std::string outPath = argv[3];
+        int level = (argc >= 5) ? std::stoi(argv[4]) : 0;
+        ImageScorePro score;
+        std::string errMsg;
+        EnhanceErrorPro errCode = EnhanceErrorPro::Success;
+        auto tStart = std::chrono::high_resolution_clock::now();
+        bool ok = ImageEnhancerPro::enhanceImage(inPath, outPath, level, &score, &errMsg, &errCode);
+        auto tEnd = std::chrono::high_resolution_clock::now();
+        double elapsedMs = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
+        if (ok) {
+            std::cout << "[CPP_PRO] SUCCESS | Time: " << elapsedMs << " ms | Clarity: " << score.clarityScore
+                      << " | Edge: " << score.edgeSharpness << " | Blur: " << score.blurDegree
+                      << " | Noise: " << score.noiseFloor << " | Out: " << outPath << "\n";
+            return 0;
+        } else {
+            std::cerr << "[CPP_PRO] FAILED | Error: " << errMsg << "\n";
+            return 1;
         }
     }
 
