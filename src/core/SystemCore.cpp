@@ -116,6 +116,17 @@ std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
     current.reserve(260);
     bool inQuotes = false;
 
+    auto addPathIfValid = [&](const std::string& rawP) {
+        std::string p = trim(rawP);
+        while (!p.empty() && (p.front() == ',' || p.front() == ';')) p = trim(p.substr(1));
+        while (!p.empty() && (p.back() == ',' || p.back() == ';')) p = trim(p.substr(0, p.length() - 1));
+        if (!p.empty()) {
+            std::error_code ec;
+            if (fs::exists(fs::u8path(p), ec)) paths.push_back(p);
+            else std::cout << "    Không tìm thấy: " << p << "\n";
+        }
+    };
+
     for (size_t i = 0; i < str.length(); ++i) {
         char c = str[i];
         if (c == '"') {
@@ -131,11 +142,7 @@ std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
             bool isDriveLetter = ((curr >= 'A' && curr <= 'Z') || (curr >= 'a' && curr <= 'z'));
             if (isDriveLetter && next == ':' && (next2 == '\\' || next2 == '/')) {
                 if (!current.empty() && current.back() != ' ' && current.back() != '\t') {
-                    std::string p = trim(current);
-                    if (!p.empty()) {
-                        if (fs::exists(p)) paths.push_back(p);
-                        else std::cout << "    Không tìm thấy: " << p << "\n";
-                    }
+                    addPathIfValid(current);
                     current.clear();
                 }
             }
@@ -144,13 +151,7 @@ std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
         // Hỗ trợ phân tách bằng khoảng trắng, dấu phẩy ',' hoặc chấm phẩy ';'
         if (!inQuotes && (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == ',' || c == ';')) {
             if (!current.empty()) {
-                std::string p = trim(current);
-                while (!p.empty() && (p.front() == ',' || p.front() == ';')) p = trim(p.substr(1));
-                while (!p.empty() && (p.back() == ',' || p.back() == ';')) p = trim(p.substr(0, p.length() - 1));
-                if (!p.empty()) {
-                    if (fs::exists(p)) paths.push_back(p);
-                    else std::cout << "    Không tìm thấy: " << p << "\n";
-                }
+                addPathIfValid(current);
                 current.clear();
             }
         } else {
@@ -159,13 +160,7 @@ std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
     }
 
     if (!current.empty()) {
-        std::string p = trim(current);
-        while (!p.empty() && (p.front() == ',' || p.front() == ';')) p = trim(p.substr(1));
-        while (!p.empty() && (p.back() == ',' || p.back() == ';')) p = trim(p.substr(0, p.length() - 1));
-        if (!p.empty()) {
-            if (fs::exists(p)) paths.push_back(p);
-            else std::cout << "    Không tìm thấy: " << p << "\n";
-        }
+        addPathIfValid(current);
     }
 
     return paths;
@@ -173,16 +168,21 @@ std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
 
 std::string SystemCore::urlDecode(const std::string& str) {
     std::string decoded;
+    decoded.reserve(str.length());
     for (size_t i = 0; i < str.length(); ++i) {
         if (str[i] == '%') {
-            if (i + 2 < str.length()) {
+            if (i + 2 < str.length() && 
+                isxdigit(static_cast<unsigned char>(str[i + 1])) && 
+                isxdigit(static_cast<unsigned char>(str[i + 2]))) {
                 int value = 0;
                 if (sscanf(str.substr(i + 1, 2).c_str(), "%x", &value) == 1 && value >= 0 && value <= 255) {
                     decoded += static_cast<char>(static_cast<unsigned char>(value));
                 } else {
-                    decoded += '%'; // Invalid hex sequence, keep literal '%'
+                    decoded += '%';
                 }
                 i += 2;
+            } else {
+                decoded += '%';
             }
         } else if (str[i] == '+') {
             decoded += ' ';
@@ -200,7 +200,7 @@ bool SystemCore::runBatchAsAdmin(const std::string& batContent, const std::strin
     
     std::ofstream batFile(batPath);
     if (!batFile) return false;
-    batFile << "@echo off\nchcp 65001 >nul\n" << batContent << "\nexit\n";
+    batFile << "@echo off\nchcp 65001 >nul\n" << batContent << "\nexit /b %ERRORLEVEL%\n";
     batFile.close();
 
     bool result = SystemCore::runAdmin("\"" + batPath + "\"", true);
@@ -228,6 +228,9 @@ int SystemCore::readInt(const std::string &prompt, int defaultValue) {
             std::cout << prompt;
         }
         if (!std::getline(std::cin, line)) {
+            if (std::cin.eof() || std::cin.bad()) {
+                return (defaultValue != std::numeric_limits<int>::min()) ? defaultValue : 0;
+            }
             std::cin.clear();
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             continue;
@@ -340,11 +343,16 @@ bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
 
     if (ShellExecuteExW(&sei)) {
         std::cout << "Đang chạy lệnh với quyền Admin\n";
+        bool success = false;
         if (sei.hProcess) {
             WaitForSingleObject(sei.hProcess, INFINITE);
+            DWORD exitCode = 0;
+            if (GetExitCodeProcess(sei.hProcess, &exitCode)) {
+                success = (exitCode == 0);
+            }
             CloseHandle(sei.hProcess);
         }
-        return true;
+        return success;
     } else {
         DWORD err = GetLastError();
         if (err == ERROR_CANCELLED) {

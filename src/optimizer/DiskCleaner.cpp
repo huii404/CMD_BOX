@@ -396,17 +396,21 @@ long long DiskCleaner::cleanSurfaceAndUserTemp() {
     try { before = fs::space(sysDrive).available; } catch (...) {}
 
     vector<thread> threads;
-    threads.emplace_back([this]() { sc.runCMD("cmd /c \"del /s /f /q \"%temp%\\*\" 2>nul & for /d %p in (\"%temp%\\*\") do rmdir /s /q \"%p\" 2>nul\""); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c \"del /f /s /q \"%systemroot%\\temp\\*\" 2>nul & for /d %p in (\"%systemroot%\\temp\\*\") do rmdir /s /q \"%p\" 2>nul\""); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\Microsoft\\Windows\\Recent\\*\" 2>nul"); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\D3DSCache\\*\" 2>nul"); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Low\\Microsoft\\CryptnetUrlCache\\*\" 2>nul"); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\CrashDumps\\*\" 2>nul"); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\WER\\Temp\\*\" 2>nul"); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\WER\\ReportArchive\\*\" 2>nul"); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\WER\\ReportQueue\\*\" 2>nul"); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\Temp\\*\" 2>nul"); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\INetCache\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("del /s /f /q \"%temp%\\*\" 2>nul & for /d %p in (\"%temp%\\*\") do rmdir /s /q \"%p\" 2>nul"); });
+    if (SystemCore::isElevated()) {
+        threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%systemroot%\\temp\\*\" 2>nul & for /d %p in (\"%systemroot%\\temp\\*\") do rmdir /s /q \"%p\" 2>nul"); });
+    }
+    threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%AppData%\\Microsoft\\Windows\\Recent\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%LocalAppData%\\D3DSCache\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%LocalAppData%\\Low\\Microsoft\\CryptnetUrlCache\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%LocalAppData%\\CrashDumps\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\WER\\Temp\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\WER\\ReportArchive\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\WER\\ReportQueue\\*\" 2>nul"); });
+    if (SystemCore::isElevated()) {
+        threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%ProgramData%\\Microsoft\\Windows\\WER\\Temp\\*\" 2>nul"); });
+    }
+    threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\INetCache\\*\" 2>nul"); });
     threads.emplace_back([this]() { sc.runCMD("powershell -NoProfile -Command \"Clear-RecycleBin -Force -ErrorAction SilentlyContinue\""); });
     threads.emplace_back([this]() { sc.runCMD("ipconfig /flushdns >nul 2>&1"); });
 
@@ -425,11 +429,11 @@ long long DiskCleaner::cleanBrowserAndAppCache() {
     clearBrowserCache();
 
     vector<thread> threads;
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\NVIDIA\\GLCache\\*\" 2>nul"); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\Explorer\\thumbcache_*.db\" 2>nul"); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\discord\\Cache\\*\" 2>nul"); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\discord\\Code Cache\\*\" 2>nul"); });
-    threads.emplace_back([this]() { sc.runCMD("cmd /c del /f /s /q \"%AppData%\\Telegram Desktop\\tdata\\user_data\\cache\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%LocalAppData%\\NVIDIA\\GLCache\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%LocalAppData%\\Microsoft\\Windows\\Explorer\\thumbcache_*.db\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%AppData%\\discord\\Cache\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%AppData%\\discord\\Code Cache\\*\" 2>nul"); });
+    threads.emplace_back([this]() { sc.runCMD("del /f /s /q \"%AppData%\\Telegram Desktop\\tdata\\user_data\\cache\\*\" 2>nul"); });
 
     for (auto &t : threads) t.join();
 
@@ -495,9 +499,10 @@ long long DiskCleaner::cleanDeepSystemAndUpdates() {
     batContent += "cleanmgr /sagerun:1\n";
     batContent += "rmdir \"%SystemDrive%\\EmptyFolderTmp\" 2>nul\n";
 
-    SystemCore::runBatchAsAdmin(batContent, "Dọn dẹp hệ thống chuyên sâu & Tồn dư cập nhật");
+    bool batchOk = SystemCore::runBatchAsAdmin(batContent, "Dọn dẹp hệ thống chuyên sâu & Tồn dư cập nhật");
 
     try { after = fs::space(sysDrive).available; } catch (...) {}
+    if (!batchOk) return -1;
     return (after > before) ? (after - before) : 0;
 }
 
@@ -608,8 +613,10 @@ long long DiskCleaner::cleanDownloadsExesAndDuplicates() {
             try { copyIndex = stoi(match[2].str()); } catch (...) { copyIndex = 1; }
         }
 
-        // Khóa định danh nhóm: chữ thường chuẩn hóa của baseStem + extension
-        string groupKey = cleanAppName(baseStem) + ext;
+        // Khóa định danh nhóm: chữ thường của baseStem + extension để gom các file trùng lặp (1), (2)
+        string lowerBaseStem = baseStem;
+        transform(lowerBaseStem.begin(), lowerBaseStem.end(), lowerBaseStem.begin(), ::tolower);
+        string groupKey = lowerBaseStem + ext;
         if (groupKey.empty()) groupKey = filename;
 
         groups[groupKey].push_back({entry.path(), filename, ext, baseStem, copyIndex, sz, false});
@@ -650,19 +657,15 @@ long long DiskCleaner::cleanDownloadsExesAndDuplicates() {
 
             // 1. So khớp với DisplayName trong Registry
             for (const auto &inst : installed) {
-                // Khớp chính xác hoàn toàn tên app
                 if (inst == candidate) return true;
 
-                // Với tên ngắn (< 5 ký tự), không cho phép khớp chuỗi con để chống false-positive
                 if (candidate.length() < 5) continue;
 
-                // Tìm cụm từ có ranh giới từ (whole token / phrase)
                 size_t pos = inst.find(candidate);
                 if (pos != string::npos) {
                     bool leftOk = (pos == 0 || !isalnum((unsigned char)inst[pos - 1]));
                     bool rightOk = (pos + candidate.length() == inst.length() || !isalnum((unsigned char)inst[pos + candidate.length()]));
                     if (leftOk && rightOk) {
-                        // Đảm bảo cụm từ chiếm tỷ lệ đáng kể trong tên app thật để tránh trùng lặp tiện ích mở rộng
                         if (candidate.length() * 10 >= inst.length() * 4) {
                             return true;
                         }
@@ -676,6 +679,13 @@ long long DiskCleaner::cleanDownloadsExesAndDuplicates() {
             groupInstalled = true;
         }
 
+        // Tuyệt đối không tự động xóa các file portable hoặc standalone
+        string lowerFile = fileList[0].filename;
+        transform(lowerFile.begin(), lowerFile.end(), lowerFile.begin(), ::tolower);
+        if (lowerFile.find("portable") != string::npos || lowerFile.find("standalone") != string::npos) {
+            groupInstalled = false;
+        }
+
         // ÁP DỤNG QUY TẮC XỬ LÝ AN TOÀN (Chuyển vào Recycle Bin thay vì xóa cứng vĩnh viễn)
         if (groupInstalled) {
             // Phần mềm ĐÃ CÀI ĐẶT trên hệ thống -> Chuyển toàn bộ file cài đặt vào Thùng rác
@@ -687,19 +697,19 @@ long long DiskCleaner::cleanDownloadsExesAndDuplicates() {
                 }
             }
         } else {
-            // Phần mềm CHƯA CÀI ĐẶT -> Giữ lại bản gốc, chuyển các bản sao trùng lặp (1), (2)... vào Thùng rác
+            // Phần mềm CHƯA CÀI ĐẶT -> Giữ lại bản gốc (copyIndex 0), chỉ chuyển các bản sao trùng lặp (1), (2)... vào Thùng rác
             if (fileList.size() > 1) {
-                // Sắp xếp theo copyIndex tăng dần (0 sẽ đứng đầu nếu có bản gốc)
                 sort(fileList.begin(), fileList.end(), [](const ExeItem &a, const ExeItem &b) {
                     return a.copyIndex < b.copyIndex;
                 });
 
-                // Giữ lại phần tử đầu tiên (bản gốc setup.exe hoặc bản copy thấp nhất)
                 for (size_t i = 1; i < fileList.size(); ++i) {
-                    SetFileAttributesA(fileList[i].fullPath.string().c_str(), FILE_ATTRIBUTE_NORMAL);
-                    if (moveToRecycleBin(fileList[i].fullPath)) {
-                        freedBytes += fileList[i].size;
-                        deletedDuplicateCount++;
+                    if (fileList[i].copyIndex > 0) {
+                        SetFileAttributesA(fileList[i].fullPath.string().c_str(), FILE_ATTRIBUTE_NORMAL);
+                        if (moveToRecycleBin(fileList[i].fullPath)) {
+                            freedBytes += fileList[i].size;
+                            deletedDuplicateCount++;
+                        }
                     }
                 }
             }
@@ -776,8 +786,8 @@ void DiskCleaner::cleanDevCaches(bool interactive) {
     }
 
     // 1. Python
-    bool hasPython = SystemCore::runRawCommand("where python >nul 2>nul") || 
-                     SystemCore::runRawCommand("where py >nul 2>nul") ||
+    bool hasPython = SystemCore::runRawCommand("where python") || 
+                     SystemCore::runRawCommand("where py") ||
                      (!baseLocal.empty() && fs::exists(baseLocal + "\\pip\\cache"));
 
     if (hasPython) {
@@ -812,30 +822,28 @@ void DiskCleaner::cleanDevCaches(bool interactive) {
     }
 
     long long nodeFreed = 0;
+    // Chỉ dọn các thư mục cache tạm, bảo vệ node_modules của các dự án
     for (const auto &sr : scanRoots) {
         cleanDirectoryArtifacts(sr, 
-            {"node_modules", "node_module", ".turbo", ".next", ".nuxt", ".parcel-cache", ".svelte-kit", ".cache"}, 
+            {".turbo", ".parcel-cache", ".cache"}, 
             {}, 
             nodeFreed);
     }
 
-    // 3. Java Gradle & Maven
+    // 3. Java Gradle & Android (chỉ xóa cache/daemon, bảo vệ kho thư viện .m2/repository dùng chung)
     if (!baseUser.empty()) {
         wipeFolderContents(baseUser + "\\.gradle\\caches");
         wipeFolderContents(baseUser + "\\.gradle\\daemon");
         wipeFolderContents(baseUser + "\\.android\\cache");
-        wipeFolderContents(baseUser + "\\.m2\\repository");
     }
 
-    // 4. VS Code, Cursor, NuGet, Rust, Go
+    // 4. VS Code, Cursor, NuGet, Rust, Go (chỉ xóa cache tạm, bảo vệ .nuget/packages dùng chung)
     if (!baseApp.empty()) {
         wipeFolderContents(baseApp + "\\Code\\Cache");
         wipeFolderContents(baseApp + "\\Code\\CachedData");
         wipeFolderContents(baseApp + "\\Code\\CachedExtensionVSIXs");
-        wipeFolderContents(baseApp + "\\Code\\User\\workspaceStorage");
         wipeFolderContents(baseApp + "\\Cursor\\Cache");
         wipeFolderContents(baseApp + "\\Cursor\\CachedData");
-        wipeFolderContents(baseApp + "\\Cursor\\User\\workspaceStorage");
     }
     if (!baseLocal.empty()) {
         wipeFolderContents(baseLocal + "\\NuGet\\v3-cache");
@@ -843,8 +851,6 @@ void DiskCleaner::cleanDevCaches(bool interactive) {
     }
     if (!baseUser.empty()) {
         wipeFolderContents(baseUser + "\\.cargo\\registry\\cache");
-        wipeFolderContents(baseUser + "\\.cargo\\registry\\src");
-        wipeFolderContents(baseUser + "\\.nuget\\packages");
         wipeFolderContents(baseUser + "\\.rustup\\downloads");
     }
 
@@ -973,29 +979,41 @@ void DiskCleaner::runCleanChoice(int choice) {
     if (choice == 3 || choice == 6 || choice == 7) {
         cout << " [*] Nhiệm vụ 3: Đang dọn dẹp Chuyên sâu & Tồn dư cập nhật (DISM, Windows.old, EventLogs)...\n";
         long long f3 = cleanDeepSystemAndUpdates();
-        totalFreed += f3;
-        cout << "     └── [✓] " << (f3 > 0 ? ("Giải phóng " + SystemCore::formatSize(f3)) : "Đã sạch sẽ từ trước") << "\n\n";
+        if (f3 > 0) {
+            totalFreed += f3;
+            cout << "     └── [✓] Giải phóng " << SystemCore::formatSize(f3) << "\n\n";
+        } else if (f3 == 0) {
+            cout << "     └── [✓] Đã sạch sẽ từ trước\n\n";
+        } else {
+            cout << "     └── [!] Bị hủy hoặc cần quyền Administrator để dọn dẹp chuyên sâu\n\n";
+        }
     }
 
     if (choice == 4 || choice == 7) {
-        cout << " [*] Nhiệm vụ 4: Đang dọn rác Môi trường lập trình (node_modules, Pip, Gradle, VS Code)...\n";
+        cout << " [*] Nhiệm vụ 4: Đang dọn rác Môi trường lập trình (Pip, Gradle, VS Code, Cache tạm)...\n";
         long long f4 = cleanDevArtifactsAndCaches();
         totalFreed += f4;
         cout << "     └── [✓] " << (f4 > 0 ? ("Giải phóng " + SystemCore::formatSize(f4)) : "Đã sạch sẽ từ trước") << "\n\n";
     }
 
+    long long totalRecycled = 0;
     if (choice == 5 || choice == 6 || choice == 7) {
         cout << " [*] Nhiệm vụ 5: Đang quét & dọn dẹp thư mục Downloads (Exe đã cài đặt, Exe trùng lặp)...\n";
         long long f5 = cleanDownloadsExesAndDuplicates();
-        totalFreed += f5;
-        cout << "     └── [✓] " << (f5 > 0 ? ("Giải phóng " + SystemCore::formatSize(f5)) : "Đã sạch sẽ từ trước") << "\n\n";
+        totalRecycled += f5;
+        cout << "     └── [✓] " << (f5 > 0 ? ("Đã chuyển vào Thùng rác " + SystemCore::formatSize(f5)) : "Đã sạch sẽ từ trước") << "\n\n";
     }
 
     cout << "\n\n";
     if (totalFreed > 0) {
-        cout << " [✓] TỔNG DUNG LƯỢNG ĐÃ GIẢI PHÓNG: \x1b[92m" << SystemCore::formatSize(totalFreed) << "\x1b[0m\n\n";
-    } else {
-        cout << " [✓] Hệ thống đã rất sạch sẽ.\n\n";
+        cout << " [✓] TỔNG DUNG LƯỢNG ĐÃ GIẢI PHÓNG TRỰC TIẾP: \x1b[92m" << SystemCore::formatSize(totalFreed) << "\x1b[0m\n";
     }
+    if (totalRecycled > 0) {
+        cout << " [ℹ] Tổng dung lượng đã chuyển vào Thùng rác: \x1b[93m" << SystemCore::formatSize(totalRecycled) << "\x1b[0m (Dọn sạch Thùng rác để giải phóng ổ đĩa)\n";
+    }
+    if (totalFreed <= 0 && totalRecycled <= 0) {
+        cout << " [✓] Hệ thống đã rất sạch sẽ.\n";
+    }
+    cout << "\n";
     sc.waitEnter();
 }

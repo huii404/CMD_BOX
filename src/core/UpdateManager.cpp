@@ -16,7 +16,7 @@
 
 using namespace std;
 
-const string UpdateManager::CURRENT_VERSION = "0.3.25";
+const string UpdateManager::CURRENT_VERSION = "0.3.40";
 const string UpdateManager::API_RELEASES_URL = "https://api.github.com/repos/huii404/CMD_BOX/releases/latest";
 
 static const long long UPDATE_COOLDOWN_SECONDS = 2 * 24 * 3600; // 2 ngày (48 giờ)
@@ -176,13 +176,14 @@ ReleaseInfo UpdateManager::fetchLatestRelease() {
         return info;
     }
 
+    string tagName = extractJsonField(json, "tag_name");
     info.releaseName = extractJsonField(json, "name");
     if (info.releaseName.empty()) {
-        info.releaseName = extractJsonField(json, "tag_name");
+        info.releaseName = tagName;
     }
-    info.version = extractCleanVersion(info.releaseName);
+    info.version = extractCleanVersion(tagName);
     if (info.version.empty()) {
-        info.version = extractCleanVersion(extractJsonField(json, "tag_name"));
+        info.version = extractCleanVersion(info.releaseName);
     }
     info.htmlUrl = extractJsonField(json, "html_url");
     info.publishedAt = extractJsonField(json, "published_at");
@@ -296,14 +297,14 @@ void UpdateManager::showUpdateMenu() {
             Sleep(800);
         } else if (choice == 2) {
             cout << "\n[*] Đang kéo mã nguồn mới nhất từ GitHub...\n\n";
-            if (SystemCore::runRawCommand("git rev-parse --is-inside-work-tree >nul 2>&1")) {
-                SystemCore::runRawCommand("git pull origin main");
+            if (SystemCore::runRawCommand("git rev-parse --is-inside-work-tree")) {
+                system("git pull origin main");
                 cout << "\n[✓] Hoàn tất! Bạn có muốn biên dịch lại ứng dụng ngay? (y/n): ";
                 string ans;
                 getline(cin, ans);
                 if (ans == "y" || ans == "Y") {
                     cout << "\n[*] Đang biên dịch lại qua build.bat...\n";
-                    SystemCore::runRawCommand("call build.bat");
+                    system("call build.bat");
                 }
             } else {
                 cout << "[!] Không tìm thấy kho lưu trữ Git cục bộ.\n";
