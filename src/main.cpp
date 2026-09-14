@@ -9,7 +9,10 @@
 #include "SystemOptimizer.h"
 #include "UtilityTools.h"
 #include "MediaProcessor.h"
+#include "ImageEnhancerPro.h"
 #include "UpdateManager.h"
+#include "TaskLog.h"
+#include <chrono>
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -83,6 +86,7 @@ public:
              << " [3] Công cụ tự động\n"
              << " [4] Xử lý Media\n"
              << " [5] Cập nhật phần mềm\n"
+             << " [6] Nhật ký tác vụ\n"
              << " [0] Thoát\n\n"
              << " [Chọn]: ";
     }
@@ -99,7 +103,7 @@ public:
             int mainChoice = readInt("");
             
             if (mainChoice == 0) break;      
-            if (mainChoice < 1 || mainChoice > 5) continue;
+            if (mainChoice < 1 || mainChoice > 6) continue;
 
             int sub;
             switch (mainChoice) {
@@ -130,6 +134,8 @@ public:
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;
+                    const char* cleanActions[] = {"Dọn cache người dùng", "Dọn cache ứng dụng", "Dọn hệ thống chuyên sâu", "Dọn cache lập trình", "Dọn Downloads", "Dọn hệ thống toàn diện", "Dọn tất cả", "Tối ưu khởi động", "Tối ưu dịch vụ", "Tối ưu giao diện", "Tối ưu liên hoàn", "Sửa Windows Update", "Quản lý dịch vụ"};
+                    if (sub >= 1 && sub <= 13) TaskLog::write(cleanActions[sub - 1], "BẮT ĐẦU");
                     
                     switch (sub) {
                     case 1:  getOptimizer().runCleanChoice(1); break;
@@ -147,6 +153,7 @@ public:
                     case 13: getOptimizer().turnOffServicesMenu(); break;
                     default: Sleep(300); break;
                     }
+                    if (sub >= 1 && sub <= 13) TaskLog::write(cleanActions[sub - 1], "ĐÃ QUAY LẠI");
                 }
                 break;
 
@@ -164,6 +171,8 @@ public:
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;
+                    const char* networkActions[] = {"Sửa mạng", "Lá chắn bảo mật", "Kiểm tra bảo mật", "Xem Wi-Fi đã lưu", "Quét thiết bị LAN", "Local Drop"};
+                    if (sub >= 1 && sub <= 6) TaskLog::write(networkActions[sub - 1], "BẮT ĐẦU");
                     
                     switch (sub) {
                     case 1:  getInternet().repairNetwork(); break;
@@ -174,6 +183,7 @@ public:
                     case 6:  getInternet().localDropMenu(); break;
                     default: Sleep(300); break;
                     }
+                    if (sub >= 1 && sub <= 6) TaskLog::write(networkActions[sub - 1], "ĐÃ QUAY LẠI");
                 }
                 break;
 
@@ -191,6 +201,8 @@ public:
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;
+                    const char* toolActions[] = {"Auto Click", "Spam Text", "Auto Paste", "Cài phần mềm", "Gỡ bloatware", "Kiểm tra pin"};
+                    if (sub >= 1 && sub <= 6) TaskLog::write(toolActions[sub - 1], "BẮT ĐẦU");
 
                     switch (sub) {
                     case 1:  getTools().autoClickPoint(); break;
@@ -201,6 +213,7 @@ public:
                     case 6:  getTools().batteryHealthDiagnostic(); break;
                     default: Sleep(300); break;
                     }
+                    if (sub >= 1 && sub <= 6) TaskLog::write(toolActions[sub - 1], "ĐÃ QUAY LẠI");
                 }
                 break;
 
@@ -219,6 +232,8 @@ public:
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break; 
+                    const char* mediaActions[] = {"Nén media", "Làm nét ảnh", "Tách MP3", "Đổi tốc độ video", "Đổi định dạng media", "Chuẩn hóa tên media", "Ẩn file trong file"};
+                    if (sub >= 1 && sub <= 7) TaskLog::write(mediaActions[sub - 1], "BẮT ĐẦU");
 
                     switch (sub) {
                     case 1:  getMedia().processMediaAuto(); break;
@@ -230,12 +245,18 @@ public:
                     case 7:  getMedia().processAnFileTrongFile(); break;
                     default: Sleep(300); break;
                     }
+                    if (sub >= 1 && sub <= 7) TaskLog::write(mediaActions[sub - 1], "ĐÃ QUAY LẠI");
                 }
                 break;
 
             // Kiểm tra cập nhật
             case 5:
+                TaskLog::write("Cập nhật phần mềm", "BẮT ĐẦU");
                 UpdateManager::showUpdateMenu();
+                TaskLog::write("Cập nhật phần mềm", "ĐÃ QUAY LẠI");
+                break;
+            case 6:
+                TaskLog::showRecent();
                 break;
             }
         }

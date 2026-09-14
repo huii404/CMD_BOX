@@ -997,5 +997,6 @@ void DiskCleaner::runCleanChoice(int choice) {
     } else {
         cout << " [✓] Hệ thống đã rất sạch sẽ.\n\n";
     }
+    SystemCore::logTask("Dọn dẹp hệ thống", "HOÀN TẤT", "Lựa chọn " + to_string(choice) + ", giải phóng " + SystemCore::formatSize(totalFreed));
     sc.waitEnter();
 }

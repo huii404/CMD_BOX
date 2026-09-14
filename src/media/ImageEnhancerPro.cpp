@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <vector>
+#include <utility>
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -162,6 +163,54 @@ static bool decodeWIC(
     out.pDecoder = pDecoder;
     out.pFrame = pFrame;
     return true;
+}
+// Denoise at native resolution, before interpolation turns grain into detail.
+static void denoiseBeforeUpscale(std::vector<uint8_t>& pixels, int width, int height,
+                                int stride, float noiseSigma) {
+    if (noiseSigma < 1.5f || width < 3 || height < 3) return;
+    const std::vector<uint8_t> source = pixels;
+    const float rangeScale = 1.0f / (2.0f * std::pow(std::max(3.0f, 2.5f * noiseSigma), 2.0f));
+    const float strength = std::clamp((noiseSigma - 1.0f) / 8.0f, 0.18f, 0.72f);
+    auto luminance = [](const uint8_t* p) {
+        return 0.114f * p[0] + 0.587f * p[1] + 0.299f * p[2];
+    };
+
+    #pragma omp parallel for schedule(static)
+    for (int y = 1; y < height - 1; ++y) {
+        for (int x = 1; x < width - 1; ++x) {
+            const uint8_t* center = source.data() + y * stride + x * 4;
+            if (center[3] == 0) continue;
+            float centerY = luminance(center);
+            float sum[3] = {0.0f, 0.0f, 0.0f};
+            float sumW = 0.0f;
+            float neighbourhoodMin = 255.0f, neighbourhoodMax = 0.0f;
+            for (int dy = -1; dy <= 1; ++dy) {
+                for (int dx = -1; dx <= 1; ++dx) {
+                    const uint8_t* p = source.data() + (y + dy) * stride + (x + dx) * 4;
+                    if (p[3] != center[3]) continue;
+                    float lum = luminance(p);
+                    if (dx != 0 || dy != 0) {
+                        neighbourhoodMin = std::min(neighbourhoodMin, lum);
+                        neighbourhoodMax = std::max(neighbourhoodMax, lum);
+                    }
+                    float d = lum - centerY;
+                    float spatial = (dx == 0 && dy == 0) ? 1.0f : ((dx == 0 || dy == 0) ? 0.75f : 0.5f);
+                    float w = spatial * std::exp(-d * d * rangeScale);
+                    sumW += w;
+                    for (int c = 0; c < 3; ++c) sum[c] += w * p[c];
+                }
+            }
+            if (sumW <= 1.0f) continue;
+            float edge = neighbourhoodMax - neighbourhoodMin;
+            float edgeGate = 1.0f - std::clamp((edge - 2.0f * noiseSigma) /
+                                               (6.0f * noiseSigma + 1.0f), 0.0f, 0.8f);
+            uint8_t* out = pixels.data() + y * stride + x * 4;
+            for (int c = 0; c < 3; ++c) {
+                float value = center[c] + strength * edgeGate * (sum[c] / sumW - center[c]);
+                out[c] = static_cast<uint8_t>(std::clamp(std::lround(value), 0L, 255L));
+            }
+        }
+    }
 }
 } // namespace
 
@@ -704,9 +753,11 @@ void ImageEnhancerPro::applyOutlierDespeckle(
             if ((isOutlierPeak || isOutlierPit) && gradN < 14.0f) {
                 float pSkin = (pSkinMask && !pSkinMask->empty()) ? (*pSkinMask)[idx] : 0.0f;
                 float dev = isOutlierPeak ? (center - max1) : (min1 - center);
-                if (dev < noiseThresh * 2.5f || pSkin > 0.05f) {
+                // A large isolated impulse is still noise when its neighbours
+                // are smooth; the old upper bound let the worst specks through.
+                if (dev > noiseThresh * 0.5f || pSkin > 0.05f) {
                     float target = isOutlierPeak ? max1 : min1;
-                    float blend = (pSkin > 0.05f) ? 0.85f : 0.70f;
+                    float blend = (pSkin > 0.05f) ? 0.85f : 0.90f;
                     cleanLuma[idx] = center * (1.0f - blend) + target * blend;
                 }
             }
@@ -1051,7 +1102,8 @@ void ImageEnhancerPro::synthesizeTextureLayer(
     int width, int height,
     float textureBoost,
     const std::vector<float>* pSkinMask,
-    const std::vector<float>* pPrecomputedStructure)
+    const std::vector<float>* pPrecomputedStructure,
+    float estimatedNoise)
 {
     if (textureBoost <= 0.001f) return;
 
@@ -1066,11 +1118,14 @@ void ImageEnhancerPro::synthesizeTextureLayer(
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < width * height; ++i) {
         float texture = luma[i] - structure[i];
+        // Do not synthesize texture from residuals inside the noise floor.
+        float signalGate = std::clamp((std::abs(texture) - 1.5f * estimatedNoise) /
+                                      (2.0f * std::max(estimatedNoise, 0.5f)), 0.0f, 1.0f);
         float damp = 8.0f / (std::abs(texture) + 8.0f);
         float maskVal = (pSkinMask && !pSkinMask->empty()) ? (*pSkinMask)[i] : 0.0f;
         if (std::isnan(maskVal)) maskVal = 0.0f;
         float skinDamp = 1.0f - std::clamp(maskVal, 0.0f, 1.0f);
-        float updated = luma[i] + texture * textureBoost * damp * skinDamp;
+        float updated = luma[i] + texture * textureBoost * signalGate * damp * skinDamp;
         if (!std::isnan(updated)) {
             luma[i] = std::clamp(updated, 0.0f, 255.0f);
         }
@@ -1115,7 +1170,7 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
     int midPixelCount = 0;
 
     int step = std::clamp((int)std::sqrt((width * height) / 1200000.0f), 1, 3);
-    std::vector<float> flatRegionVariances;
+    std::vector<std::pair<float, float>> noiseSamples;
     std::vector<double> tileGradSum(16, 0.0);
     std::vector<int> tileSampleCount(16, 0);
 
@@ -1204,7 +1259,10 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
                 skinPixels++;
             }
 
-            if (grad < 2.5f) flatRegionVariances.push_back(lap);
+            // Residual of a pixel against four neighbours, in luma units.
+            // Keep the sign until after sampling; the absolute Laplacian's MAD
+            // is not a noise standard deviation and underestimates impulses.
+            noiseSamples.emplace_back(grad, std::abs(Y - 0.25f * (yR + yL + yB + yT)));
             sampleCount++;
         }
     }
@@ -1248,17 +1306,22 @@ ImageScorePro ImageEnhancerPro::analyzeImageBufferPro(
     }
     score.dynamicRange = (float)(p99 - p1);
 
-    if (!flatRegionVariances.empty()) {
-        size_t mid = flatRegionVariances.size() / 2;
-        std::nth_element(flatRegionVariances.begin(), flatRegionVariances.begin() + mid, flatRegionVariances.end());
-        float median = flatRegionVariances[mid];
-
-        std::vector<float> devs(flatRegionVariances.size());
-        for (size_t i = 0; i < devs.size(); ++i) {
-            devs[i] = std::abs(flatRegionVariances[i] - median);
+    if (noiseSamples.size() >= 32) {
+        // Select the flattest quarter by *neighbour* gradient. A fixed
+        // gradient cutoff selects almost no pixels in a noisy photograph.
+        size_t keep = std::max<size_t>(32, noiseSamples.size() / 4);
+        if (keep < noiseSamples.size()) {
+            std::nth_element(noiseSamples.begin(), noiseSamples.begin() + keep, noiseSamples.end(),
+                [](const auto& a, const auto& b) { return a.first < b.first; });
         }
-        std::nth_element(devs.begin(), devs.begin() + mid, devs.end());
-        score.noiseFloor = 1.4826f * devs[mid];
+        std::vector<float> flatResiduals;
+        flatResiduals.reserve(keep);
+        for (size_t i = 0; i < keep; ++i) flatResiduals.push_back(noiseSamples[i].second);
+        size_t mid = flatResiduals.size() / 2;
+        std::nth_element(flatResiduals.begin(), flatResiduals.begin() + mid, flatResiduals.end());
+        // Gaussian median(|X|) = 0.67449 sigma; the four-neighbour
+        // prediction residual has variance 1.25 sigma^2 for white noise.
+        score.noiseFloor = std::clamp(flatResiduals[mid] / (0.67449f * std::sqrt(1.25f)), 0.5f, 30.0f);
     } else {
         score.noiseFloor = 2.0f;
     }
@@ -1416,7 +1479,7 @@ void ImageEnhancerPro::processSharpenPro(
     applyGuidedFilter3Scale(luma, diffGuided, width, height, opts, &skinMask, &microBase, estimatedNoise);
 
     // 6. Texture Layer Synthesis
-    synthesizeTextureLayer(luma, width, height, opts.textureBoost, &skinMask, &microBase);
+    synthesizeTextureLayer(luma, width, height, opts.textureBoost, &skinMask, &microBase, estimatedNoise);
 
     // 7. Mặt nạ làm mờ Gaussian cho CAS
     std::vector<float> blurL = fastBlur(luma, width, height, opts.radius);
@@ -1464,6 +1527,10 @@ void ImageEnhancerPro::processSharpenPro(
             float lumFactor = 1.0f + 1.25f * std::max(0.0f, (75.0f - yCenter) / 75.0f);
             float localCauchyK = cauchyK * lumFactor;
             float edgeWeight = (grad * grad) / (grad * grad + localCauchyK) * opts.edgeSensitivity;
+            float detailSignal = std::abs(yCenter - yBlur);
+            float noiseGate = smoothstepVal(1.25f * estimatedNoise,
+                                            3.25f * std::max(estimatedNoise, 0.5f), detailSignal);
+            edgeWeight *= noiseGate;
 
             if (grad < 20.0f) {
                 edgeWeight *= (0.50f + 0.50f * maxCoherence);
@@ -1656,6 +1723,23 @@ bool ImageEnhancerPro::enhanceImage(
         opts = getPresetPro(level);
     }
     opts.sanitize();
+
+    if (score.noiseFloor > 3.0f || score.compressionBlockiness > 25.0f) {
+        opts.scalePercent = 100;
+    }
+    // All presets share the same noise budget. In particular, a requested
+    // Ultra preset must not bypass the adaptive protection for a noisy input.
+    if (score.noiseFloor > 3.0f) {
+        float budget = std::clamp(3.0f / score.noiseFloor, 0.45f, 1.0f);
+        opts.amount *= budget;
+        opts.detailBoost = 1.0f + (opts.detailBoost - 1.0f) * budget;
+        opts.nanoDetailBoost = 1.0f + (opts.nanoDetailBoost - 1.0f) * budget;
+        opts.textureBoost *= budget;
+        opts.clarityBoost *= budget;
+        opts.claheBlend *= budget;
+    }
+    denoiseBeforeUpscale(decoded.pixels, decoded.width, decoded.height,
+                         decoded.stride, score.noiseFloor);
 
     UINT procW = decoded.width;
     UINT procH = decoded.height;

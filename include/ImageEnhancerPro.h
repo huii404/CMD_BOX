@@ -163,7 +163,8 @@ private:
         int width, int height,
         float textureBoost,
         const std::vector<float>* pSkinMask = nullptr,
-        const std::vector<float>* pPrecomputedStructure = nullptr);
+        const std::vector<float>* pPrecomputedStructure = nullptr,
+        float estimatedNoise = 2.0f);
 
     static void applyCLAHE(
         std::vector<float>& luma,

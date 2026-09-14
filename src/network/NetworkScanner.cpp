@@ -81,8 +81,8 @@ string NetworkScanner::getLocalIP(SystemCore &core) {
                 char ipStr[INET_ADDRSTRLEN] = {0};
                 inet_ntop(AF_INET, &local.sin_addr, ipStr, sizeof(ipStr));
                 string res = ipStr;
-                closesocket(s);
                 if (!res.empty() && res != "0.0.0.0" && res != "127.0.0.1") {
+                    closesocket(s);
                     cachedScannerIP = res;
                     lastScannerIPCheck = now;
                     return cachedScannerIP;

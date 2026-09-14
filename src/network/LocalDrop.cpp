@@ -275,6 +275,7 @@ string LocalDrop::sanitizeFilename(const string &filename) {
             c = '_';
         }
     }
+    if (safe.empty() || safe == "." || safe == "..") safe = "received_file";
     return safe;
 }
 
@@ -962,7 +963,17 @@ void LocalDrop::startReceiver() {
            << "Connection: close\r\n\r\n";
 
     string reqStr = getReq.str();
-    send(tcpClient, reqStr.c_str(), (int)reqStr.size(), 0);
+    size_t requestSent = 0;
+    while (requestSent < reqStr.size()) {
+        int n = send(tcpClient, reqStr.data() + requestSent, (int)(reqStr.size() - requestSent), 0);
+        if (n <= 0) {
+            cout << " [!] Không thể gửi yêu cầu tải file.\n";
+            closesocket(tcpClient);
+            sc.waitEnter();
+            return;
+        }
+        requestSent += n;
+    }
 
     // Mở file ghi trực tiếp vào ổ đĩa (Zero-Temp-File)
     std::ofstream outFile(savePath, std::ios::binary);
@@ -984,6 +995,7 @@ void LocalDrop::startReceiver() {
         if (r <= 0) break;
 
         headerBuffer.append(tempBuf, r);
+        if (headerBuffer.size() > 16384) break;
         size_t endPos = headerBuffer.find("\r\n\r\n");
         if (endPos != string::npos) {
             foundHeaderEnd = true;
@@ -996,7 +1008,7 @@ void LocalDrop::startReceiver() {
         }
     }
 
-    if (!foundHeaderEnd) {
+    if (!foundHeaderEnd || headerBuffer.rfind("HTTP/1.1 200 ", 0) != 0) {
         cout << " [!] Không nhận được phản hồi HTTP hợp lệ từ máy phát.\n";
         outFile.close();
         fs::remove(savePath, ec);
@@ -1069,7 +1081,7 @@ void LocalDrop::startReceiver() {
         return;
     }
 
-    if (detectedSize > 0 && receivedBytes < detectedSize) {
+    if (!outFile || receivedBytes != detectedSize) {
         fs::remove(savePath, ec);
         cout << "\n\n [!] Tải file không hoàn chỉnh (" << SystemCore::formatSize(receivedBytes) 
              << " / " << SystemCore::formatSize(detectedSize) << ")! Đã xóa file dở dang.\n";
