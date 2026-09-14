@@ -29,10 +29,9 @@ static bool sleepWithEmergencyCheck(int totalMs) {
 // Auto click chuột theo vị trí
 void UtilityTools::autoClickPoint() {
     sc.cls();
-    cout << "\n ─── [ AUTO CLICK CHUỘT ] ───────────────────────────────────────────\n\n"
-         << " Nhập: Số lần [delay ms, kiểu click (1:Trái, 2:Phải, 3:Đúp)]\n"
-         << "   * Mặc định: 100 lần, delay 50ms, Click Chuột Phải\n"
-         << "   * Ví dụ: Bấm Enter dùng luôn | hoặc gõ: 50 | hoặc: 200, 20, 2\n"
+    cout << "\n== AUTO CLICK ==\n"
+         << " Nhập: số lần, delay ms, kiểu (1: trái, 2: phải, 3: đúp)\n"
+         << " Mặc định: 100, 50, 2 | Ví dụ: 200, 20, 2\n"
          << " (0 để hủy)\n\n"
          << " [>] ";
     
@@ -123,8 +122,8 @@ void UtilityTools::autoClickPoint() {
 void UtilityTools::spamText() {
     sc.cls();
     
-    cout << "\n ─── [ SPAM TEXT TỰ ĐỘNG ] ─────────────────────────────────────────\n\n"
-         << " Nhập nội dung text (nhấn Enter hoặc '0' để hủy):\n"
+    cout << "\n== GỬI VĂN BẢN ==\n"
+         << " Nội dung (0 để hủy):\n"
          << " [>] ";
     string content; 
     if (!getline(cin, content)) return;
@@ -407,12 +406,8 @@ void UtilityTools::downloadManager() {
 
     while (true) {
         sc.cls();
-        cout << "================================================================================\n"
-             << "                 TRÌNH TẢI & CÀI ĐẶT PHẦN MỀM TỰ ĐỘNG\n"
-             << "================================================================================\n"
-             << " [Thư mục tải: " << downloadDir << "]\n"
-             << " [Tổng cộng  : " << apps.size() << " ứng dụng khả dụng]\n"
-             << "--------------------------------------------------------------------------------\n";
+        cout << "== TẢI PHẦN MỀM ==\n"
+             << " Thư mục: " << downloadDir << " | Ứng dụng: " << apps.size() << "\n";
 
         if (apps.empty()) {
             cout << "  [!] Không tìm thấy danh sách trong: " << configPath << "\n\n";
@@ -428,9 +423,8 @@ void UtilityTools::downloadManager() {
             }
         }
 
-        cout << "--------------------------------------------------------------------------------\n"
-             << "  [A] Tải tất cả   |   [R] Nạp lại danh sách   |   [0] Quay lại\n\n"
-             << "  Nhập số để tải (vd: 1 hoặc 1,3,5 hoặc 1-5): ";
+        cout << " [A] Tải tất cả | [R] Nạp lại | [0] Quay lại\n"
+             << " Chọn số (1,3,5 hoặc 1-5): ";
 
         string inputLine;
         getline(cin, inputLine);
@@ -450,9 +444,7 @@ void UtilityTools::downloadManager() {
         if (inputLine == "A" || inputLine == "a") {
             if (apps.empty()) continue;
             sc.cls();
-            cout << "================================================================================\n"
-                 << "                     TẢI TOÀN BỘ " << apps.size() << " ỨNG DỤNG\n"
-                 << "================================================================================\n\n";
+            cout << "== TẢI TẤT CẢ: " << apps.size() << " ỨNG DỤNG ==\n";
 
             int successCount = 0;
             for (size_t i = 0; i < apps.size(); ++i) {
@@ -475,9 +467,8 @@ void UtilityTools::downloadManager() {
                 }
             }
 
-            cout << "--------------------------------------------------------------------------------\n"
-                 << "  [✓] Hoàn tất " << successCount << "/" << apps.size() << " ứng dụng vào thư mục Downloads!\n\n"
-                 << "  Mở thư mục Downloads? (y/n, mặc định y): ";
+            cout << "[✓] Đã tải " << successCount << "/" << apps.size() << " ứng dụng.\n"
+                 << " Mở Downloads? (Y/n): ";
             string openChoice;
             getline(cin, openChoice);
             openChoice = SystemCore::trim(openChoice);
@@ -499,13 +490,8 @@ void UtilityTools::downloadManager() {
         if (selectedIndices.size() == 1) {
             const auto &app = apps[selectedIndices[0]];
             sc.cls();
-            cout << "================================================================================\n"
-                 << "                  ĐANG TẢI ỨNG DỤNG [" << (selectedIndices[0] + 1) << "/" << apps.size() << "]\n"
-                 << "================================================================================\n\n"
-                 << "  [*] Tên ứng dụng: " << app.name << "\n"
-                 << "  [*] Tệp lưu     : " << app.fileName << "\n"
-                 << "  [*] Thư mục lưu : " << downloadDir << "\n\n"
-                 << "--------------------------------------------------------------------------------\n";
+            cout << "== TẢI [" << (selectedIndices[0] + 1) << "/" << apps.size() << "] " << app.name << " ==\n"
+                 << " Tệp: " << app.fileName << " | Thư mục: " << downloadDir << "\n";
 
             string targetPath = downloadDir + "\\" + app.fileName;
             string cmd = "curl -# -f -L \"" + app.url + "\" -o \"" + targetPath + "\"";
@@ -534,9 +520,7 @@ void UtilityTools::downloadManager() {
         } else {
             // Tải nhiều ứng dụng được chọn
             sc.cls();
-            cout << "================================================================================\n"
-                 << "                ĐANG TẢI " << selectedIndices.size() << " ỨNG DỤNG ĐÃ CHỌN\n"
-                 << "================================================================================\n\n";
+            cout << "== TẢI " << selectedIndices.size() << " ỨNG DỤNG ==\n";
 
             int successCount = 0;
             for (size_t i = 0; i < selectedIndices.size(); ++i) {
@@ -560,9 +544,8 @@ void UtilityTools::downloadManager() {
                 }
             }
 
-            cout << "--------------------------------------------------------------------------------\n"
-                 << "  [✓] Hoàn tất " << successCount << "/" << selectedIndices.size() << " ứng dụng tải về!\n\n"
-                 << "  Mở thư mục Downloads? (y/n, mặc định y): ";
+            cout << "[✓] Đã tải " << successCount << "/" << selectedIndices.size() << " ứng dụng.\n"
+                 << " Mở Downloads? (Y/n): ";
             string openChoice;
             getline(cin, openChoice);
             openChoice = SystemCore::trim(openChoice);
@@ -869,7 +852,7 @@ void UtilityTools::uninstallBloatware() {
     AdvancedBloatStatus advStatus;
     scanBloatware(detectedSec, advStatus);
 
-    cout << " ┌─ [ KẾT QUẢ DÒ QUÉT ] ──────────────────────────────────────────\n";
+    cout << "== KẾT QUẢ QUÉT ==\n";
     
     // Hiển thị app thứ cấp
     cout << " │ [1] App rác thứ cấp: Phát hiện " << detectedSec.size() << "/" << g_secondaryBloat.size() << " ứng dụng\n";
@@ -893,7 +876,7 @@ void UtilityTools::uninstallBloatware() {
     cout << " │   - Teams Chat Taskbar   : " << (advStatus.hasTeams ? "\x1b[33m[Phát hiện Teams cá nhân]\x1b[0m" : "\x1b[32m[Sạch]\x1b[0m") << "\n";
     cout << " │   - Windows Widgets (Góc): " << (advStatus.hasWidgets ? (advStatus.widgetsRunning ? "\x1b[33m[Phát hiện - Đang chạy ngầm]\x1b[0m" : "\x1b[33m[Phát hiện gói WebExperience]\x1b[0m") : "\x1b[32m[Sạch]\x1b[0m") << "\n";
     cout << " │   - Xbox Ecosystem       : " << (advStatus.hasXbox ? (advStatus.xboxRunning ? "\x1b[33m[Phát hiện - Tiến trình đang chạy]\x1b[0m" : "\x1b[33m[Phát hiện gói/dịch vụ Xbox]\x1b[0m") : "\x1b[32m[Sạch]\x1b[0m") << "\n";
-    cout << " └────────────────────────────────────────────────────────────────\n\n";
+    cout << "\n";
 
     bool hasAnySec = !detectedSec.empty();
     bool hasAnyAdv = advStatus.hasOneDrive || advStatus.hasPhoneLink || advStatus.hasCortana || advStatus.hasTeams || advStatus.hasWidgets || advStatus.hasXbox;

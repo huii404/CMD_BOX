@@ -47,12 +47,16 @@ string NetworkScanner::getLocalIP(SystemCore &core) {
         return cachedScannerIP;
     }
     
-    IP_ADAPTER_INFO adapterInfo[16];
-    DWORD dwSize = sizeof(adapterInfo);
-    DWORD dwRetVal = GetAdaptersInfo(adapterInfo, &dwSize);
+    vector<BYTE> adapterInfo(sizeof(IP_ADAPTER_INFO));
+    DWORD dwSize = static_cast<DWORD>(adapterInfo.size());
+    DWORD dwRetVal = GetAdaptersInfo(reinterpret_cast<PIP_ADAPTER_INFO>(adapterInfo.data()), &dwSize);
+    if (dwRetVal == ERROR_BUFFER_OVERFLOW) {
+        adapterInfo.resize(dwSize);
+        dwRetVal = GetAdaptersInfo(reinterpret_cast<PIP_ADAPTER_INFO>(adapterInfo.data()), &dwSize);
+    }
     
     if (dwRetVal == ERROR_SUCCESS) {
-        PIP_ADAPTER_INFO pAdapter = adapterInfo;
+        PIP_ADAPTER_INFO pAdapter = reinterpret_cast<PIP_ADAPTER_INFO>(adapterInfo.data());
         while (pAdapter) {
             string ip = pAdapter->IpAddressList.IpAddress.String;
             if (isPrivateIPv4(ip)) {
@@ -378,14 +382,17 @@ vector<DiscoveredDevice> NetworkScanner::performScan(double &outElapsedSec) {
     string myMAC = "";
 
     ULONG outBufLen = sizeof(IP_ADAPTER_INFO);
-    PIP_ADAPTER_INFO pAdapterInfo = (IP_ADAPTER_INFO*)malloc(outBufLen);
-    if (GetAdaptersInfo(pAdapterInfo, &outBufLen) == ERROR_BUFFER_OVERFLOW) {
-        free(pAdapterInfo);
-        pAdapterInfo = (IP_ADAPTER_INFO*)malloc(outBufLen);
+    vector<BYTE> adapterBuffer(outBufLen);
+    DWORD adapterResult = GetAdaptersInfo(reinterpret_cast<PIP_ADAPTER_INFO>(adapterBuffer.data()), &outBufLen);
+    if (adapterResult == ERROR_BUFFER_OVERFLOW) {
+        adapterBuffer.resize(outBufLen);
+        adapterResult = GetAdaptersInfo(reinterpret_cast<PIP_ADAPTER_INFO>(adapterBuffer.data()), &outBufLen);
     }
 
-    if (pAdapterInfo && GetAdaptersInfo(pAdapterInfo, &outBufLen) == NO_ERROR) {
-        PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
+    DWORD preferredIndex = 0;
+    GetBestInterface(inet_addr("8.8.8.8"), &preferredIndex);
+    if (adapterResult == NO_ERROR) {
+        PIP_ADAPTER_INFO pAdapter = reinterpret_cast<PIP_ADAPTER_INFO>(adapterBuffer.data());
         while (pAdapter) {
             string ip = pAdapter->IpAddressList.IpAddress.String;
             string gw = pAdapter->GatewayList.IpAddress.String;
@@ -398,12 +405,11 @@ vector<DiscoveredDevice> NetworkScanner::performScan(double &outElapsedSec) {
                         pAdapter->Address[0], pAdapter->Address[1], pAdapter->Address[2],
                         pAdapter->Address[3], pAdapter->Address[4], pAdapter->Address[5]);
                 myMAC = macBuf;
-                break;
+                if (pAdapter->Index == preferredIndex) break;
             }
             pAdapter = pAdapter->Next;
         }
     }
-    if (pAdapterInfo) free(pAdapterInfo);
 
     if (myIP.empty()) {
         myIP = getLocalIP(sc);
@@ -414,15 +420,27 @@ vector<DiscoveredDevice> NetworkScanner::performScan(double &outElapsedSec) {
         return {};
     }
 
-    size_t lastDot = myIP.rfind('.');
-    if (lastDot == string::npos) {
+    IN_ADDR ipAddr{}, maskAddr{};
+    if (inet_pton(AF_INET, myIP.c_str(), &ipAddr) != 1 ||
+        inet_pton(AF_INET, myMask.c_str(), &maskAddr) != 1) {
         outElapsedSec = 0;
         return {};
     }
-
-    string baseSubnet = myIP.substr(0, lastDot + 1);
+    uint32_t ipNumber = ntohl(ipAddr.S_un.S_addr);
+    uint32_t maskNumber = ntohl(maskAddr.S_un.S_addr);
+    uint32_t networkNumber = ipNumber & maskNumber;
+    uint32_t broadcastNumber = networkNumber | ~maskNumber;
+    if (broadcastNumber <= networkNumber + 1 ||
+        static_cast<uint64_t>(broadcastNumber) - networkNumber > 4096) {
+        outElapsedSec = 0;
+        return {};
+    }
     if (gatewayIP.empty()) {
-        gatewayIP = baseSubnet + "1";
+        IN_ADDR gatewayAddr{};
+        gatewayAddr.S_un.S_addr = htonl(networkNumber + 1);
+        char gatewayText[INET_ADDRSTRLEN] = {};
+        inet_ntop(AF_INET, &gatewayAddr, gatewayText, sizeof(gatewayText));
+        gatewayIP = gatewayText;
     }
 
     char localHostName[256] = {0};
@@ -441,13 +459,13 @@ vector<DiscoveredDevice> NetworkScanner::performScan(double &outElapsedSec) {
 
     auto scanStart = chrono::high_resolution_clock::now();
 
-    // 2. GIAI ĐOẠN 1: QUÉT NHANH 254 IP BẰNG ICMP PING ĐA LUỒNG (128 THREADS, TIMEOUT 70MS)
-    #pragma omp parallel for schedule(dynamic, 1) num_threads(128)
-    for (int i = 1; i <= 254; ++i) {
-        string curIP = baseSubnet + to_string(i);
-        if (curIP == myIP) continue;
+    // Quét các địa chỉ host thuộc subnet thật; giới hạn 4096 địa chỉ.
+    #pragma omp parallel for schedule(dynamic, 1) num_threads(32)
+    for (int64_t address = static_cast<int64_t>(networkNumber) + 1;
+         address < static_cast<int64_t>(broadcastNumber); ++address) {
+        if (static_cast<uint32_t>(address) == ipNumber) continue;
 
-        IPAddr destIp = inet_addr(curIP.c_str());
+        IPAddr destIp = htonl(static_cast<uint32_t>(address));
         HANDLE hIcmp = IcmpCreateFile();
         if (hIcmp != INVALID_HANDLE_VALUE) {
             char sendData[] = "Q";
@@ -472,8 +490,10 @@ vector<DiscoveredDevice> NetworkScanner::performScan(double &outElapsedSec) {
                     in_addr inAddr;
                     inAddr.s_addr = row.dwAddr;
                     string ip = inet_ntoa(inAddr);
-                    if (ip.rfind(baseSubnet, 0) == 0 &&
-                        (ip.rfind(".255") != ip.length() - 4) && row.dwPhysAddrLen == 6) {
+                    uint32_t arpAddress = ntohl(row.dwAddr);
+                    if ((arpAddress & maskNumber) == networkNumber &&
+                        arpAddress != networkNumber && arpAddress != broadcastNumber &&
+                        row.dwPhysAddrLen == 6) {
                         char macBuf[24];
                         sprintf(macBuf, "%02X:%02X:%02X:%02X:%02X:%02X",
                                 row.bPhysAddr[0], row.bPhysAddr[1], row.bPhysAddr[2],
@@ -552,7 +572,7 @@ vector<DiscoveredDevice> NetworkScanner::performScan(double &outElapsedSec) {
 void NetworkScanner::scanConnectedDevices() {
     while (true) {
         sc.cls();
-        cout << "\n [*] Vui lòng đợi trong giây lát...\n";
+        cout << "\n[*] Đang quét mạng...\n";
         cout.flush();
 
         double elapsedSec = 0.0;
@@ -560,7 +580,7 @@ void NetworkScanner::scanConnectedDevices() {
 
         if (deviceList.empty()) {
             sc.cls();
-            cout << " [!] Không phát hiện kết nối mạng cục bộ nào đang hoạt động!\n";
+            cout << "[!] Không có kết nối LAN đang hoạt động.\n";
             sc.waitEnter();
             return;
         }
@@ -595,7 +615,7 @@ void NetworkScanner::scanConnectedDevices() {
         cout << " [*] Thời gian quét: \x1b[93m" << fixed << setprecision(2) << elapsedSec << "s\x1b[0m | "
              << "Tìm thấy \x1b[32m" << deviceList.size() << "\x1b[0m thiết bị đang kết nối mạng.\n\n";
 
-        cout << " Nhấn Enter để quay lại (hoặc gõ '1' / 'r' để quét lại): ";
+        cout << " Enter: quay lại | 1/r: quét lại: ";
         string opt;
         getline(cin, opt);
         opt = SystemCore::trim(opt);

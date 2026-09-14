@@ -256,7 +256,7 @@ string UpdateManager::getVersionStatusText() {
 void UpdateManager::showUpdateMenu() {
     while (true) {
         system("cls");
-        cout << "\n";
+        cout << "== CẬP NHẬT ==\n";
 
         ReleaseInfo rel = fetchLatestRelease();
         if (!rel.valid) {
@@ -278,10 +278,10 @@ void UpdateManager::showUpdateMenu() {
             saveCache(static_cast<long long>(time(nullptr)), rel.version, g_releaseUrl);
         }
 
-        cout << " [1] Tải bản mới (Mở GitHub)\n"
-             << " [2] Cập nhật tự động (Git pull)\n"
+        cout << " [1] Mở GitHub\n"
+             << " [2] Cập nhật bằng Git\n"
              << " [3] Kiểm tra lại\n"
-             << " [0] Quay lại\n\n"
+             << " [0] Quay lại\n"
              << " [Chọn]: ";
 
         int choice = SystemCore::readInt("");

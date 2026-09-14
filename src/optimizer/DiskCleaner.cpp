@@ -543,7 +543,7 @@ long long DiskCleaner::cleanDownloadsExesAndDuplicates() {
     int deletedDuplicateCount = 0;
     int deletedCorruptCount = 0;
 
-    cout << "     ├── Đang quét danh mục phần mềm đã cài đặt trên Windows...\n";
+    cout << "     ├── Đang quét ứng dụng đã cài...\n";
     unordered_set<string> installed = getInstalledAppNames();
 
     // A. DỌN FILE TẢI DỞ DANG (.crdownload, .part, .tmp cũ hơn 24 giờ qua Win32 API chính xác)
@@ -963,21 +963,21 @@ void DiskCleaner::runCleanChoice(int choice) {
     long long totalFreed = 0;
 
     if (choice == 1 || choice == 6 || choice == 7) {
-        cout << " [*] Nhiệm vụ 1: Đang dọn rác Bề mặt & Cache người dùng (Temp, WER, CrashDumps, DNS)...\n";
+        cout << "[*] Dọn temp & cache người dùng...\n";
         long long f1 = cleanSurfaceAndUserTemp();
         totalFreed += f1;
         cout << "     └── [✓] " << (f1 > 0 ? ("Giải phóng " + SystemCore::formatSize(f1)) : "Đã sạch sẽ từ trước") << "\n\n";
     }
 
     if (choice == 2 || choice == 6 || choice == 7) {
-        cout << " [*] Nhiệm vụ 2: Đang dọn rác Trình duyệt & Ứng dụng (Chrome, Edge, Discord, Telegram)...\n";
+        cout << "[*] Dọn cache trình duyệt & ứng dụng...\n";
         long long f2 = cleanBrowserAndAppCache();
         totalFreed += f2;
         cout << "     └── [✓] " << (f2 > 0 ? ("Giải phóng " + SystemCore::formatSize(f2)) : "Đã sạch sẽ từ trước") << "\n\n";
     }
 
     if (choice == 3 || choice == 6 || choice == 7) {
-        cout << " [*] Nhiệm vụ 3: Đang dọn dẹp Chuyên sâu & Tồn dư cập nhật (DISM, Windows.old, EventLogs)...\n";
+        cout << "[*] Dọn hệ thống chuyên sâu...\n";
         long long f3 = cleanDeepSystemAndUpdates();
         if (f3 > 0) {
             totalFreed += f3;
@@ -990,7 +990,7 @@ void DiskCleaner::runCleanChoice(int choice) {
     }
 
     if (choice == 4 || choice == 7) {
-        cout << " [*] Nhiệm vụ 4: Đang dọn rác Môi trường lập trình (Pip, Gradle, VS Code, Cache tạm)...\n";
+        cout << "[*] Dọn cache lập trình...\n";
         long long f4 = cleanDevArtifactsAndCaches();
         totalFreed += f4;
         cout << "     └── [✓] " << (f4 > 0 ? ("Giải phóng " + SystemCore::formatSize(f4)) : "Đã sạch sẽ từ trước") << "\n\n";
@@ -998,7 +998,7 @@ void DiskCleaner::runCleanChoice(int choice) {
 
     long long totalRecycled = 0;
     if (choice == 5 || choice == 6 || choice == 7) {
-        cout << " [*] Nhiệm vụ 5: Đang quét & dọn dẹp thư mục Downloads (Exe đã cài đặt, Exe trùng lặp)...\n";
+        cout << "[*] Dọn bộ cài Downloads...\n";
         long long f5 = cleanDownloadsExesAndDuplicates();
         totalRecycled += f5;
         cout << "     └── [✓] " << (f5 > 0 ? ("Đã chuyển vào Thùng rác " + SystemCore::formatSize(f5)) : "Đã sạch sẽ từ trước") << "\n\n";

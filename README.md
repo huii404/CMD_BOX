@@ -2,6 +2,8 @@
 
 > **Nền tảng:** Windows (x64) | **Ngôn ngữ:** C++17 | **Biên dịch:** MinGW-w64 (GCC / UCRT64)
 
+**Tra cứu:** [Sổ tay lệnh Windows CMD](README_WINDOWS_COMMANDS.md) — lệnh hữu ích, tác dụng, ví dụ và mức quyền cần thiết.
+
 ---
 
 ## I. Giới thiệu Tổng quan

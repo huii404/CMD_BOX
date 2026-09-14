@@ -270,7 +270,7 @@ static bool disableSingleStartupApp(const StartupAppInfo &item) {
  * - Bước 3: Khởi động lại toàn bộ dịch vụ để Windows tải lại bản update mới nguyên bản.
  */
 void SystemOptimizer::fixWindowsUpdate() {
-    cout << "\n[*] Đang thiết lập kịch bản reset Windows Update (quyền Admin)...\n";
+    cout << "\n[*] Đang reset Windows Update (Admin)...\n";
     string batContent = 
         "@echo off\n"
         "chcp 65001 >nul\n"
@@ -292,9 +292,9 @@ void SystemOptimizer::fixWindowsUpdate() {
         "net start wuauserv >nul 2>&1\n";
 
     if (SystemCore::runBatchAsAdmin(batContent, "Reset Windows Update")) {
-        cout << "\n[✓] Đã reset Windows Update thành công!\n";
+        cout << "\n[✓] Đã reset Windows Update.\n";
     } else {
-        cout << "\n[!] Thất bại (Cần cấp quyền Administrator để reset Windows Update).\n";
+        cout << "\n[!] Reset thất bại; cần quyền Admin.\n";
     }
     sc.waitEnter();
 }
@@ -495,22 +495,20 @@ void SystemOptimizer::runOptimizeChoice(int choice) {
     if (choice < 1 || choice > 4) return;
 
     sc.cls();
-    cout << "\n\n";
-
     if (choice == 1 || choice == 4) {
-        cout << " [*] Nhiệm vụ 1: Đang quét và tắt ứng dụng khởi động làm chậm máy\n";
+        cout << "[*] Đang tối ưu ứng dụng khởi động...\n";
         int count = optimizeStartupApps();
         cout << "     └── [✓] " << (count > 0 ? ("Đã tắt " + to_string(count) + " app làm chậm máy") : "Tất cả ứng dụng khởi động đã tối ưu") << "\n\n";
     }
 
     if (choice == 2 || choice == 4) {
-        cout << " [*] Nhiệm vụ 2: Đang vô hiệu hóa các dịch vụ chạy ngầm vô ích\n";
+        cout << "[*] Đang tối ưu dịch vụ nền...\n";
         int count = optimizeBackgroundServices();
         cout << "     └── [✓] Đã tối ưu " << count << " dịch vụ ngầm (Maps, Wallet, Telemetry, ErrorReporting)\n\n";
     }
 
     if (choice == 3 || choice == 4) {
-        cout << " [*] Nhiệm vụ 3: Kiểm tra và tối ưu Giao diện & Taskbar\n";
+        cout << "[*] Đang tối ưu giao diện...\n";
         bool restarted = optimizeVisualEffectsAndUI();
         if (restarted) {
             cout << "     └── [✓] Đã áp dụng tinh chỉnh mới và làm mới Explorer.\n\n";
@@ -519,8 +517,7 @@ void SystemOptimizer::runOptimizeChoice(int choice) {
         }
     }
 
-    cout << "\n\n";
-    cout << "[✓] Hoàn tất: Hệ thống đã sẵn sàng với hiệu năng tối đa.\n\n";
+    cout << "\n[✓] Hoàn tất tối ưu.\n";
     sc.waitEnter();
 }
 

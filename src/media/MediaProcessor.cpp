@@ -196,7 +196,7 @@ void MediaProcessor::processMediaAuto() {
             continue;
         }
 
-        cout << "\nPhát hiện " << inputs.size() << " file đang được phân tích\n";
+        cout << "\nĐang phân tích " << inputs.size() << " file...\n";
 
         int currentOptimizedCount = 0; 
         int currentSkippedCount = 0;   
@@ -324,7 +324,7 @@ void MediaProcessor::processMediaAuto() {
                     else {
                         fs::remove(tempOutPath);
                         currentSkippedCount++;
-                        cout << "\nBỏ qua: File đã ở dung lượng tối ưu, giữ nguyên để tránh giảm nét\n\n";
+                    cout << "\nBỏ qua: File đã tối ưu.\n";
                     }
                 } 
                 catch (const std::exception& e) {
@@ -404,12 +404,12 @@ void MediaProcessor::processExtractAudioBatch() {
             cout << "    Bỏ qua: Sai định dạng!\n";
         }
     }
-    cout << "\nHoàn thành: Đã trích " << successCount << "/" << inputs.size() << " âm thanh!\n";
+    cout << "\n[✓] Đã trích " << successCount << "/" << inputs.size() << " file âm thanh.\n";
     SystemCore::waitEnter();
 }
 
 void MediaProcessor::processChangeSpeedBatch() {
-    cout << "\n ─── [ ĐỔI TỐC ĐỘ VIDEO ] ──────────────────────────────────────────\n\n"
+    cout << "\n== ĐỔI TỐC ĐỘ VIDEO ==\n"
          << " Kéo thả video [kèm tốc độ nếu muốn, vd: video.mp4, 1.5]:\n"
          << " [>] ";
     string rawInput;
@@ -511,7 +511,7 @@ void MediaProcessor::processChangeSpeedBatch() {
             cout << "Bỏ qua: Sai định dạng!\n";
         }
     }
-    cout << "\nHoàn thành: Đã xử lý " << successCount << "/" << inputs.size() << " video!\n";
+    cout << "\n[✓] Đã xử lý " << successCount << "/" << inputs.size() << " video.\n";
     SystemCore::waitEnter();
 }
 
@@ -914,7 +914,7 @@ void MediaProcessor::processConvertFormatBatch() {
 //  CHUẨN HÓA TÊN FILE MEDIA
 void MediaProcessor::normalizeMediaFilenames() {
     SystemCore::cls();
-    std::cout << "\n    CHUẨN HÓA TÊN FILE ẢNH, VIDEO, ÂM THANH\n\n"
+    std::cout << "\n== CHUẨN HÓA TÊN MEDIA ==\n"
               << "Nhập đường dẫn thư mục (0 để quay lại): ";
     std::string dirPath;
     std::getline(std::cin, dirPath);
@@ -1159,7 +1159,7 @@ bool MediaProcessor::extractHiddenFromMediaCore(const std::string& containerPath
 // 1. Giấu file bí mật vào Ảnh
 void MediaProcessor::hideFileInImage() {
     SystemCore::cls();
-    std::cout << "\n   ẨN FILE TRONG ẢNH (Bìa Ảnh <= 10MB)\n\n"
+    std::cout << "\n== ẨN FILE TRONG ẢNH (≤10 MB) ==\n"
               << "Nhập đường dẫn Ảnh nền (jpg/png): ";
     std::string imagePath;
     std::getline(std::cin, imagePath);
@@ -1204,7 +1204,7 @@ void MediaProcessor::hideFileInImage() {
 // 2. Giấu file bí mật vào Video
 void MediaProcessor::hideFileInVideo() {
     SystemCore::cls();
-    std::cout << "\n   ẨN FILE TRONG VIDEO (Bìa Video <= 100MB)\n\n"
+    std::cout << "\n== ẨN FILE TRONG VIDEO (≤100 MB) ==\n"
               << "Nhập đường dẫn Video nền (mp4/mkv): ";
     std::string videoPath;
     std::getline(std::cin, videoPath);
@@ -1287,7 +1287,7 @@ void MediaProcessor::extractHiddenFromMedia() {
 // HÀM MẸ: ẨN FILE TRONG FILE & TRÍCH XUẤT THÔNG MINH
 void MediaProcessor::processAnFileTrongFile() {
     SystemCore::cls();
-    std::cout << "\n ─── [ ẨN FILE VÀO MEDIA & TRÍCH XUẤT ] ─────────────────────────────\n\n"
+    std::cout << "\n== ẨN & TRÍCH FILE MEDIA ==\n"
               << " * Giấu file  : Kéo thả [File nền], [File cần ẩn] (vd: anh.jpg, data.zip)\n"
               << " * Trích xuất : Kéo thả [File đã giấu] để tự động lấy lại file ẩn\n"
               << " (0 để quay lại)\n\n"

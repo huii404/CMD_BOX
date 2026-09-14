@@ -11,6 +11,9 @@
 #include <filesystem>
 #include <shlobj.h>
 #include <algorithm>
+#include <cstdint>
+#include <cctype>
+#include <climits>
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
@@ -21,6 +24,42 @@ using namespace std;
 static const int DEFAULT_TCP_PORT = 8888;
 static const int DEFAULT_UDP_BEACON_PORT = 53318;
 static const int CHUNK_SIZE = 262144; // 256 KB (Tối ưu thông lượng LAN & Wi-Fi)
+
+static bool sendAll(SOCKET socket, const char *data, size_t size) {
+    size_t sent = 0;
+    while (sent < size) {
+        int n = send(socket, data + sent, static_cast<int>(std::min(size - sent, static_cast<size_t>(INT_MAX))), 0);
+        if (n <= 0) return false;
+        sent += static_cast<size_t>(n);
+    }
+    return true;
+}
+
+static string htmlEscape(const string &value) {
+    string escaped;
+    for (char c : value) {
+        switch (c) {
+            case '&': escaped += "&amp;"; break;
+            case '<': escaped += "&lt;"; break;
+            case '>': escaped += "&gt;"; break;
+            case '"': escaped += "&quot;"; break;
+            case '\'': escaped += "&#39;"; break;
+            default: escaped += c;
+        }
+    }
+    return escaped;
+}
+
+static string encodeHeaderFilename(const string &value) {
+    static const char hex[] = "0123456789ABCDEF";
+    string encoded;
+    for (unsigned char c : value) {
+        if (std::isalnum(c) && c < 128) encoded += static_cast<char>(c);
+        else if (c == '-' || c == '_' || c == '.') encoded += static_cast<char>(c);
+        else { encoded += '%'; encoded += hex[c >> 4]; encoded += hex[c & 15]; }
+    }
+    return encoded;
+}
 
 //API (qrenco.de) lấy mã QR trên console (timeout 1-2s tránh nghẽn)
 static string fetchQrCodeApi(const string &targetUrl) {
@@ -101,7 +140,7 @@ LocalDrop::~LocalDrop() {
         closesocket(beaconUdpSocket);
         beaconUdpSocket = INVALID_SOCKET;
     }
-    removeFirewallRule();
+    if (!firewallRuleName.empty()) removeFirewallRule(firewallRuleName);
     WSACleanup();
 }
 
@@ -233,14 +272,14 @@ unordered_set<string> LocalDrop::getAllLocalIPs() {
 // ----------------------------------------------------------------------------------
 // Quản lý Windows Firewall tự động
 // ----------------------------------------------------------------------------------
-void LocalDrop::addFirewallRule(int port) {
-    string cmd = "netsh advfirewall firewall add rule name=\"CMDBOX_DROP\" dir=in action=allow protocol=TCP localport=" 
+bool LocalDrop::addFirewallRule(int port, const string &ruleName) {
+    string cmd = "netsh advfirewall firewall add rule name=\"" + ruleName + "\" dir=in action=allow protocol=TCP localport="
                  + to_string(port);
-    SystemCore::runRawCommand(cmd);
+    return SystemCore::runRawCommand(cmd);
 }
 
-void LocalDrop::removeFirewallRule() {
-    SystemCore::runRawCommand("netsh advfirewall firewall delete rule name=\"CMDBOX_DROP\"");
+bool LocalDrop::removeFirewallRule(const string &ruleName) {
+    return SystemCore::runRawCommand("netsh advfirewall firewall delete rule name=\"" + ruleName + "\"");
 }
 
 // ----------------------------------------------------------------------------------
@@ -271,21 +310,33 @@ string LocalDrop::parseDeviceName(const string &userAgent, const string &clientI
 string LocalDrop::sanitizeFilename(const string &filename) {
     string safe = filename;
     for (char &c : safe) {
-        if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|') {
+        if (static_cast<unsigned char>(c) < 32 || c == '/' || c == '\\' || c == ':' ||
+            c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|') {
             c = '_';
         }
     }
+    while (!safe.empty() && (safe.back() == '.' || safe.back() == ' ')) safe.pop_back();
     if (safe.empty() || safe == "." || safe == "..") safe = "received_file";
+    string stem = safe.substr(0, safe.find('.'));
+    transform(stem.begin(), stem.end(), stem.begin(), [](unsigned char c) { return static_cast<char>(toupper(c)); });
+    if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" ||
+        (stem.size() == 4 && (stem.rfind("COM", 0) == 0 || stem.rfind("LPT", 0) == 0) &&
+         stem[3] >= '1' && stem[3] <= '9')) safe = "received_" + safe;
     return safe;
 }
 
 string LocalDrop::getDownloadsFolder() {
     PWSTR path = NULL;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Downloads, 0, NULL, &path))) {
-        char buf[MAX_PATH];
-        WideCharToMultiByte(CP_UTF8, 0, path, -1, buf, MAX_PATH, NULL, NULL);
+        int needed = WideCharToMultiByte(CP_UTF8, 0, path, -1, NULL, 0, NULL, NULL);
+        string result;
+        if (needed > 0) {
+            vector<char> buf(needed);
+            if (WideCharToMultiByte(CP_UTF8, 0, path, -1, buf.data(), needed, NULL, NULL) > 0)
+                result = buf.data();
+        }
         CoTaskMemFree(path);
-        return string(buf);
+        if (!result.empty()) return result;
     }
     const char *userProf = getenv("USERPROFILE");
     if (userProf) return string(userProf) + "\\Downloads";
@@ -361,7 +412,7 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
                 std::error_code ec;
                 fs::path dirP = fs::u8path(cleanInput);
                 if (fs::exists(dirP, ec) && fs::is_directory(dirP, ec)) {
-                    cout << " [!] Bạn vừa chọn một THƯ MỤC. Vui lòng chọn một FILE cụ thể để truyền!\n";
+                    cout << " [!] Hãy chọn file, không chọn thư mục.\n";
                 } else {
                     cout << " [!] Không tìm thấy file: " << rawInput << "\n"
                          << " [!] Vui lòng kéo thả file vào cửa sổ hoặc kiểm tra lại đường dẫn.\n";
@@ -382,13 +433,14 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
     cout << "\n [*] Đang mở trạm phát" << std::flush;
 
     std::error_code ecSize;
-    uintmax_t fileSizeBytes = fs::file_size(targetPath, ecSize);
+    fs::path sourcePath = fs::u8path(targetPath);
+    uintmax_t fileSizeBytes = fs::file_size(sourcePath, ecSize);
     if (ecSize) {
-        cout << "\n [!] Không thể đọc kích thước file (Lỗi: " << ecSize.message() << ")!\n";
+            cout << "\n [!] Không đọc được dung lượng: " << ecSize.message() << "\n";
         sc.waitEnter();
         return;
     }
-    string fileName = fs::path(targetPath).filename().u8string();
+    string fileName = sourcePath.filename().u8string();
     string fileSizeFormatted = SystemCore::formatSize(fileSizeBytes);
 
     // Phát hiện IP LAN chuẩn
@@ -425,13 +477,21 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
     }
 
     // Tự động mở rule Windows Firewall sau khi đã bind thành công vào cổng
-    addFirewallRule(tcpPort);
+    firewallRuleName = "CMDBOX_DROP_" + to_string(GetCurrentProcessId()) + "_" +
+                       to_string(reinterpret_cast<uintptr_t>(this)) + "_" + to_string(tcpPort);
+    if (!addFirewallRule(tcpPort, firewallRuleName)) {
+        firewallRuleName.clear();
+        cout << " [!] Không mở được firewall; máy khác có thể không kết nối được.\n";
+    }
 
     if (listen(serverTcpSocket, 5) == SOCKET_ERROR) {
         cout << " [!] Lỗi listen trên socket TCP!\n";
         closesocket(serverTcpSocket);
         serverTcpSocket = INVALID_SOCKET;
-        removeFirewallRule();
+        if (!firewallRuleName.empty()) {
+            removeFirewallRule(firewallRuleName);
+            firewallRuleName.clear();
+        }
         sc.waitEnter();
         return;
     }
@@ -488,7 +548,7 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
                                 const string &statusText = "Chờ kết nối") {
         sc.cls();
         if (!isSecure) {
-            cout << "\n --- CÔNG KHAI: WEB DROP QR ---\n"
+            cout << "\n== WEB DROP QR ==\n"
                  << " [*] File : \x1b[93m" << fileName << " (" << fileSizeFormatted << ")\x1b[0m\n"
                  << " [*] Link : \x1b[96m" << homeUrl << "\x1b[0m\n"
                  << " [!] Quét QR hoặc mở link để tải (Phím 0: Thoát)\n\n"
@@ -496,7 +556,7 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
                  << " [*] Thiết bị: \x1b[96m" << connectedDevice << "\x1b[0m\n"
                  << " [*] Tiến độ : " << statusText << "\n" << std::flush;
         } else {
-            cout << "\n --- BẢO MẬT: BẮN FILE P2P ---\n"
+            cout << "\n== GỬI FILE P2P ==\n"
                  << " [*] File : \x1b[93m" << fileName << " (" << fileSizeFormatted << ")\x1b[0m\n"
                  << " [*] Kênh : Sóng Beacon ngầm (Chỉ tool CMD Box nhận diện)\n"
                  << " [!] Đang phát tín hiệu ngầm tới máy nhận (Phím 0: Thoát)\n\n"
@@ -513,7 +573,7 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
         if (_kbhit()) {
             int key = _getch();
             if (key == '0' || key == 27 || key == 'q' || key == 'Q') {
-                cout << "\n [!] Người dùng bấm dừng truyền file.\n" << std::flush;
+            cout << "\n [!] Đã dừng truyền file.\n" << std::flush;
                 break;
             }
         }
@@ -551,13 +611,17 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
         inet_ntop(AF_INET, &(clientAddr.sin_addr), clientIP, INET_ADDRSTRLEN);
 
         // Đọc HTTP Request Header
-        char reqBuf[4096] = {0};
-        int bytesRead = recv(clientSocket, reqBuf, sizeof(reqBuf) - 1, 0);
-        if (bytesRead <= 0) {
+        char reqBuf[4096];
+        string req;
+        while (req.find("\r\n\r\n") == string::npos && req.size() < 16384) {
+            int bytesRead = recv(clientSocket, reqBuf, sizeof(reqBuf), 0);
+            if (bytesRead <= 0) break;
+            req.append(reqBuf, bytesRead);
+        }
+        if (req.find("\r\n\r\n") == string::npos) {
             closesocket(clientSocket);
             continue;
         }
-        string req(reqBuf, bytesRead);
 
         // Trích xuất User-Agent
         string userAgent = "";
@@ -605,7 +669,7 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
                      << "</style></head><body>"
                      << "<div class=\"card\">"
                      << "<div class=\"icon\">📦</div>"
-                     << "<h1>" << fileName << "</h1>"
+                     << "<h1>" << htmlEscape(fileName) << "</h1>"
                      << "<div class=\"badge\">" << fileSizeFormatted << " • Tốc độ LAN siêu tốc</div>"
                      << "<a href=\"/download\" class=\"btn\" download>⚡ BẤM ĐỂ TẢI VỀ NGAY</a>"
                      << "<div class=\"note\">Truyền trực tiếp từ máy tính qua Wi-Fi nội bộ.<br>Không tốn dung lượng 4G/Internet ngoài.</div>"
@@ -620,21 +684,21 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
                 if (isGet) resp << body;
 
                 string respStr = resp.str();
-                send(clientSocket, respStr.c_str(), (int)respStr.size(), 0);
+                sendAll(clientSocket, respStr.data(), respStr.size());
                 closesocket(clientSocket);
                 continue;
             }
 
             // Các request phụ của trình duyệt (favicon.ico, apple-touch-icon, robots.txt...) -> Trả 404 Not Found
             string notFound = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-            send(clientSocket, notFound.c_str(), (int)notFound.size(), 0);
+            sendAll(clientSocket, notFound.data(), notFound.size());
             closesocket(clientSocket);
             continue;
         }
 
         // BẮT ĐẦU TRUYỀN FILE THEO KHỐI 256KB (CHUNKED STREAM) - CHỈ KHI isDownload LÀ TRUE
         std::error_code ecCheck;
-        uintmax_t currentFileSize = fs::file_size(targetPath, ecCheck);
+        uintmax_t currentFileSize = fs::file_size(sourcePath, ecCheck);
         if (ecCheck) currentFileSize = fileSizeBytes;
 
         // Vẽ Dashboard 1 lần duy nhất khi bắt đầu tải file
@@ -644,13 +708,17 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
         std::ostringstream respHeader;
         respHeader << "HTTP/1.1 200 OK\r\n"
                    << "Content-Type: application/octet-stream\r\n"
-                   << "Content-Disposition: attachment; filename=\"" << fileName << "\"\r\n"
+                   << "Content-Disposition: attachment; filename=\"download\"; filename*=UTF-8''"
+                   << encodeHeaderFilename(fileName) << "\r\n"
                    << "Content-Length: " << currentFileSize << "\r\n"
                    << "Connection: close\r\n"
                    << "Accept-Ranges: bytes\r\n\r\n";
 
         string headerStr = respHeader.str();
-        send(clientSocket, headerStr.c_str(), (int)headerStr.size(), 0);
+        if (!sendAll(clientSocket, headerStr.data(), headerStr.size())) {
+            closesocket(clientSocket);
+            continue;
+        }
 
         // Với HTTP HEAD, client chỉ kiểm tra header/kích thước mà không nhận body
         if (isHead) {
@@ -658,7 +726,7 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
             continue;
         }
 
-        std::ifstream file(targetPath, std::ios::binary);
+        std::ifstream file(sourcePath, std::ios::binary);
         if (!file.is_open()) {
             closesocket(clientSocket);
             continue;
@@ -731,7 +799,7 @@ client_disconnected:
                  << " \x1b[92m[✓] Đã gửi thành công tới " << deviceStr << "!\x1b[0m\n\n"
                  << " [*] Sẵn sàng cho lượt tải tiếp theo (Phím 0: Thoát)\n" << std::flush;
         } else {
-            cout << "\n \x1b[93m[*] Ngắt kết nối. Sẵn sàng nhận lượt mới (Phím 0: Thoát).\x1b[0m\n" << std::flush;
+            cout << "\n \x1b[93m[*] Chờ lượt mới (0 để thoát).\x1b[0m\n" << std::flush;
         }
     }
 
@@ -748,7 +816,10 @@ client_disconnected:
         closesocket(serverTcpSocket);
         serverTcpSocket = INVALID_SOCKET;
     }
-    removeFirewallRule();
+    if (!firewallRuleName.empty()) {
+        removeFirewallRule(firewallRuleName);
+        firewallRuleName.clear();
+    }
 
     cout << "\n [*] Đã đóng trạm phát.\n";
     Sleep(500);
@@ -759,7 +830,7 @@ client_disconnected:
 // ----------------------------------------------------------------------------------
 void LocalDrop::startReceiver() {
     sc.cls();
-    cout << "\n --- BẢO MẬT: NHẬN FILE P2P ---\n"
+    cout << "\n== NHẬN FILE P2P ==\n"
          << " [*] Đang dò sóng Beacon ngầm từ tool phát (Phím 0: Thoát)\n\n";
 
     SOCKET recvUdp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -839,7 +910,8 @@ void LocalDrop::startReceiver() {
                     parts.push_back(item);
                 }
 
-                if (parts.size() >= 6) {
+                if (parts.size() == 6 && !parts[2].empty() && parts[2].size() <= 255 &&
+                    !parts[3].empty() && parts[3].find_first_not_of("0123456789") == string::npos) {
                     detectedFileName = parts[2];
                     detectedSize = strtoull(parts[3].c_str(), NULL, 10);
                     detectedSizeStr = parts[4];
@@ -888,7 +960,8 @@ void LocalDrop::startReceiver() {
     // Xác định đường dẫn lưu file trong Downloads
     string safeName = sanitizeFilename(detectedFileName);
     string downloadsDir = getDownloadsFolder();
-    fs::path savePath = fs::path(downloadsDir) / safeName;
+    fs::path downloadsPath = fs::u8path(downloadsDir);
+    fs::path savePath = downloadsPath / fs::u8path(safeName);
 
     // Tránh ghi đè file nếu đã tồn tại (dùng std::error_code tránh exception)
     std::error_code ec;
@@ -896,10 +969,10 @@ void LocalDrop::startReceiver() {
         string stem = savePath.stem().u8string();
         string ext = savePath.extension().u8string();
         int counter = 1;
-        while (fs::exists(fs::path(downloadsDir) / (stem + "_" + to_string(counter) + ext), ec)) {
+        while (fs::exists(downloadsPath / fs::u8path(stem + "_" + to_string(counter) + ext), ec)) {
             counter++;
         }
-        savePath = fs::path(downloadsDir) / (stem + "_" + to_string(counter) + ext);
+        savePath = downloadsPath / fs::u8path(stem + "_" + to_string(counter) + ext);
     }
 
     cout << "\n [*] Đang tải về: \x1b[96m" << savePath.u8string() << "\x1b[0m\n\n";
@@ -918,7 +991,12 @@ void LocalDrop::startReceiver() {
 
         size_t colonPos = hostPort.find(':');
         if (colonPos != string::npos) {
-            host = hostPort.substr(0, colonPos);
+            string advertisedHost = hostPort.substr(0, colonPos);
+            if (advertisedHost != senderIP) {
+                cout << " [!] Beacon có địa chỉ không khớp máy phát.\n";
+                sc.waitEnter();
+                return;
+            }
             try {
                 port = stoi(hostPort.substr(colonPos + 1));
                 if (port <= 0 || port > 65535) port = DEFAULT_TCP_PORT;
@@ -926,8 +1004,17 @@ void LocalDrop::startReceiver() {
                 port = DEFAULT_TCP_PORT;
             }
         } else {
-            host = hostPort;
+            if (hostPort != senderIP) {
+                cout << " [!] Beacon có địa chỉ không khớp máy phát.\n";
+                sc.waitEnter();
+                return;
+            }
         }
+    }
+    if (path != "/download" && path != "/get") {
+        cout << " [!] Đường dẫn tải không hợp lệ.\n";
+        sc.waitEnter();
+        return;
     }
 
     // Kết nối TCP tới máy phát
@@ -1008,12 +1095,49 @@ void LocalDrop::startReceiver() {
         }
     }
 
-    if (!foundHeaderEnd || headerBuffer.rfind("HTTP/1.1 200 ", 0) != 0) {
+    if (!foundHeaderEnd || (headerBuffer.rfind("HTTP/1.1 200 ", 0) != 0 &&
+                            headerBuffer.rfind("HTTP/1.0 200 ", 0) != 0)) {
         cout << " [!] Không nhận được phản hồi HTTP hợp lệ từ máy phát.\n";
         outFile.close();
         fs::remove(savePath, ec);
         closesocket(tcpClient);
         sc.waitEnter();
+        return;
+    }
+
+    size_t lengthPos = headerBuffer.find("\r\nContent-Length:");
+    if (lengthPos == string::npos) lengthPos = headerBuffer.find("\r\ncontent-length:");
+    if (lengthPos == string::npos) {
+        outFile.close();
+        fs::remove(savePath, ec);
+        closesocket(tcpClient);
+        cout << " [!] Thiếu Content-Length.\n";
+        return;
+    }
+    size_t valueStart = headerBuffer.find(':', lengthPos) + 1;
+    size_t valueEnd = headerBuffer.find("\r\n", valueStart);
+    string lengthText = SystemCore::trim(headerBuffer.substr(valueStart, valueEnd - valueStart));
+    if (lengthText.empty() || lengthText.find_first_not_of("0123456789") != string::npos) {
+        outFile.close();
+        fs::remove(savePath, ec);
+        closesocket(tcpClient);
+        cout << " [!] Content-Length không hợp lệ.\n";
+        return;
+    }
+    uintmax_t responseSize = 0;
+    try { responseSize = stoull(lengthText); }
+    catch (...) {
+        outFile.close();
+        fs::remove(savePath, ec);
+        closesocket(tcpClient);
+        cout << " [!] Content-Length quá lớn.\n";
+        return;
+    }
+    if (responseSize != detectedSize) {
+        outFile.close();
+        fs::remove(savePath, ec);
+        closesocket(tcpClient);
+        cout << " [!] Kích thước beacon và HTTP không khớp.\n";
         return;
     }
 
@@ -1023,8 +1147,9 @@ void LocalDrop::startReceiver() {
 
     // Ghi phần dữ liệu đầu tiên nếu đã đọc kèm trong buffer header
     if (!initialBody.empty()) {
-        outFile.write(initialBody.data(), initialBody.size());
-        receivedBytes += initialBody.size();
+        size_t count = static_cast<size_t>(std::min<uintmax_t>(initialBody.size(), responseSize));
+        outFile.write(initialBody.data(), count);
+        receivedBytes += count;
     }
 
     auto startTime = std::chrono::steady_clock::now();
@@ -1033,7 +1158,7 @@ void LocalDrop::startReceiver() {
     double currentSpeedMBps = 0.0;
     bool userCancelled = false;
 
-    while (true) {
+    while (receivedBytes < responseSize) {
         if (_kbhit()) {
             int key = _getch();
             if (key == '0' || key == 27) {
@@ -1045,8 +1170,9 @@ void LocalDrop::startReceiver() {
         int bytes = recv(tcpClient, recvBuffer.data(), CHUNK_SIZE, 0);
         if (bytes <= 0) break;
 
-        outFile.write(recvBuffer.data(), bytes);
-        receivedBytes += bytes;
+        size_t count = static_cast<size_t>(std::min<uintmax_t>(bytes, responseSize - receivedBytes));
+        outFile.write(recvBuffer.data(), count);
+        receivedBytes += count;
 
         auto now = std::chrono::steady_clock::now();
         auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate).count();

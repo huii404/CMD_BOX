@@ -209,7 +209,7 @@ bool SystemCore::runBatchAsAdmin(const std::string& batContent, const std::strin
 }
 
 void SystemCore::waitEnter() {
-    std::cout << "\nNhấn Enter để tiếp tục";
+    std::cout << "\nEnter để tiếp tục";
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
 
@@ -247,7 +247,7 @@ int SystemCore::readInt(const std::string &prompt, int defaultValue) {
         try {
             return std::stoi(line);
         } catch (...) {
-            std::cout << "Vui lòng nhập số hợp lệ\n";
+            std::cout << "Số không hợp lệ.\n";
         }
     }
 }

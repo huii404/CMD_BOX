@@ -70,11 +70,11 @@ public:
         bool admin = SystemCore::isElevated();
         std::string devInfo = SystemCore::getDeviceStatus();
         std::string verStatus = UpdateManager::getVersionStatusText();
-        cout << " ┌─ [ TRẠNG THÁI ] ─────────────────────────\n"
+        cout << " ┌─ TRẠNG THÁI ──────────────────────────────┐\n"
              << " │ Phiên bản : " << verStatus << "\n"
-             << " │ Quyền hạn : " << (admin ? "Administrator" : "User") << "\n"
+             << " │ Quyền     : " << (admin ? "Admin" : "User") << "\n"
              << " │ Thiết bị  : " << devInfo << "\n"
-             << " └──────────────────────────────────────────\n";
+             << " └───────────────────────────────────────────┘\n";
     }
 
     void mainMenu() {
@@ -96,7 +96,6 @@ public:
 
         while (true) {
             cls();
-            cout << "\n\n";
             mainMenu();
             int mainChoice = readInt("");
             
@@ -110,25 +109,23 @@ public:
             case 1:
                 while (true) {
                     cls();
-                    cout << "\n"
-                         << " ─── [ DỌN RÁC & LÀM SẠCH ] ────────────────────────────────────────\n\n"
-                         << "  [1]  Dọn rác bề mặt & Cache người dùng (Temp, CrashDumps, WER, DNS)\n"
-                         << "  [2]  Dọn rác Trình duyệt & Ứng dụng (Chrome, Edge, Discord...)\n"
-                         << "  [3]  Dọn dẹp Chuyên sâu & Tồn dư Cập nhật (DISM, Windows.old, Logs)\n"
-                         << "  [4]  Dọn rác Môi trường lập trình (node_modules, Pip, VS Code...)\n"
-                         << "  [5]  Dọn tệp cài đặt Downloads (Exe đã cài đặt, installer trùng lặp)\n"
-                         << "  [6]  [⚡] Dọn toàn diện Hệ thống (Mục 1 + 2 + 3 + 5)\n"
-                         << "  [7]  [🚀] Dọn tất cả (Cả 5 mục - Bao gồm cả rác Dev)\n\n"
-                         << " ─── [ TĂNG TỐC & TỐI ƯU ] ─────────────────────────────────────────\n\n"
-                         << "  [8]  Tối ưu Khởi động (Tắt app làm chậm, giữ Bộ gõ & Driver)\n"
-                         << "  [9]  Tối ưu Dịch vụ ngầm (Telemetry, DiagTrack, Maps, Wallet)\n"
-                         << "  [10] Tối ưu Giao diện & Taskbar (Bỏ trễ UI, tinh gọn Taskbar)\n"
-                         << "  [11] [⚡] Tối ưu liên hoàn hiệu năng (Mục 8 + 9 + 10)\n\n"
-                         << " ─── [ CÔNG CỤ HỆ THỐNG ] ──────────────────────────────────────────\n\n"
-                         << "  [12] Sửa lỗi kẹt Windows Update\n"
-                         << "  [13] Quản lý Dịch vụ Windows nâng cao\n"
-                         << " ───────────────────────────────────────────────────────────────────\n\n"
-                         << "  [0]  Quay lại\n\n"
+                    cout << "== DỌN RÁC ==\n"
+                         << " [1] Temp & cache người dùng\n"
+                         << " [2] Cache trình duyệt & ứng dụng\n"
+                         << " [3] Dọn hệ thống chuyên sâu\n"
+                         << " [4] Cache lập trình\n"
+                         << " [5] Bộ cài trong Downloads\n"
+                         << " [6] Dọn hệ thống (1, 2, 3, 5)\n"
+                         << " [7] Dọn tất cả (1–5)\n\n"
+                         << "== TỐI ƯU ==\n"
+                         << " [8] Ứng dụng khởi động\n"
+                         << " [9] Dịch vụ nền\n"
+                         << " [10] Giao diện & Taskbar\n"
+                         << " [11] Tối ưu tất cả (8–10)\n\n"
+                         << "== HỆ THỐNG ==\n"
+                         << " [12] Sửa Windows Update\n"
+                         << " [13] Quản lý dịch vụ\n"
+                         << " [0] Quay lại\n"
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;
@@ -156,13 +153,14 @@ public:
             case 2:
                 while (true) {
                     cls();
-                    cout << " [1] Sửa lỗi & Khôi phục mạng toàn diện\n"
-                         << " [2] Kích hoạt Lá chắn bảo mật toàn diện\n"
-                         << " [3] Kiểm tra trạng thái bảo mật\n"
-                         << " [4] Xem danh sách mật khẩu Wi-Fi đã lưu\n"
-                         << " [5] Quét thiết bị kết nối Wi-Fi\n"
-                         << " [6] Local Web Drop (Truyền file P2P)\n"
-                         << " [0] Quay lại\n\n"
+                    cout << "== MẠNG & BẢO MẬT ==\n"
+                         << " [1] Sửa mạng\n"
+                         << " [2] Bật bảo vệ\n"
+                         << " [3] Trạng thái bảo mật\n"
+                         << " [4] Mật khẩu Wi-Fi đã lưu\n"
+                         << " [5] Thiết bị Wi-Fi\n"
+                         << " [6] Truyền file LAN\n"
+                         << " [0] Quay lại\n"
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;
@@ -183,13 +181,14 @@ public:
             case 3:
                 while (true) {
                     cls();
-                    cout << " [1] Auto Click\n"
-                         << " [2] Spam Text\n"
-                         << " [3] Auto Paste\n"
-                         << " [4] Install Software\n"
-                         << " [5] Uninstall Bloatware\n"
-                         << " [6] Check Pin Laptop\n"
-                         << " [0] Return\n\n"
+                    cout << "== CÔNG CỤ ==\n"
+                         << " [1] Tự động click\n"
+                         << " [2] Gửi văn bản\n"
+                         << " [3] Dán nhiều dòng\n"
+                         << " [4] Tải phần mềm\n"
+                         << " [5] Gỡ ứng dụng rác\n"
+                         << " [6] Kiểm tra pin\n"
+                         << " [0] Quay lại\n"
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break;
@@ -210,14 +209,15 @@ public:
             case 4:
                 while (true) {
                     cls(); 
-                    cout << " [1] Nén dung lượng Video/Ảnh\n"
-                         << " [2] Làm nét Ảnh\n"
-                         << " [3] Mp4 -> Mp3\n"
-                         << " [4] Tốc độ Video\n"
-                         << " [5] Đổi định dạng Video/Ảnh\n"
-                         << " [6] Chuẩn hóa tên file Video/Ảnh\n"
-                         << " [7] Ẩn file vào file\n"
-                         << " [0] Quay lại\n\n"
+                    cout << "== MEDIA ==\n"
+                         << " [1] Nén video/ảnh\n"
+                         << " [2] Làm nét ảnh\n"
+                         << " [3] MP4 → MP3\n"
+                         << " [4] Đổi tốc độ video\n"
+                         << " [5] Đổi định dạng\n"
+                         << " [6] Chuẩn hóa tên file\n"
+                         << " [7] Ẩn file trong media\n"
+                         << " [0] Quay lại\n"
                          << " [Chọn]: ";
                     sub = readInt("");
                     if (sub == 0) break; 
