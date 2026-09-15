@@ -1,7 +1,5 @@
 #include "MediaProcessor.h"
 #include "SystemCore.h"
-#include "ImageEnhancer.h"
-#include "ImageEnhancerPro.h"
 #include <iostream>
 #include <conio.h>
 #include <random>
@@ -76,9 +74,6 @@ GpuCodecInfo MediaProcessor::getGpuEncoder() {
         cachedGpuInfo.encoder = "h264_nvenc";
         cachedGpuInfo.compressParams = "-c:v h264_nvenc -preset p6 -cq 22 -b:v 0 -pix_fmt yuv420p";
         cachedGpuInfo.speedParams = "-c:v h264_nvenc -preset p4 -cq 23 -pix_fmt yuv420p";
-        cachedGpuInfo.enhanceParamsLevel1 = "-c:v h264_nvenc -preset p3 -cq 20 -pix_fmt yuv420p";
-        cachedGpuInfo.enhanceParamsLevel2 = "-c:v h264_nvenc -preset p5 -cq 22 -pix_fmt yuv420p";
-        cachedGpuInfo.enhanceParamsLevel3 = "-c:v h264_nvenc -preset p7 -cq 24 -pix_fmt yuv420p";
         cachedGpuInfo.displayName = "NVIDIA NVENC (GPU Tăng tốc phần cứng)";
         hasDetectedGpu = true;
         return cachedGpuInfo;
@@ -90,9 +85,6 @@ GpuCodecInfo MediaProcessor::getGpuEncoder() {
         cachedGpuInfo.encoder = "h264_qsv";
         cachedGpuInfo.compressParams = "-c:v h264_qsv -preset medium -global_quality 22 -pix_fmt yuv420p";
         cachedGpuInfo.speedParams = "-c:v h264_qsv -global_quality 23 -pix_fmt yuv420p";
-        cachedGpuInfo.enhanceParamsLevel1 = "-c:v h264_qsv -preset fast -global_quality 20 -pix_fmt yuv420p";
-        cachedGpuInfo.enhanceParamsLevel2 = "-c:v h264_qsv -preset medium -global_quality 22 -pix_fmt yuv420p";
-        cachedGpuInfo.enhanceParamsLevel3 = "-c:v h264_qsv -preset slow -global_quality 24 -pix_fmt yuv420p";
         cachedGpuInfo.displayName = "Intel QuickSync (GPU Tăng tốc phần cứng)";
         hasDetectedGpu = true;
         return cachedGpuInfo;
@@ -104,9 +96,6 @@ GpuCodecInfo MediaProcessor::getGpuEncoder() {
         cachedGpuInfo.encoder = "h264_amf";
         cachedGpuInfo.compressParams = "-c:v h264_amf -quality quality -rc cqp -qp_p 22 -qp_i 22 -pix_fmt yuv420p";
         cachedGpuInfo.speedParams = "-c:v h264_amf -rc cqp -qp_p 23 -qp_i 23 -pix_fmt yuv420p";
-        cachedGpuInfo.enhanceParamsLevel1 = "-c:v h264_amf -quality speed -rc cqp -qp_p 20 -qp_i 20 -pix_fmt yuv420p";
-        cachedGpuInfo.enhanceParamsLevel2 = "-c:v h264_amf -quality balanced -rc cqp -qp_p 22 -qp_i 22 -pix_fmt yuv420p";
-        cachedGpuInfo.enhanceParamsLevel3 = "-c:v h264_amf -quality quality -rc cqp -qp_p 24 -qp_i 24 -pix_fmt yuv420p";
         cachedGpuInfo.displayName = "AMD AMF (GPU Tăng tốc phần cứng)";
         hasDetectedGpu = true;
         return cachedGpuInfo;
@@ -116,9 +105,6 @@ GpuCodecInfo MediaProcessor::getGpuEncoder() {
     cachedGpuInfo.encoder = "libx264";
     cachedGpuInfo.compressParams = "-c:v libx264 -crf 21 -preset medium -pix_fmt yuv420p";
     cachedGpuInfo.speedParams = "-c:v libx264 -crf 23 -preset fast -pix_fmt yuv420p";
-    cachedGpuInfo.enhanceParamsLevel1 = "-c:v libx264 -crf 18 -preset fast -pix_fmt yuv420p";
-    cachedGpuInfo.enhanceParamsLevel2 = "-c:v libx264 -crf 20 -preset medium -pix_fmt yuv420p";
-    cachedGpuInfo.enhanceParamsLevel3 = "-c:v libx264 -crf 22 -preset slow -pix_fmt yuv420p";
     cachedGpuInfo.displayName = "CPU (libx264 Software Encoder)";
     hasDetectedGpu = true;
     return cachedGpuInfo;
@@ -575,207 +561,6 @@ void MediaProcessor::processChangeSpeedBatch() {
     }
     cout << "\n[✓] Đã xử lý " << successCount << "/" << inputs.size() << " video.\n";
     SystemCore::waitEnter();
-}
-
-void MediaProcessor::processMediaEnhancement() {
-    std::vector<std::string> imageExts = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".heic", ".tif", ".tiff", ".dng" };
-    std::string ffmpeg = getFFmpegPath();
-
-    struct EnhanceResult {
-        int index;
-        std::string filename;
-        std::string type;
-        uintmax_t oldSizeBytes;
-        uintmax_t newSizeBytes;
-        std::string oldSizeStr;
-        std::string newSizeStr;
-        bool success;
-    };
-
-    while (true) {
-        SystemCore::cls();
-
-        cout<< "\nKéo thả file ảnh (0 để thoát): ";
-        string rawInput;
-        getline(cin, rawInput);
-        std::vector<std::string> inputs = SystemCore::parsePaths(rawInput);
-        
-        if (inputs.empty()) return;
-
-        cout << "\nChọn chế độ làm nét:\n"
-             << "  [1] Nâng cao (PRO)    [2] Cơ bản (BASE)\n"
-             << "Lựa chọn: ";
-        string modeStr;
-        getline(cin, modeStr);
-        int choice = 1;
-        if (!modeStr.empty()) {
-            try { choice = stoi(modeStr); } catch (...) { choice = 1; }
-        }
-
-        bool usePro = (choice != 2);
-
-        std::vector<EnhanceResult> results;
-        std::cout << "\n[!] Đang xử lý (" << (usePro ? "PRO" : "BASE") << ") cho " << inputs.size() << " ảnh\n";
-
-        for (size_t i = 0; i < inputs.size(); ++i) {
-            fs::path inPath = fs::u8path(inputs[i]);
-            std::cout << "\rĐang xử lý: [" << (i + 1) << "/" << inputs.size() << "] " << inPath.filename().string() << "        " << std::flush;
-            std::string ext = inPath.extension().string();
-            transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-
-            if (find(imageExts.begin(), imageExts.end(), ext) == imageExts.end()) {
-                results.push_back({ (int)i + 1, inPath.filename().string(), "Bỏ qua (Sai định dạng)", 0, 0, "0 B", "0 B", false });
-                continue;
-            }
-
-            uintmax_t oldSize = fs::exists(inPath) ? fs::file_size(inPath) : 0;
-            std::string suffix = usePro ? "_pro" : "_base";
-            fs::path outputDir = getMediaOutputDirectory(inPath);
-            if (outputDir.empty()) {
-                results.push_back({ (int)i + 1, inPath.filename().string(), "Lỗi tạo CMD_BOX_Output", 0, 0, "0 B", "0 B", false });
-                continue;
-            }
-            fs::path outPath = makeUniqueOutputPath(outputDir / (inPath.stem().string() + suffix + ext));
-
-            bool ok = false;
-            std::string typeStr = "";
-
-            if (usePro) {
-                ImageScorePro scorePro;
-                if (ext == ".webp") {
-                    auto nano = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-                    std::string tempPng = (fs::temp_directory_path() / ("cmdbox_webp_" + to_string(GetCurrentProcessId()) + "_" + to_string(nano) + ".png")).string();
-                    ok = ImageEnhancerPro::enhanceImage(inputs[i], tempPng, 0, &scorePro);
-                    if (ok && fs::exists(tempPng)) {
-                        std::string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + tempPng + "\" -map_metadata 0 -q:v 2 \"" + outPath.string() + "\"";
-                        SystemCore::runRawCommand(cmd);
-                        try { fs::remove(tempPng); } catch (...) {}
-                        ok = fs::exists(outPath);
-                    }
-                } else {
-                    ok = ImageEnhancerPro::enhanceImage(inputs[i], outPath.string(), 0, &scorePro);
-
-                    if (!ok && (ext == ".heic" || ext == ".dng") && !ffmpeg.empty()) {
-                        auto nano = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-                        std::string tempDecoded = (fs::temp_directory_path() / ("cmdbox_raw_" + to_string(GetCurrentProcessId()) + "_" + to_string(nano) + ".png")).string();
-                        std::string decCmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + inputs[i] + "\" -pix_fmt rgb24 \"" + tempDecoded + "\"";
-                        if (SystemCore::runRawCommand(decCmd) && fs::exists(tempDecoded)) {
-                            ok = ImageEnhancerPro::enhanceImage(tempDecoded, outPath.string(), 0, &scorePro);
-                            try { fs::remove(tempDecoded); } catch (...) {}
-                        }
-                    }
-                }
-
-                if (!ok) {
-                    typeStr = "Lỗi";
-                }
-            } else {
-                ImageScore score;
-                if (ext == ".webp") {
-                    auto nano = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-                    std::string tempPng = (fs::temp_directory_path() / ("cmdbox_webp_" + to_string(GetCurrentProcessId()) + "_" + to_string(nano) + ".png")).string();
-                    ok = ImageEnhancer::enhanceImage(inputs[i], tempPng, 0, &score);
-                    if (ok && fs::exists(tempPng)) {
-                        std::string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + tempPng + "\" -map_metadata 0 -q:v 2 \"" + outPath.string() + "\"";
-                        SystemCore::runRawCommand(cmd);
-                        try { fs::remove(tempPng); } catch (...) {}
-                        ok = fs::exists(outPath);
-                    }
-                } else {
-                    ok = ImageEnhancer::enhanceImage(inputs[i], outPath.string(), 0, &score);
-
-                    if (!ok && (ext == ".heic" || ext == ".dng") && !ffmpeg.empty()) {
-                        auto nano = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-                        std::string tempDecoded = (fs::temp_directory_path() / ("cmdbox_raw_" + to_string(GetCurrentProcessId()) + "_" + to_string(nano) + ".png")).string();
-                        std::string decCmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + inputs[i] + "\" -pix_fmt rgb24 \"" + tempDecoded + "\"";
-                        if (SystemCore::runRawCommand(decCmd) && fs::exists(tempDecoded)) {
-                            ok = ImageEnhancer::enhanceImage(tempDecoded, outPath.string(), 0, &score);
-                            try { fs::remove(tempDecoded); } catch (...) {}
-                        }
-                    }
-
-                    bool isPortrait = (score.skinPercent >= 8.0f);
-                    if (ok && isPortrait && !ffmpeg.empty() && fs::exists(outPath)) {
-                        std::string polishedOut = makeUniqueOutputPath(
-                            outputDir / (inPath.stem().string() + "_polished" + ext)).string();
-                        std::string polishFilter = "hqdn3d=1.2:0.0:1.5:0.0,unsharp=3:3:0.25:3:3:0.0";
-                        std::string polishCmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + outPath.string() + "\" -map_metadata 0 -vf \"" + polishFilter + "\" -q:v 2 \"" + polishedOut + "\"";
-                        if (SystemCore::runRawCommand(polishCmd) && fs::exists(polishedOut) && fs::file_size(polishedOut) > 0) {
-                            try {
-                                fs::remove(outPath);
-                                fs::rename(polishedOut, outPath);
-                            } catch (...) {}
-                        } else {
-                            try { if (fs::exists(polishedOut)) fs::remove(polishedOut); } catch(...) {}
-                        }
-                    }
-
-                    if (!ok && !ffmpeg.empty()) {
-                        std::string imgFilter = "hqdn3d=2.0:1.5:3.0:2.5,unsharp=5:5:1.0:5:5:0.0,eq=saturation=1.05:contrast=1.04";
-                        std::string cmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + inputs[i] + "\" -map_metadata 0 -vf \"" + imgFilter + "\" -q:v 2 \"" + outPath.string() + "\"";
-                        if (SystemCore::runRawCommand(cmd) && fs::exists(outPath)) {
-                            ok = true;
-                        }
-                    }
-                }
-            }
-
-            if (ok && fs::exists(outPath)) {
-                uintmax_t newSize = fs::file_size(outPath);
-                results.push_back({
-                    (int)i + 1,
-                    inPath.filename().string(),
-                    typeStr,
-                    oldSize,
-                    newSize,
-                    SystemCore::formatSize(oldSize),
-                    SystemCore::formatSize(newSize),
-                    true
-                });
-            } else {
-                results.push_back({
-                    (int)i + 1,
-                    inPath.filename().string(),
-                    "Lỗi",
-                    oldSize,
-                    0,
-                    SystemCore::formatSize(oldSize),
-                    "0 B",
-                    false
-                });
-            }
-        }
-
-        // Xóa hoàn toàn toàn bộ log tiến trình trước đó
-        SystemCore::cls();
-
-        std::cout << "\nSTT | Tên file | Dung lượng gốc --> Mới (+tăng %)\n";
-
-        for (const auto& res : results) {
-            std::string sizeStr;
-            if (res.success) {
-                float diffPercent = 0.0f;
-                if (res.oldSizeBytes > 0) {
-                    diffPercent = ((float)res.newSizeBytes - (float)res.oldSizeBytes) / (float)res.oldSizeBytes * 100.0f;
-                }
-                std::ostringstream oss;
-                oss << res.oldSizeStr << " --> " << res.newSizeStr;
-                if (diffPercent >= 0.0f) {
-                    oss << " (+tăng " << std::fixed << std::setprecision(1) << diffPercent << "%)";
-                } else {
-                    oss << " (-giảm " << std::fixed << std::setprecision(1) << std::abs(diffPercent) << "%)";
-                }
-                sizeStr = oss.str();
-            } else {
-                sizeStr = res.oldSizeStr + " --> Thất bại";
-            }
-
-            std::cout << res.index << " | " << res.filename << " | " << sizeStr << "\n";
-        }
-        std::cout << "\n";
-
-        SystemCore::waitEnter();
-    }
 }
 
 void MediaProcessor::processConvertFormatBatch() {

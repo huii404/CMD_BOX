@@ -976,7 +976,7 @@ void DiskCleaner::runCleanChoice(int choice) {
     static const char* scopes[] = {
         "", "Temp, cache người dùng, CrashDump và DNS cache",
         "Cache trình duyệt, ứng dụng và shader",
-        "Windows Update, log hệ thống, Windows.old, hibernation [Admin]",
+        "Windows Update, log hệ thống, Windows.old và hibernation",
         "Cache công cụ lập trình trong các thư mục dự án",
         "Bộ cài đã cài và bản tải trùng trong Downloads",
         "Các mục 1, 2, 3 và 5", "Toàn bộ mục 1 đến 5"

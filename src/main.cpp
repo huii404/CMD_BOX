@@ -9,7 +9,6 @@
 #include "SystemOptimizer.h"
 #include "UtilityTools.h"
 #include "MediaProcessor.h"
-#include "ImageEnhancerPro.h"
 #include "UpdateManager.h"
 #include <chrono>
 
@@ -213,12 +212,11 @@ public:
                     cls(); 
                     cout << "== MEDIA ==\n"
                          << " [1] Nén video/ảnh\n"
-                         << " [2] Làm nét ảnh\n"
-                         << " [3] MP4 → MP3\n"
-                         << " [4] Đổi tốc độ video\n"
-                         << " [5] Đổi định dạng\n"
-                         << " [6] Chuẩn hóa tên file\n"
-                         << " [7] Ẩn file trong media\n"
+                         << " [2] MP4 → MP3\n"
+                         << " [3] Đổi tốc độ video\n"
+                         << " [4] Đổi định dạng\n"
+                         << " [5] Chuẩn hóa tên file\n"
+                         << " [6] Ẩn file trong media\n"
                          << " [0] Quay lại\n"
                          << " [Chọn]: ";
                     sub = readInt("");
@@ -226,12 +224,11 @@ public:
 
                     switch (sub) {
                     case 1:  getMedia().processMediaAuto(); break;
-                    case 2:  getMedia().processMediaEnhancement(); break;
-                    case 3:  getMedia().processExtractAudioBatch(); break;
-                    case 4:  getMedia().processChangeSpeedBatch(); break;
-                    case 5:  getMedia().processConvertFormatBatch(); break;
-                    case 6:  getMedia().normalizeMediaFilenames(); break;
-                    case 7:  getMedia().processAnFileTrongFile(); break;
+                    case 2:  getMedia().processExtractAudioBatch(); break;
+                    case 3:  getMedia().processChangeSpeedBatch(); break;
+                    case 4:  getMedia().processConvertFormatBatch(); break;
+                    case 5:  getMedia().normalizeMediaFilenames(); break;
+                    case 6:  getMedia().processAnFileTrongFile(); break;
                     default: Sleep(300); break;
                     }
                 }

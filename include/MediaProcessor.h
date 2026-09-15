@@ -17,9 +17,6 @@ struct GpuCodecInfo {
     std::string encoder;
     std::string compressParams;
     std::string speedParams;
-    std::string enhanceParamsLevel1;
-    std::string enhanceParamsLevel2;
-    std::string enhanceParamsLevel3;
     std::string displayName;
 };
 
@@ -43,7 +40,6 @@ public:
     void processMediaAuto(); 
     void processExtractAudioBatch();
     void processChangeSpeedBatch();
-    void processMediaEnhancement();
     void processConvertFormatBatch();
     void normalizeMediaFilenames();
     

@@ -2,7 +2,7 @@
 
 > **Nền tảng:** Windows (x64) | **Ngôn ngữ:** C++17 | **Biên dịch:** MinGW-w64 (GCC / UCRT64)
 >
-> **Phiên bản:** 1.0.0
+> **Phiên bản:** 1.3.0
 
 Từ phiên bản 1.0.0, các tác vụ media giữ nguyên file nguồn và ghi kết quả vào thư mục `CMD_BOX_Output` nằm cạnh file nguồn. Tác vụ dọn dẹp và tối ưu hiển thị phạm vi ảnh hưởng trước khi chạy.
 
@@ -30,7 +30,6 @@ Dự án được xây dựng hoàn toàn bằng **C++ native**, can thiệp tr�
 ### Đặc tính Kỹ thuật
 - **Quản lý tiến trình an toàn (Windows Job Objects):** Tất cả tiến trình con do công cụ khởi tạo đều được kiểm soát trong Job Object của hệ điều hành. Khi đóng ứng dụng hoặc nhận tín hiệu ngắt (`Ctrl + C`), toàn bộ cây tiến trình con được giải phóng triệt để, ngăn ngừa rò rỉ bộ nhớ hoặc tiến trình chạy ngầm.
 - **Khởi tạo trễ (Lazy Loading):** Áp dụng mô hình con trỏ thông minh `std::unique_ptr` kết hợp cơ chế kiểm tra đa luồng (Double-Checked Locking / Thread-safe). Ứng dụng chỉ cấp phát bộ nhớ khi người dùng truy cập phân hệ tương ứng, duy trì mức chiếm dụng RAM cực thấp ở trạng thái chờ.
-- **Xử lý đồ họa & thuật toán song song:** Module xử lý hình ảnh được tối ưu hóa ở mức số học điểm động (float), hỗ trợ vector hóa phần cứng AVX2 + FMA và tăng tốc đa luồng CPU (OpenMP). Giải mã và mã hóa định dạng ảnh trực tiếp từ bộ giải mã hệ thống WIC.
 - **Bảo toàn 100% Siêu dữ liệu (Metadata Preservation):** Sao chép nguyên vẹn khối siêu dữ liệu cấp thấp (EXIF, GPS tọa độ, Model máy ảnh, Ống kính, Giờ chụp) và đồng bộ ngày giờ tạo/sửa đổi tệp tin (`last_write_time`) trên hệ điều hành trùng khớp ảnh gốc.
 - **Tương thích toàn diện:** Hoạt động ổn định trên Windows 10 và Windows 11 (64-bit).
 
@@ -80,25 +79,9 @@ Chương trình được phân tách thành 4 phân hệ chính theo từng lĩn
 - **Gỡ bỏ ứng dụng rác (Bloatware Removal):** Quét và gỡ bỏ tận gốc các gói ứng dụng UWP dư thừa được cài sẵn trên Windows.
 - **Kiểm tra Pin Laptop chuyên sâu (Battery Diagnostic):** Đọc trực tiếp từ ACPI và báo cáo pin Windows (`powercfg`), trích xuất công suất thiết kế, công suất sạc đầy hiện tại, chu kỳ sạc, tỷ lệ hao mòn chai pin thực tế và tình trạng sạc.
 
-### 4. Xử lý Đa phương tiện & Làm nét Ảnh (`MediaProcessor`, `ImageEnhancer` & `ImageEnhancerPro`)
+### 4. Xử lý Đa phương tiện (`MediaProcessor`)
 
-#### A. Thuật toán Làm nét Ảnh (2 Phiên bản):
-- **Bản Base (`ImageEnhancer`):**
-  - Hỗ trợ đầy đủ các định dạng: JPG, PNG, BMP, TIFF, WebP, HEIC, DNG (RAW).
-  - Phóng đại siêu mẫu Lanczos-3 bảo toàn dải tần số cao.
-  - Bộ lọc dẫn đường 2 tầng (2-Scale Guided Filter) tách bạch chi tiết vi mô ($r=1$) và cấu trúc ($r=3$).
-  - Khử bệt màu liên tục Cauchy (Cauchy Continuous Coring) chống dính hạt pixel.
-  - Bù màu Constant-Saturation Chroma Tracking giữ sắc tươi xanh tự nhiên cho cỏ cây hoa lá.
-  - Bảo vệ vùng da chân dung chuẩn ITU-R BT.601 (làm mịn da phẳng, sắc nét ngũ quan).
-- **Bản Pro v2 (`ImageEnhancerPro`) - Nâng cấp Vượt trội:**
-  - **7 Góc độ phân tích chuyên sâu:** Tự động đo đạc năng lượng biên đa hướng Tenengrad, tỷ lệ tần số cao, độ nhòe blur, mức nhiễu nền MAD, vỡ khối JPEG blockiness 8x8, dải tương phản động và độ phức tạp kết cấu/nét mảnh.
-  - **Phân loại ngữ cảnh tự động:** Nhận diện thông minh Chân dung (Portrait), Phong cảnh (Landscape), Tài liệu/Văn bản (Document), Ban đêm/Thiếu sáng (Low-light) hoặc Ảnh mờ nặng (Heavy Blur).
-  - **Khử sương mù & Chói sáng:** Tự động nâng sáng vùng tối bị dìm (`shadowLift`) và thu hồi chi tiết vùng chói gắt (`highlightPull`).
-  - **Nổi chủ thể & Nét đúng đối tượng:** Tăng cường chi tiết thân cây, cành lá, vách đá, đường sá mà không bị bệt viền, không xuất hiện quầng sáng quầng tối giả tạo (Anti-Halo).
-  - **Ức chế bên (Lateral Inhibition):** Chống phình nét mảnh, giữ các đường kẻ/chữ viết thanh mảnh sắc lẹm.
-  - **Bảo toàn 100% WIC Metadata:** Giữ nguyên vẹn toàn bộ EXIF, GPS, camera model, lens info và đồng bộ ngày giờ tạo tệp tin gốc.
-
-#### B. Xử lý Video & Âm thanh (Tăng tốc phần cứng FFmpeg):
+#### Xử lý Video, Ảnh & Âm thanh (Tăng tốc phần cứng FFmpeg):
 - Tự động nhận diện và tận dụng bộ mã hóa phần cứng GPU (NVIDIA NVENC, Intel QuickSync, AMD AMF).
 - Nén tối ưu dung lượng Video MP4 và Ảnh (PNG/JPG) bảo toàn độ nét và Metadata.
 - Trích xuất âm thanh từ Video sang định dạng MP3 hàng loạt.
@@ -118,8 +101,6 @@ CMD_BOX/
 │   ├── ffmpeg.exe           # Bộ công cụ xử lý media hỗ trợ tăng tốc GPU
 │   └── main.exe             # Tệp thực thi chính của chương trình
 ├── include/                 # Danh mục tệp tiêu đề (Header files)
-│   ├── ImageEnhancer.h      # Khai báo thuật toán làm nét ảnh Base
-│   ├── ImageEnhancerPro.h   # Khai báo thuật toán làm nét ảnh Pro v2 & phân tích 7 góc độ
 │   ├── Internet.h           # Khai báo module mạng, bảo mật & tường lửa
 │   ├── MediaProcessor.h     # Khai báo bộ xử lý video, âm thanh & Steganography
 │   ├── SystemCore.h         # Khung điều khiển Win32 API, Job Object & Console I/O
@@ -127,8 +108,6 @@ CMD_BOX/
 │   └── UtilityTools.h       # Khai báo tiện ích tự động, clicker & chẩn đoán pin
 ├── src/                     # Danh mục mã nguồn (Source files)
 │   ├── apps.txt             # Tệp nguồn cấu hình danh mục phần mềm
-│   ├── ImageEnhancer.cpp    # Cài đặt Lanczos-3, 2-Scale Guided Filter & WIC
-│   ├── ImageEnhancerPro.cpp # Cài đặt bộ làm nét PRO v2, 7 góc độ phân tích & WIC Metadata
 │   ├── Internet.cpp         # Cài đặt xử lý socket, tường lửa & kiểm tra bảo mật
 │   ├── main.cpp             # Điểm khởi chạy (Entry point) & hệ thống menu
 │   ├── MediaProcessor.cpp   # Cài đặt giao tiếp FFmpeg & GPU acceleration
@@ -136,8 +115,7 @@ CMD_BOX/
 │   ├── SystemOptimizer.cpp  # Cài đặt dọn dẹp rác đa tầng & tối ưu hệ thống
 │   └── UtilityTools.cpp     # Cài đặt tự động hóa chuột/bàn phím & đọc ACPI pin
 ├── build.bat                # Kịch bản biên dịch 1 file duy nhất với loading thời gian thực
-├── README.md                # Tài liệu hướng dẫn kỹ thuật của dự án
-└── README_IMAGE_ENHANCER.md # Tài liệu đặc tả toán học & kiến trúc làm nét ảnh
+└── README.md                # Tài liệu hướng dẫn kỹ thuật của dự án
 ```
 
 ---

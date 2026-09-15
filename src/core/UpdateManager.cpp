@@ -16,7 +16,7 @@
 
 using namespace std;
 
-const string UpdateManager::CURRENT_VERSION = "1.0.0";
+const string UpdateManager::CURRENT_VERSION = "1.3.0";
 const string UpdateManager::API_RELEASES_URL = "https://api.github.com/repos/huii404/CMD_BOX/releases/latest";
 
 static const long long UPDATE_COOLDOWN_SECONDS = 2 * 24 * 3600; // 2 ngày (48 giờ)

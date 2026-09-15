@@ -503,9 +503,9 @@ void SystemOptimizer::runOptimizeChoice(int choice) {
     sc.cls();
     static const char* scopes[] = {
         "", "Tắt ứng dụng khởi động không thuộc danh sách bảo vệ",
-        "Tắt Maps, Wallet, Telemetry, Error Reporting và một số dịch vụ nền [Admin]",
+        "Tắt Maps, Wallet, Telemetry, Error Reporting và một số dịch vụ nền",
         "Tinh chỉnh Taskbar, hiệu ứng và có thể khởi động lại Explorer",
-        "Thực hiện cả ba nhóm tối ưu trên [Admin]"
+        "Thực hiện cả ba nhóm tối ưu trên"
     };
     cout << "== XEM TRƯỚC TỐI ƯU ==\n"
          << " Phạm vi: " << scopes[choice] << "\n\n";
