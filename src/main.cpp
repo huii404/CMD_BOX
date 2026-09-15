@@ -116,12 +116,12 @@ public:
                          << " [4] Cache lập trình\n"
                          << " [5] Bộ cài trong Downloads\n"
                          << " [6] Dọn hệ thống (1, 2, 3, 5)\n"
-                         << " [7] Dọn tất cả (1–5)\n\n"
+                         << " [7] Dọn tất cả (1 -> 5)\n\n"
                          << "== TỐI ƯU ==\n"
                          << " [8] Ứng dụng khởi động\n"
                          << " [9] Dịch vụ nền\n"
                          << " [10] Giao diện & Taskbar\n"
-                         << " [11] Tối ưu tất cả (8–10)\n\n"
+                         << " [11] Tối ưu tất cả (8 -> 10)\n\n"
                          << "== HỆ THỐNG ==\n"
                          << " [12] Sửa Windows Update\n"
                          << " [13] Quản lý dịch vụ\n"
@@ -256,29 +256,6 @@ int main(int argc, char* argv[]) {
         if (GetConsoleMode(hOut, &dwMode)) {
             dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
             SetConsoleMode(hOut, dwMode);
-        }
-    }
-
-    // Hỗ trợ chế độ dòng lệnh (CLI Mode) cho Image Enhancer và Kiểm thử Benchmark
-    if (argc >= 4 && std::string(argv[1]) == "--enhance") {
-        std::string inPath = argv[2];
-        std::string outPath = argv[3];
-        int level = (argc >= 5) ? std::stoi(argv[4]) : 0;
-        ImageScorePro score;
-        std::string errMsg;
-        EnhanceErrorPro errCode = EnhanceErrorPro::Success;
-        auto tStart = std::chrono::high_resolution_clock::now();
-        bool ok = ImageEnhancerPro::enhanceImage(inPath, outPath, level, &score, &errMsg, &errCode);
-        auto tEnd = std::chrono::high_resolution_clock::now();
-        double elapsedMs = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-        if (ok) {
-            std::cout << "[CPP_PRO] SUCCESS | Time: " << elapsedMs << " ms | Clarity: " << score.clarityScore
-                      << " | Edge: " << score.edgeSharpness << " | Blur: " << score.blurDegree
-                      << " | Noise: " << score.noiseFloor << " | Out: " << outPath << "\n";
-            return 0;
-        } else {
-            std::cerr << "[CPP_PRO] FAILED | Error: " << errMsg << "\n";
-            return 1;
         }
     }
 

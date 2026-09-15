@@ -627,15 +627,15 @@ static const vector<BloatAppInfo> g_secondaryBloat = {
     {"OneNoteForWindows10", "OneNote for Windows 10"},
     {"QuickAssist", "Quick Assist (Hỗ trợ nhanh)"},
     {"OutlookForWindows", "Outlook mới"},
+    {"MicrosoftTeams", "Microsoft Teams (Chat)"},
 
-    // Xbox & Widgets bloatware
+    // Xbox bloatware
     {"Xbox", "Gia đình ứng dụng Xbox (Xbox App, Game Bar, TCUI)"},
     {"GamingApp", "Xbox App (GamingApp)"},
     {"XboxGamingOverlay", "Xbox Game Bar"},
     {"XboxGameOverlay", "Xbox Game Overlay"},
     {"XboxIdentityProvider", "Xbox Identity Provider"},
-    {"XboxSpeechToTextOverlay", "Xbox Speech To Text"},
-    {"WebExperience", "Windows Widgets (Tin tức thời tiết góc trái Taskbar)"}
+    {"XboxSpeechToTextOverlay", "Xbox Speech To Text"}
 };
 
 // 2. Trạng thái App rác nâng cao (Bám rễ sâu: Chạy ngầm Taskmgr, Dịch vụ Service, File exe trong C:\, Registry)
@@ -645,12 +645,8 @@ struct AdvancedBloatStatus {
     bool hasPhoneLink = false;
     bool phoneLinkRunning = false;
     bool hasCortana = false;
-    bool hasTeams = false;
-    bool teamsRunning = false;
     bool hasWidgets = false;
     bool widgetsRunning = false;
-    bool hasXbox = false;
-    bool xboxRunning = false;
 };
 
 // Thực thi an toàn đoạn mã PowerShell quản trị thông qua file .ps1 tạm thời
@@ -706,14 +702,8 @@ static void scanBloatware(vector<BloatAppInfo> &outSecondary, AdvancedBloatStatu
     outAdv.hasPhoneLink = outAdv.phoneLinkRunning || (installed.find("Microsoft.YourPhone") != string::npos) || (installed.find("CrossDevice") != string::npos);
 
     outAdv.hasCortana = isProcessRunning("Cortana.exe") || (installed.find("Microsoft.549981C3F5F10") != string::npos);
-    outAdv.teamsRunning = isProcessRunning("ms-teams.exe") || isProcessRunning("msteams.exe");
-    outAdv.hasTeams = outAdv.teamsRunning || (installed.find("MicrosoftTeams") != string::npos);
-
     outAdv.widgetsRunning = isProcessRunning("Widgets.exe") || isProcessRunning("WidgetService.exe");
     outAdv.hasWidgets = outAdv.widgetsRunning || (installed.find("WebExperience") != string::npos);
-
-    outAdv.xboxRunning = isProcessRunning("XboxApp.exe") || isProcessRunning("GameBar.exe") || isProcessRunning("GameBarFTServer.exe");
-    outAdv.hasXbox = outAdv.xboxRunning || (installed.find("Xbox") != string::npos) || (installed.find("GamingApp") != string::npos);
 }
 
 // Luồng 1: Xử lý gỡ sạch app rác thứ cấp
@@ -741,7 +731,7 @@ static void cleanSecondaryBloat(SystemCore &sc, const vector<BloatAppInfo> &list
 
 // Luồng 2: Xử lý tận gốc app rác nâng cao (Chỉ chạy khi phát hiện có trên máy)
 static void cleanAdvancedBloat(SystemCore &sc, const AdvancedBloatStatus &adv) {
-    if (!adv.hasOneDrive && !adv.hasPhoneLink && !adv.hasCortana && !adv.hasTeams && !adv.hasWidgets && !adv.hasXbox) {
+    if (!adv.hasOneDrive && !adv.hasPhoneLink && !adv.hasCortana && !adv.hasWidgets) {
         cout << " [✓] Các ứng dụng rác nâng cao đều sạch sẽ, không có gì cần gỡ!\n";
         return;
     }
@@ -790,16 +780,7 @@ static void cleanAdvancedBloat(SystemCore &sc, const AdvancedBloatStatus &adv) {
         psScript += "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search' -Name 'AllowCortana' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
     }
 
-    // 4. Kiểm tra & Gỡ Teams cá nhân nếu có
-    if (adv.hasTeams) {
-        psScript += "Stop-Process -Name 'ms-teams' -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Stop-Process -Name 'msteams' -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-AppxPackage -AllUsers -Name '*MicrosoftTeams*' -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like '*MicrosoftTeams*' } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue;\n";
-        psScript += "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'TaskbarMn' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-    }
-
-    // 5. Kiểm tra & Gỡ Windows Widgets (Tin tức góc dưới bên trái Taskbar & Service ngầm)
+    // 4. Kiểm tra & Gỡ Windows Widgets (Tin tức góc dưới bên trái Taskbar & Service ngầm)
     if (adv.hasWidgets) {
         psScript += "Stop-Process -Name 'Widgets','WidgetService' -Force -ErrorAction SilentlyContinue;\n";
         psScript += "Get-AppxPackage -AllUsers -Name '*WebExperience*' -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
@@ -818,19 +799,6 @@ static void cleanAdvancedBloat(SystemCore &sc, const AdvancedBloatStatus &adv) {
         psScript += "Start-Process 'explorer.exe';\n";
     }
 
-    // 6. Kiểm tra & Gỡ triệt để toàn bộ hệ sinh thái Xbox (App, Game Bar, Services)
-    if (adv.hasXbox) {
-        psScript += "Stop-Process -Name 'XboxApp','GameBar','GameBarFTServer','XboxGameBarSpotify','XboxPcAppFT' -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-AppxPackage -AllUsers -Name '*Xbox*' -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-AppxPackage -AllUsers -Name '*GamingApp*' -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like '*Xbox*' -or $_.DisplayName -like '*GamingApp*' -or $_.PackageName -like '*Xbox*' } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue;\n";
-        psScript += "Stop-Service -Name 'XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc' -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\XblAuthManager' -Name 'Start' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\XblGameSave' -Name 'Start' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\XboxNetApiSvc' -Name 'Start' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\XboxGipSvc' -Name 'Start' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-    }
-
     if (!psScript.empty()) {
         runPowerShellScriptAsAdmin(sc, psScript);
     }
@@ -838,9 +806,7 @@ static void cleanAdvancedBloat(SystemCore &sc, const AdvancedBloatStatus &adv) {
     if (adv.hasOneDrive) cout << " [✓] Đã gỡ triệt để Microsoft OneDrive (tiến trình, thư mục C:, icon Explorer).\n";
     if (adv.hasPhoneLink) cout << " [✓] Đã gỡ Phone Link & vô hiệu hóa dịch vụ ngầm CDPUserSvc.\n";
     if (adv.hasCortana) cout << " [✓] Đã gỡ Cortana & chặn Policy tìm kiếm.\n";
-    if (adv.hasTeams) cout << " [✓] Đã gỡ Teams cá nhân & ẩn icon Chat trên Taskbar.\n";
     if (adv.hasWidgets) cout << " [✓] Đã gỡ Widgets (WebExperience), tắt icon góc dưới Taskbar & vô hiệu hóa WpnService.\n";
-    if (adv.hasXbox) cout << " [✓] Đã gỡ sạch hệ sinh thái Xbox (Xbox App, Game Bar) & tắt các dịch vụ Xbox Live.\n";
 }
 
 // Gỡ bỏ ứng dụng rác Bloatware (Dọn dẹp toàn diện cả 2 luồng: Thứ cấp & Nâng cao)
@@ -873,13 +839,11 @@ void UtilityTools::uninstallBloatware() {
     cout << " │   - Microsoft OneDrive   : " << (advStatus.hasOneDrive ? (advStatus.oneDriveRunning ? "\x1b[33m[Phát hiện - Đang chạy ngầm]\x1b[0m" : "\x1b[33m[Phát hiện file/folder C:]\x1b[0m") : "\x1b[32m[Sạch]\x1b[0m") << "\n";
     cout << " │   - Phone Link & Dịch vụ : " << (advStatus.hasPhoneLink ? (advStatus.phoneLinkRunning ? "\x1b[33m[Phát hiện - Tiến trình đang chạy]\x1b[0m" : "\x1b[33m[Phát hiện gói/dịch vụ]\x1b[0m") : "\x1b[32m[Sạch]\x1b[0m") << "\n";
     cout << " │   - Cortana Assistant    : " << (advStatus.hasCortana ? "\x1b[33m[Phát hiện gói Cortana]\x1b[0m" : "\x1b[32m[Sạch]\x1b[0m") << "\n";
-    cout << " │   - Teams Chat Taskbar   : " << (advStatus.hasTeams ? "\x1b[33m[Phát hiện Teams cá nhân]\x1b[0m" : "\x1b[32m[Sạch]\x1b[0m") << "\n";
     cout << " │   - Windows Widgets (Góc): " << (advStatus.hasWidgets ? (advStatus.widgetsRunning ? "\x1b[33m[Phát hiện - Đang chạy ngầm]\x1b[0m" : "\x1b[33m[Phát hiện gói WebExperience]\x1b[0m") : "\x1b[32m[Sạch]\x1b[0m") << "\n";
-    cout << " │   - Xbox Ecosystem       : " << (advStatus.hasXbox ? (advStatus.xboxRunning ? "\x1b[33m[Phát hiện - Tiến trình đang chạy]\x1b[0m" : "\x1b[33m[Phát hiện gói/dịch vụ Xbox]\x1b[0m") : "\x1b[32m[Sạch]\x1b[0m") << "\n";
     cout << "\n";
 
     bool hasAnySec = !detectedSec.empty();
-    bool hasAnyAdv = advStatus.hasOneDrive || advStatus.hasPhoneLink || advStatus.hasCortana || advStatus.hasTeams || advStatus.hasWidgets || advStatus.hasXbox;
+    bool hasAnyAdv = advStatus.hasOneDrive || advStatus.hasPhoneLink || advStatus.hasCortana || advStatus.hasWidgets;
 
     if (!hasAnySec && !hasAnyAdv) {
         cout << " \x1b[32m[✓] Hệ thống đã hoàn toàn sạch sẽ\x1b[0m\n";
