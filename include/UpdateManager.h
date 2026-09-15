@@ -20,6 +20,7 @@ public:
 
     // Kiểm tra ngầm trong nền (background thread) khi khởi động
     static void checkUpdateAsync();
+    static void shutdown();
 
     // Trạng thái kiểm tra
     static bool isCheckingFinished();

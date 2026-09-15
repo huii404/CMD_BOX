@@ -42,12 +42,13 @@ struct DecodedWICImage {
     IWICImagingFactory* pFactory = nullptr;
     IWICBitmapDecoder* pDecoder = nullptr;
     IWICBitmapFrameDecode* pFrame = nullptr;
+    bool comInitialized = false;
     ~DecodedWICImage() { release(); }
     void release() {
         if (pFrame) { pFrame->Release(); pFrame = nullptr; }
         if (pDecoder) { pDecoder->Release(); pDecoder = nullptr; }
         if (pFactory) { pFactory->Release(); pFactory = nullptr; }
-        CoUninitialize();
+        if (comInitialized) { CoUninitialize(); comInitialized = false; }
     }
 };
 
@@ -67,13 +68,18 @@ static bool decodeWIC(
         return false;
     }
 
-    CoInitialize(NULL);
+    HRESULT comHr = CoInitialize(NULL);
+    if (FAILED(comHr)) {
+        setError(EnhanceErrorPro::DecoderInitFailed, "Không thể khởi tạo COM để giải mã ảnh.");
+        return false;
+    }
+    out.comInitialized = true;
 
     IWICImagingFactory* pFactory = NULL;
     HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFactory));
     if (FAILED(hr) || !pFactory) {
         setError(EnhanceErrorPro::DecoderInitFailed, "Không thể khởi tạo WIC Imaging Factory của Windows.");
-        CoUninitialize();
+        out.release();
         return false;
     }
 
@@ -91,7 +97,7 @@ static bool decodeWIC(
                 std::string("Không thể khởi tạo bộ giải mã WIC cho tệp ảnh (Mã lỗi HRESULT: ") + hexBuf + ").");
         }
         pFactory->Release();
-        CoUninitialize();
+        out.release();
         return false;
     }
 
@@ -101,7 +107,7 @@ static bool decodeWIC(
         setError(EnhanceErrorPro::FrameDecodeFailed, "Không thể giải mã khung hình ảnh thứ nhất (Frame 0).");
         pDecoder->Release();
         pFactory->Release();
-        CoUninitialize();
+        out.release();
         return false;
     }
 
@@ -112,7 +118,7 @@ static bool decodeWIC(
         pFrame->Release();
         pDecoder->Release();
         pFactory->Release();
-        CoUninitialize();
+        out.release();
         return false;
     }
     hr = pConverter->Initialize(pFrame, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, NULL, 0.0, WICBitmapPaletteTypeCustom);
@@ -122,7 +128,7 @@ static bool decodeWIC(
         pFrame->Release();
         pDecoder->Release();
         pFactory->Release();
-        CoUninitialize();
+        out.release();
         return false;
     }
 
@@ -133,7 +139,7 @@ static bool decodeWIC(
         pFrame->Release();
         pDecoder->Release();
         pFactory->Release();
-        CoUninitialize();
+        out.release();
         return false;
     }
 
@@ -150,7 +156,7 @@ static bool decodeWIC(
         pFrame->Release();
         pDecoder->Release();
         pFactory->Release();
-        CoUninitialize();
+        out.release();
         return false;
     }
 

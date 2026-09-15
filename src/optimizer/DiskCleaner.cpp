@@ -95,9 +95,24 @@ bool DiskCleaner::moveToRecycleBin(const fs::path &filePath) {
     if (res == 0 && !fileOp.fAnyOperationsAborted) {
         return true;
     }
-    // Fallback xóa bằng std::filesystem nếu Recycle Bin không được hỗ trợ trên phân vùng này
+    // Không xóa vĩnh viễn nếu Recycle Bin không khả dụng.
+    return false;
+}
+
+static bool filesHaveSameContent(const fs::path& first, const fs::path& second) {
     std::error_code ec;
-    return fs::remove(filePath, ec);
+    if (fs::file_size(first, ec) != fs::file_size(second, ec) || ec) return false;
+    std::ifstream a(first, std::ios::binary);
+    std::ifstream b(second, std::ios::binary);
+    if (!a || !b) return false;
+    std::vector<char> aBuf(64 * 1024), bBuf(64 * 1024);
+    while (a && b) {
+        a.read(aBuf.data(), static_cast<std::streamsize>(aBuf.size()));
+        b.read(bBuf.data(), static_cast<std::streamsize>(bBuf.size()));
+        if (a.gcount() != b.gcount() ||
+            !std::equal(aBuf.begin(), aBuf.begin() + a.gcount(), bBuf.begin())) return false;
+    }
+    return a.eof() && b.eof();
 }
 
 int DiskCleaner::cleanDirectoryArtifacts(const fs::path &rootPath, 
@@ -692,7 +707,6 @@ long long DiskCleaner::cleanDownloadsExesAndDuplicates() {
             for (const auto &item : fileList) {
                 SetFileAttributesA(item.fullPath.string().c_str(), FILE_ATTRIBUTE_NORMAL);
                 if (moveToRecycleBin(item.fullPath)) {
-                    freedBytes += item.size;
                     deletedExeCount++;
                 }
             }
@@ -704,10 +718,10 @@ long long DiskCleaner::cleanDownloadsExesAndDuplicates() {
                 });
 
                 for (size_t i = 1; i < fileList.size(); ++i) {
-                    if (fileList[i].copyIndex > 0) {
+                    if (fileList[i].copyIndex > 0 &&
+                        filesHaveSameContent(fileList[0].fullPath, fileList[i].fullPath)) {
                         SetFileAttributesA(fileList[i].fullPath.string().c_str(), FILE_ATTRIBUTE_NORMAL);
                         if (moveToRecycleBin(fileList[i].fullPath)) {
-                            freedBytes += fileList[i].size;
                             deletedDuplicateCount++;
                         }
                     }
@@ -959,7 +973,23 @@ void DiskCleaner::runCleanChoice(int choice) {
     if (choice < 1 || choice > 7) return;
 
     sc.cls();
-    cout << "\n\n";
+    static const char* scopes[] = {
+        "", "Temp, cache người dùng, CrashDump và DNS cache",
+        "Cache trình duyệt, ứng dụng và shader",
+        "Windows Update, log hệ thống, Windows.old, hibernation [Admin]",
+        "Cache công cụ lập trình trong các thư mục dự án",
+        "Bộ cài đã cài và bản tải trùng trong Downloads",
+        "Các mục 1, 2, 3 và 5", "Toàn bộ mục 1 đến 5"
+    };
+    cout << "\n== XEM TRƯỚC TÁC VỤ DỌN DẸP ==\n"
+         << " Phạm vi : " << scopes[choice] << "\n"
+         << " Khôi phục: Bộ cài Downloads được đưa vào Thùng rác; cache hệ thống không thể hoàn tác.\n\n";
+    if (!sc.confirm(" Tiếp tục thực hiện? (y/N): ")) {
+        cout << "\nĐã hủy, chưa có thay đổi nào được thực hiện.\n";
+        Sleep(600);
+        return;
+    }
+    cout << "\n";
     long long totalFreed = 0;
 
     if (choice == 1 || choice == 6 || choice == 7) {

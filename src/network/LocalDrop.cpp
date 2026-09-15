@@ -25,6 +25,19 @@ static const int DEFAULT_TCP_PORT = 8888;
 static const int DEFAULT_UDP_BEACON_PORT = 53318;
 static const int CHUNK_SIZE = 262144; // 256 KB (Tối ưu thông lượng LAN & Wi-Fi)
 
+static string createSessionToken() {
+    GUID id{};
+    if (FAILED(CoCreateGuid(&id))) {
+        return to_string(GetTickCount64()) + to_string(GetCurrentProcessId());
+    }
+    char token[33];
+    snprintf(token, sizeof(token), "%08lX%04X%04X%02X%02X%02X%02X%02X%02X%02X%02X",
+             static_cast<unsigned long>(id.Data1), id.Data2, id.Data3,
+             id.Data4[0], id.Data4[1], id.Data4[2], id.Data4[3],
+             id.Data4[4], id.Data4[5], id.Data4[6], id.Data4[7]);
+    return token;
+}
+
 static bool sendAll(SOCKET socket, const char *data, size_t size) {
     size_t sent = 0;
     while (sent < size) {
@@ -506,7 +519,10 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
     }
 
     isRunning = true;
-    string downloadUrl = "http://" + localIP + ":" + to_string(tcpPort) + "/download";
+    const string sessionToken = isSecure ? createSessionToken() : "";
+    const string secureDownloadPath = "/download?token=" + sessionToken;
+    string downloadUrl = "http://" + localIP + ":" + to_string(tcpPort) +
+                         (isSecure ? secureDownloadPath : "/download");
     string homeUrl = "http://" + localIP + ":" + to_string(tcpPort) + "/";
 
     string qrDisplay = "";
@@ -640,16 +656,14 @@ void LocalDrop::startSender(const string &defaultFile, bool isSecure) {
 
         bool isGet = (httpMethod == "GET");
         bool isHead = (httpMethod == "HEAD");
-        bool isCliGet = (req.find("CMDBOX_GET") != string::npos);
-
-        bool isDownload = (isCliGet || 
-                           ((isGet || isHead) && 
-                            (httpPath == "/download" || httpPath == "/get" || 
-                             httpPath.rfind("/download?", 0) == 0 || httpPath.rfind("/get?", 0) == 0)));
+        bool isDownloadPath = (httpPath == "/download" || httpPath == "/get");
+        bool isAuthorizedSecurePath = isSecure && httpPath == secureDownloadPath;
+        bool isDownload = (isGet || isHead) &&
+                          (isSecure ? isAuthorizedSecurePath : isDownloadPath);
         
         if (!isDownload) {
             // Nếu người dùng truy cập trang chủ / bằng trình duyệt điện thoại -> phục vụ Web Portal
-            if ((isGet || isHead) && (httpPath == "/" || httpPath.rfind("/?", 0) == 0)) {
+            if (!isSecure && (isGet || isHead) && (httpPath == "/" || httpPath.rfind("/?", 0) == 0)) {
                 renderDashboard(deviceStr, "Đang xem trang chủ");
 
                 std::ostringstream html;
@@ -1011,7 +1025,7 @@ void LocalDrop::startReceiver() {
             }
         }
     }
-    if (path != "/download" && path != "/get") {
+    if (path != "/download" && path != "/get" && path.rfind("/download?token=", 0) != 0) {
         cout << " [!] Đường dẫn tải không hợp lệ.\n";
         sc.waitEnter();
         return;

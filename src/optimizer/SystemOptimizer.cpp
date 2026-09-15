@@ -273,23 +273,29 @@ void SystemOptimizer::fixWindowsUpdate() {
     cout << "\n[*] Đang reset Windows Update (Admin)...\n";
     string batContent = 
         "@echo off\n"
+        "set \"failed=0\"\n"
         "chcp 65001 >nul\n"
         "echo [1/3] Dung cac dich vu Windows Update...\n"
         "net stop wuauserv >nul 2>&1\n"
         "net stop cryptSvc >nul 2>&1\n"
         "net stop bits >nul 2>&1\n"
         "net stop msiserver >nul 2>&1\n"
+        "if errorlevel 2 set \"failed=1\"\n"
         "\n"
         "echo [2/3] Xoa cache cap nhat ton dong...\n"
         "del /f /q \"%windir%\\SoftwareDistribution\\*.*\" >nul 2>&1\n"
         "rd /s /q \"%windir%\\SoftwareDistribution\" >nul 2>&1\n"
         "rd /s /q \"%windir%\\system32\\catroot2\" >nul 2>&1\n"
+        "if exist \"%windir%\\SoftwareDistribution\" set \"failed=1\"\n"
+        "if exist \"%windir%\\system32\\catroot2\" set \"failed=1\"\n"
         "\n"
         "echo [3/3] Khoi dong lai cac dich vu...\n"
         "net start msiserver >nul 2>&1\n"
         "net start bits >nul 2>&1\n"
         "net start cryptSvc >nul 2>&1\n"
-        "net start wuauserv >nul 2>&1\n";
+        "net start wuauserv >nul 2>&1\n"
+        "if errorlevel 1 set \"failed=1\"\n"
+        "exit /b %failed%\n";
 
     if (SystemCore::runBatchAsAdmin(batContent, "Reset Windows Update")) {
         cout << "\n[✓] Đã reset Windows Update.\n";
@@ -495,6 +501,20 @@ void SystemOptimizer::runOptimizeChoice(int choice) {
     if (choice < 1 || choice > 4) return;
 
     sc.cls();
+    static const char* scopes[] = {
+        "", "Tắt ứng dụng khởi động không thuộc danh sách bảo vệ",
+        "Tắt Maps, Wallet, Telemetry, Error Reporting và một số dịch vụ nền [Admin]",
+        "Tinh chỉnh Taskbar, hiệu ứng và có thể khởi động lại Explorer",
+        "Thực hiện cả ba nhóm tối ưu trên [Admin]"
+    };
+    cout << "== XEM TRƯỚC TỐI ƯU ==\n"
+         << " Phạm vi: " << scopes[choice] << "\n\n";
+    if (!sc.confirm(" Tiếp tục thực hiện? (y/N): ")) {
+        cout << "\nĐã hủy, chưa có thay đổi nào được thực hiện.\n";
+        Sleep(600);
+        return;
+    }
+    cout << "\n";
     if (choice == 1 || choice == 4) {
         cout << "[*] Đang tối ưu ứng dụng khởi động...\n";
         int count = optimizeStartupApps();

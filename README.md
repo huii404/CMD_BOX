@@ -1,6 +1,21 @@
 # CMD BOX - SYSTEM TOOLKIT
 
 > **Nền tảng:** Windows (x64) | **Ngôn ngữ:** C++17 | **Biên dịch:** MinGW-w64 (GCC / UCRT64)
+>
+> **Phiên bản:** 1.0.0
+
+Từ phiên bản 1.0.0, các tác vụ media giữ nguyên file nguồn và ghi kết quả vào thư mục `CMD_BOX_Output` nằm cạnh file nguồn. Tác vụ dọn dẹp và tối ưu hiển thị phạm vi ảnh hưởng trước khi chạy.
+
+Có thể mở menu như cũ hoặc gọi nhanh từ terminal:
+
+```cmd
+main.exe --help
+main.exe clean 1
+main.exe optimize 1
+main.exe scan-network
+main.exe security-status
+main.exe media
+```
 
 **Tra cứu:** [Sổ tay lệnh Windows CMD](README_WINDOWS_COMMANDS.md) — lệnh hữu ích, tác dụng, ví dụ và mức quyền cần thiết.
 

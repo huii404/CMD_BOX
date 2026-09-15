@@ -23,21 +23,11 @@ static GpuCodecInfo cachedGpuInfo;
 static bool hasDetectedGpu = false;
 static mutex gpuDetectionMutex;
 
-MediaProcessor::MediaProcessor() {
-    std::thread([this]() {
-        this->getGpuEncoder();
-    }).detach();
-}
+MediaProcessor::MediaProcessor() = default;
 MediaProcessor::~MediaProcessor() {}
 
 string MediaProcessor::getFFmpegPath() {
-    if (!cachedFFmpegPath.empty()) {
-        return cachedFFmpegPath;
-    }
-    
     lock_guard<mutex> lock(ffmpegMutex);
-    
-    // Double-check
     if (!cachedFFmpegPath.empty()) {
         return cachedFFmpegPath;
     }
@@ -75,7 +65,6 @@ string MediaProcessor::getFFmpegPath() {
 }
 
 GpuCodecInfo MediaProcessor::getGpuEncoder() {
-    if (hasDetectedGpu) return cachedGpuInfo;
     lock_guard<mutex> lock(gpuDetectionMutex);
     if (hasDetectedGpu) return cachedGpuInfo;
 
@@ -135,6 +124,68 @@ GpuCodecInfo MediaProcessor::getGpuEncoder() {
     return cachedGpuInfo;
 }
 
+static fs::path makeUniqueOutputPath(const fs::path& requested, const fs::path& source = {}) {
+    std::error_code ec;
+    if (requested == source || !fs::exists(requested, ec)) return requested;
+    for (int i = 1; i < 10000; ++i) {
+        fs::path candidate = requested.parent_path() /
+            (requested.stem().string() + "_converted_" + to_string(i) + requested.extension().string());
+        ec.clear();
+        if (!fs::exists(candidate, ec)) return candidate;
+    }
+    return requested.parent_path() /
+        (requested.stem().string() + "_converted_" + to_string(GetTickCount64()) + requested.extension().string());
+}
+
+static fs::path getMediaOutputDirectory(const fs::path& inputPath) {
+    fs::path outputDir = inputPath.parent_path() / "CMD_BOX_Output";
+    std::error_code ec;
+    fs::create_directories(outputDir, ec);
+    return ec ? fs::path() : outputDir;
+}
+
+static bool commitRenderedFile(const fs::path& tempPath, const fs::path& sourcePath,
+                               const fs::path& requestedOutput, fs::path& actualOutput,
+                               string& errorMessage, bool& originalRemoved,
+                               bool preserveSource = true) {
+    originalRemoved = false;
+    std::error_code ec;
+    if (!fs::exists(tempPath, ec) || fs::file_size(tempPath, ec) == 0 || ec) {
+        errorMessage = "File kết quả rỗng hoặc không tồn tại";
+        return false;
+    }
+
+    actualOutput = makeUniqueOutputPath(requestedOutput, sourcePath);
+    if (actualOutput != sourcePath) {
+        fs::rename(tempPath, actualOutput, ec);
+        if (ec) { errorMessage = "Không thể đưa file kết quả vào vị trí đích: " + ec.message(); return false; }
+        if (preserveSource) return true;
+        originalRemoved = fs::remove(sourcePath, ec);
+        if (!originalRemoved) errorMessage = "Không xóa được file gốc; đã giữ cả hai file";
+        return true;
+    }
+
+    fs::path backup = sourcePath.parent_path() /
+        (sourcePath.filename().string() + ".cmd_box_backup_" + to_string(GetTickCount64()));
+    fs::rename(sourcePath, backup, ec);
+    if (ec) { errorMessage = "Không thể tạo bản dự phòng file gốc: " + ec.message(); return false; }
+    ec.clear();
+    fs::rename(tempPath, sourcePath, ec);
+    if (ec) {
+        std::error_code rollbackEc;
+        fs::rename(backup, sourcePath, rollbackEc);
+        if (rollbackEc) {
+            errorMessage = "Không thể thay file gốc. Bản gốc vẫn an toàn tại: " + backup.string();
+        } else {
+            errorMessage = "Không thể thay file gốc; đã khôi phục bản cũ: " + ec.message();
+        }
+        return false;
+    }
+    fs::remove(backup, ec);
+    originalRemoved = true;
+    return true;
+}
+
 
 void MediaProcessor::extractAudioCore(const std::string& inputPath, const std::string& outputPath) {
     std::string ffmpeg = getFFmpegPath();
@@ -175,7 +226,8 @@ void MediaProcessor::processMediaAuto() {
 
         if (hasPreviousRun) {
             cout << "\n\n";
-            cout << "  Đã giải phóng     : " << SystemCore::formatSize(totalBytesSaved) << "\n\n";
+            cout << "  Bản xuất giảm được: " << SystemCore::formatSize(totalBytesSaved) << "\n"
+                 << "  File gốc           : Được giữ nguyên\n\n";
         }
         cout << "\nKéo thả các file (0 để thoát): ";
         string rawInput;
@@ -223,6 +275,11 @@ void MediaProcessor::processMediaAuto() {
             bool isImage = (find(imageExts.begin(), imageExts.end(), ext) != imageExts.end());
             bool isVideo = (find(videoExts.begin(), videoExts.end(), ext) != videoExts.end());
 
+            fs::path outputDir = getMediaOutputDirectory(inPath);
+            if (outputDir.empty()) {
+                cout << "    Không thể tạo thư mục CMD_BOX_Output!\n\n";
+                continue;
+            }
             fs::path tempOutPath;
             fs::path finalOutPath;
 
@@ -231,16 +288,16 @@ void MediaProcessor::processMediaAuto() {
                 // Nếu gốc là PNG -> giữ định dạng PNG (nén lossless 100% không mất nét)
                 // Các định dạng khác (JPG, HEIC, BMP, TIFF, WebP) -> chuẩn hóa sang JPG chất lượng cao
                 if (ext == ".png") {
-                    finalOutPath = inPath.parent_path() / (inPath.stem().string() + ".png");
-                    tempOutPath = inPath.parent_path() / (inPath.stem().string() + "_temp_compressed.png");
+                    finalOutPath = outputDir / (inPath.stem().string() + "_compressed.png");
+                    tempOutPath = outputDir / (inPath.stem().string() + "_temp_compressed.png");
                 } else {
-                    finalOutPath = inPath.parent_path() / (inPath.stem().string() + ".jpg");
-                    tempOutPath = inPath.parent_path() / (inPath.stem().string() + "_temp_compressed.jpg");
+                    finalOutPath = outputDir / (inPath.stem().string() + "_compressed.jpg");
+                    tempOutPath = outputDir / (inPath.stem().string() + "_temp_compressed.jpg");
                 }
             } else if (isVideo) {
                 // Video luôn ưu tiên xuất ra định dạng chuẩn MP4 tương thích cao nhất
-                finalOutPath = inPath.parent_path() / (inPath.stem().string() + ".mp4");
-                tempOutPath = inPath.parent_path() / (inPath.stem().string() + "_temp_compressed.mp4");
+                finalOutPath = outputDir / (inPath.stem().string() + "_compressed.mp4");
+                tempOutPath = outputDir / (inPath.stem().string() + "_temp_compressed.mp4");
             } else {
                 cout << "\nBỏ qua: Định dạng " << ext << " không hỗ trợ!\n\n";
                 continue;
@@ -305,21 +362,22 @@ void MediaProcessor::processMediaAuto() {
                     uintmax_t compressedSize = fs::file_size(tempOutPath);
 
                     if (compressedSize < originalSize) {
+                        fs::path actualOutPath;
+                        string commitError;
+                        bool originalRemoved = false;
+                        if (!commitRenderedFile(tempOutPath, inPath, finalOutPath, actualOutPath,
+                                                commitError, originalRemoved, true)) {
+                            cout << "\nLỗi: " << commitError << "\n\n";
+                            continue;
+                        }
                         currentBytesSaved += (originalSize - compressedSize);
-                        
-                        if (fs::exists(inPath)) {
-                            fs::remove(inPath);
-                        }
-                        if (finalOutPath != inPath && fs::exists(finalOutPath)) {
-                            fs::remove(finalOutPath);
-                        }
-                        fs::rename(tempOutPath, finalOutPath);
                         currentOptimizedCount++;
                         
                         float ratio = (1.0f - (float)compressedSize / originalSize) * 100;
                         cout << "\nĐã nén: " << SystemCore::formatSize(originalSize - compressedSize) 
                              << " (" << fixed << setprecision(1) << ratio << "%) -> " 
-                             << finalOutPath.filename().string() << "\n\n";
+                             << actualOutPath.filename().string() << "\n\n";
+                        if (!commitError.empty()) cout << "Cảnh báo: " << commitError << "\n\n";
                     } 
                     else {
                         fs::remove(tempOutPath);
@@ -392,7 +450,9 @@ void MediaProcessor::processExtractAudioBatch() {
         transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
         if (find(videoExts.begin(), videoExts.end(), ext) != videoExts.end()) {
-            fs::path outPath = inPath.parent_path() / (inPath.stem().string() + ".mp3");
+            fs::path outputDir = getMediaOutputDirectory(inPath);
+            if (outputDir.empty()) { cout << "    [!] Không tạo được CMD_BOX_Output!\n"; continue; }
+            fs::path outPath = makeUniqueOutputPath(outputDir / (inPath.stem().string() + ".mp3"));
             extractAudioCore(inputs[i], outPath.string());
             if (fs::exists(outPath) && fs::file_size(outPath) > 0) {
                 cout << "    [✓] " << outPath.filename().string() << "\n";
@@ -499,7 +559,9 @@ void MediaProcessor::processChangeSpeedBatch() {
 
         if (find(videoExts.begin(), videoExts.end(), ext) != videoExts.end()) {
             std::string speedSuffix = "_speed_" + speedStr + "x.mp4";
-            fs::path outPath = inPath.parent_path() / (inPath.stem().string() + speedSuffix);
+            fs::path outputDir = getMediaOutputDirectory(inPath);
+            if (outputDir.empty()) { cout << "    [!] Không tạo được CMD_BOX_Output!\n"; continue; }
+            fs::path outPath = makeUniqueOutputPath(outputDir / (inPath.stem().string() + speedSuffix));
             changeSpeedCore(inputs[i], outPath.string(), speed);
             if (fs::exists(outPath) && fs::file_size(outPath) > 0) {
                 cout << "    [✓] " << outPath.filename().string() << "\n";
@@ -568,7 +630,12 @@ void MediaProcessor::processMediaEnhancement() {
 
             uintmax_t oldSize = fs::exists(inPath) ? fs::file_size(inPath) : 0;
             std::string suffix = usePro ? "_pro" : "_base";
-            fs::path outPath = inPath.parent_path() / (inPath.stem().string() + suffix + ext);
+            fs::path outputDir = getMediaOutputDirectory(inPath);
+            if (outputDir.empty()) {
+                results.push_back({ (int)i + 1, inPath.filename().string(), "Lỗi tạo CMD_BOX_Output", 0, 0, "0 B", "0 B", false });
+                continue;
+            }
+            fs::path outPath = makeUniqueOutputPath(outputDir / (inPath.stem().string() + suffix + ext));
 
             bool ok = false;
             std::string typeStr = "";
@@ -629,7 +696,8 @@ void MediaProcessor::processMediaEnhancement() {
 
                     bool isPortrait = (score.skinPercent >= 8.0f);
                     if (ok && isPortrait && !ffmpeg.empty() && fs::exists(outPath)) {
-                        std::string polishedOut = (inPath.parent_path() / (inPath.stem().string() + "_polished" + ext)).string();
+                        std::string polishedOut = makeUniqueOutputPath(
+                            outputDir / (inPath.stem().string() + "_polished" + ext)).string();
                         std::string polishFilter = "hqdn3d=1.2:0.0:1.5:0.0,unsharp=3:3:0.25:3:3:0.0";
                         std::string polishCmd = ffmpeg + " -y -hide_banner -loglevel error -i \"" + outPath.string() + "\" -map_metadata 0 -vf \"" + polishFilter + "\" -q:v 2 \"" + polishedOut + "\"";
                         if (SystemCore::runRawCommand(polishCmd) && fs::exists(polishedOut) && fs::file_size(polishedOut) > 0) {
@@ -781,11 +849,14 @@ void MediaProcessor::processConvertFormatBatch() {
                     continue;
                 }
 
-                fs::path outPath = inPath.parent_path() / (inPath.stem().string() + targetExt);
+                fs::path outputDir = getMediaOutputDirectory(inPath);
+                if (outputDir.empty()) { cout << "    Không tạo được CMD_BOX_Output!\n"; continue; }
+                fs::path outPath = outputDir / (inPath.stem().string() + targetExt);
                 if (inPath == outPath || ext == targetExt) {
                     cout << "    Bỏ qua: File đã ở định dạng " << targetExt << "\n";
                     continue;
                 }
+                outPath = makeUniqueOutputPath(outPath, inPath);
                 string cmd;
 
                 if (ext == ".jpg" || ext == ".jpeg") {
@@ -805,15 +876,17 @@ void MediaProcessor::processConvertFormatBatch() {
                 cout << "    Đang chuyển đổi";
                 bool success = SystemCore::runRawCommand(cmd);
 
-                if (success && fs::exists(outPath)) {
-                    try {
-                        fs::remove(inPath);
-                        cout << " OK: " << outPath.filename().string() << "\n";
-                    } catch (...) {
-                        cout << " (Lỗi xóa file gốc)\n";
-                    }
+                std::error_code outputEc;
+                bool validOutput = success && fs::exists(outPath, outputEc) &&
+                                   fs::file_size(outPath, outputEc) > 0 && !outputEc;
+                if (validOutput) {
+                    std::error_code removeEc;
+                    bool removed = fs::remove(inPath, removeEc);
+                    cout << " OK: " << outPath.filename().string();
+                    if (!removed) cout << " (đã giữ file gốc)";
+                    cout << "\n";
                 } else {
-                    if (fs::exists(outPath)) fs::remove(outPath);
+                    fs::remove(outPath, outputEc);
                     cout << "Chuyển đổi thất bại!\n";
                 }
             }
@@ -850,11 +923,14 @@ void MediaProcessor::processConvertFormatBatch() {
                     continue;
                 }
 
-                fs::path outPath = inPath.parent_path() / (inPath.stem().string() + targetExt);
+                fs::path outputDir = getMediaOutputDirectory(inPath);
+                if (outputDir.empty()) { cout << "    Không tạo được CMD_BOX_Output!\n"; continue; }
+                fs::path outPath = outputDir / (inPath.stem().string() + targetExt);
                 if (inPath == outPath || ext == targetExt) {
                     cout << "    Bỏ qua: File đã ở định dạng " << targetExt << "\n";
                     continue;
                 }
+                outPath = makeUniqueOutputPath(outPath, inPath);
                 
                 bool incompatible = false;
                 
@@ -891,15 +967,17 @@ void MediaProcessor::processConvertFormatBatch() {
                 cout << "    Đang chuyển đổi";
                 bool success = SystemCore::runRawCommand(cmd);
 
-                if (success && fs::exists(outPath)) {
-                    try {
-                        fs::remove(inPath);
-                        cout << " OK: " << outPath.filename().string() << "\n";
-                    } catch (...) {
-                        cout << "(Lỗi xóa file gốc)\n";
-                    }
+                std::error_code outputEc;
+                bool validOutput = success && fs::exists(outPath, outputEc) &&
+                                   fs::file_size(outPath, outputEc) > 0 && !outputEc;
+                if (validOutput) {
+                    std::error_code removeEc;
+                    bool removed = fs::remove(inPath, removeEc);
+                    cout << " OK: " << outPath.filename().string();
+                    if (!removed) cout << " (đã giữ file gốc)";
+                    cout << "\n";
                 } else {
-                    if (fs::exists(outPath)) fs::remove(outPath);
+                    fs::remove(outPath, outputEc);
                     cout << "Chuyển đổi thất bại!\n";
                 }
             }

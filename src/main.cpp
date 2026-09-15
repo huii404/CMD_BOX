@@ -64,7 +64,9 @@ public:
     AppUI() {
         UpdateManager::checkUpdateAsync();
     }
-    ~AppUI() = default;
+    ~AppUI() {
+        UpdateManager::shutdown();
+    }
 
     void renderStatusBox() {
         bool admin = SystemCore::isElevated();
@@ -80,10 +82,10 @@ public:
     void mainMenu() {
         renderStatusBox();
         cout << "\n"
-             << " [1] Tối ưu hệ thống\n"
+             << " [1] Tối ưu hệ thống              [một số tác vụ cần Admin]\n"
              << " [2] Mạng & Bảo mật\n"
              << " [3] Công cụ tự động\n"
-             << " [4] Xử lý Media\n"
+             << " [4] Xử lý Media                  [luôn giữ file gốc]\n"
              << " [5] Cập nhật phần mềm\n"
              << " [0] Thoát\n\n"
              << " [Chọn]: ";
@@ -112,19 +114,19 @@ public:
                     cout << "== DỌN RÁC ==\n"
                          << " [1] Temp & cache người dùng\n"
                          << " [2] Cache trình duyệt & ứng dụng\n"
-                         << " [3] Dọn hệ thống chuyên sâu\n"
+                         << " [3] Dọn hệ thống chuyên sâu       [Admin]\n"
                          << " [4] Cache lập trình\n"
                          << " [5] Bộ cài trong Downloads\n"
                          << " [6] Dọn hệ thống (1, 2, 3, 5)\n"
                          << " [7] Dọn tất cả (1 -> 5)\n\n"
                          << "== TỐI ƯU ==\n"
                          << " [8] Ứng dụng khởi động\n"
-                         << " [9] Dịch vụ nền\n"
-                         << " [10] Giao diện & Taskbar\n"
-                         << " [11] Tối ưu tất cả (8 -> 10)\n\n"
+                         << " [9] Dịch vụ nền                    [Admin]\n"
+                         << " [10] Giao diện & Taskbar            [có thể restart Explorer]\n"
+                         << " [11] Tối ưu tất cả (8 -> 10)         [Admin]\n\n"
                          << "== HỆ THỐNG ==\n"
-                         << " [12] Sửa Windows Update\n"
-                         << " [13] Quản lý dịch vụ\n"
+                         << " [12] Sửa Windows Update             [Admin]\n"
+                         << " [13] Quản lý dịch vụ                 [Admin]\n"
                          << " [0] Quay lại\n"
                          << " [Chọn]: ";
                     sub = readInt("");
@@ -242,6 +244,45 @@ public:
             }
         }
     }
+
+    int runCommandLine(int argc, char* argv[]) {
+        const string command = argc > 1 ? argv[1] : "";
+        if (command == "--version" || command == "-v") {
+            cout << "CMD BOX v" << UpdateManager::CURRENT_VERSION << "\n";
+            return 0;
+        }
+        if (command == "--help" || command == "-h" || command == "help") {
+            cout << "CMD BOX v" << UpdateManager::CURRENT_VERSION << "\n\n"
+                 << "Cách dùng:\n"
+                 << "  main.exe                         Mở menu tương tác\n"
+                 << "  main.exe clean <1-7>             Dọn dẹp, có xem trước và xác nhận\n"
+                 << "  main.exe optimize <1-4>          Tối ưu, có xem trước và xác nhận\n"
+                 << "  main.exe scan-network            Quét thiết bị trong LAN\n"
+                 << "  main.exe security-status         Kiểm tra trạng thái bảo mật\n"
+                 << "  main.exe media                   Mở công cụ nén media\n"
+                 << "  main.exe --version               Xem phiên bản\n";
+            return 0;
+        }
+        if (command == "clean" && argc >= 3) {
+            int tier = 0;
+            try { tier = stoi(argv[2]); } catch (...) {}
+            if (tier < 1 || tier > 7) { cerr << "Tier phải từ 1 đến 7.\n"; return 2; }
+            getOptimizer().runCleanChoice(tier);
+            return 0;
+        }
+        if (command == "optimize" && argc >= 3) {
+            int tier = 0;
+            try { tier = stoi(argv[2]); } catch (...) {}
+            if (tier < 1 || tier > 4) { cerr << "Mức tối ưu phải từ 1 đến 4.\n"; return 2; }
+            getOptimizer().runOptimizeChoice(tier);
+            return 0;
+        }
+        if (command == "scan-network") { getInternet().scanConnectedDevices(); return 0; }
+        if (command == "security-status") { getInternet().checkSecurityStatus(); return 0; }
+        if (command == "media") { getMedia().processMediaAuto(); return 0; }
+        cerr << "Lệnh không hợp lệ. Dùng --help để xem hướng dẫn.\n";
+        return 2;
+    }
 };
 
 int main(int argc, char* argv[]) {
@@ -260,6 +301,7 @@ int main(int argc, char* argv[]) {
     }
 
     AppUI app;
+    if (argc > 1) return app.runCommandLine(argc, argv);
     app.run();
     
     return 0;

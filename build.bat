@@ -50,7 +50,7 @@ echo %C_CYAN%[📿] Đang thỉnh pháp bảo Compiler...%C_RESET%
 set "GXX="
 where g++ >nul 2>nul
 if %errorlevel% equ 0 (
-    set "GXX=g++"
+    for /f "delims=" %%g in ('where g++ 2^>nul') do if not defined GXX set "GXX=%%g"
 ) else if exist "C:\msys64\ucrt64\bin\g++.exe" (
     set "GXX=C:\msys64\ucrt64\bin\g++.exe"
 ) else if exist "C:\msys64\mingw64\bin\g++.exe" (
@@ -94,11 +94,12 @@ if not "!RC_FILE!"=="" (
     )
 )
 
-:: 3. Bien dich voi loading thoi gian thuc tai cho (1 file duy nhat, chu dung im so nhay)
+rem 3. Bien dich truc tiep de tranh loi bien moi truong cua PowerShell Start-Process.
 echo.
 if exist "%TEMP%\cmd_build_err.log" del /f /q "%TEMP%\cmd_build_err.log" 2>nul
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$e=[string][char]27; $sw=[System.Diagnostics.Stopwatch]::StartNew(); $res='!RES_PARAM!'; $args='-std=c++17 -O3 -fopenmp -mavx2 -mfma -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp ' + $res + ' -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -static-libgcc -static-libstdc++ -static -s'; $p=Start-Process -FilePath '!GXX!' -ArgumentList $args -NoNewWindow -PassThru -RedirectStandardError $env:TEMP\cmd_build_err.log; $frames=@('|','/','-','\'); $i=0; Write-Host -NoNewline ('  ' + $e + '[93m[🪷] Đang tụng kinh độ code:' + $e + '[0m ' + $e + '[s'); while(-not $p.HasExited){ $s=$sw.Elapsed.TotalSeconds.ToString('0.0'); $f=$frames[$i%%4]; $disp=$e+'[u'+$e+'[95m['+$f+']'+$e+'[0m '+$e+'[93m'+$s+'s'+$e+'[0m'+$e+'[K'; Write-Host -NoNewline $disp; Start-Sleep -Milliseconds 80; $i++ }; $p.WaitForExit(); $tot=$sw.Elapsed.TotalSeconds.ToString('0.0'); $ec=$p.ExitCode; if($null -eq $ec -or $ec -eq 0){ Write-Host ($e+'[u'+$e+'[42;30m [ĐẮC ĐẠO] '+$tot+'s! CODE THÀNH CHÍNH QUẢ, KHÔNG BUG '+$e+'[0m'+$e+'[K'); exit 0 } else { Write-Host ($e+'[u'+$e+'[41;97m [NGHIỆP QUẢ] ('+$tot+'s) CODE VƯỚNG BỤI TRẦN, CÒN BUG '+$e+'[0m'+$e+'[K'); exit $ec }"
+echo   [BUILD] Dang bien dich CMD BOX...
+"!GXX!" -std=c++17 -O3 -fopenmp -mavx2 -mfma -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp !RES_PARAM! -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -static-libgcc -static-libstdc++ -static -s 2>"%TEMP%\cmd_build_err.log"
 
 set BUILD_RET=%errorlevel%
 

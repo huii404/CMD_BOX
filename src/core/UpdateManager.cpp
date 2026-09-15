@@ -16,7 +16,7 @@
 
 using namespace std;
 
-const string UpdateManager::CURRENT_VERSION = "0.3.40";
+const string UpdateManager::CURRENT_VERSION = "1.0.0";
 const string UpdateManager::API_RELEASES_URL = "https://api.github.com/repos/huii404/CMD_BOX/releases/latest";
 
 static const long long UPDATE_COOLDOWN_SECONDS = 2 * 24 * 3600; // 2 ngày (48 giờ)
@@ -26,6 +26,7 @@ static atomic<bool> g_hasNewVersion(false);
 static string g_remoteVersion = "";
 static string g_releaseUrl = "https://github.com/huii404/CMD_BOX/releases";
 static mutex g_versionMutex;
+static thread g_checkThread;
 
 static string getCacheFilePath() {
     char exePath[MAX_PATH];
@@ -219,7 +220,8 @@ void UpdateManager::checkUpdateAsync() {
     }
 
     // 2. Chưa có cache hoặc đã quá 2 ngày -> khởi chạy thread ngầm kiểm tra GitHub
-    thread([]() {
+    if (g_checkThread.joinable()) g_checkThread.join();
+    g_checkThread = thread([]() {
         ReleaseInfo rel = fetchLatestRelease();
         lock_guard<mutex> lock(g_versionMutex);
         if (rel.valid) {
@@ -230,7 +232,11 @@ void UpdateManager::checkUpdateAsync() {
             saveCache(static_cast<long long>(time(nullptr)), rel.version, g_releaseUrl);
         }
         g_checkFinished = true; // Inside lock: ensures happens-before with string reads
-    }).detach();
+    });
+}
+
+void UpdateManager::shutdown() {
+    if (g_checkThread.joinable()) g_checkThread.join();
 }
 
 bool UpdateManager::isCheckingFinished() {
@@ -298,13 +304,20 @@ void UpdateManager::showUpdateMenu() {
         } else if (choice == 2) {
             cout << "\n[*] Đang kéo mã nguồn mới nhất từ GitHub...\n\n";
             if (SystemCore::runRawCommand("git rev-parse --is-inside-work-tree")) {
-                system("git pull origin main");
+                bool pullOk = SystemCore::runRawCommand("git pull --ff-only origin main");
+                if (!pullOk) {
+                    cout << "\n[!] Cập nhật thất bại hoặc nhánh cục bộ có thay đổi xung đột.\n";
+                    SystemCore::waitEnter();
+                    continue;
+                }
                 cout << "\n[✓] Hoàn tất! Bạn có muốn biên dịch lại ứng dụng ngay? (y/n): ";
                 string ans;
                 getline(cin, ans);
                 if (ans == "y" || ans == "Y") {
                     cout << "\n[*] Đang biên dịch lại qua build.bat...\n";
-                    system("call build.bat");
+                    if (!SystemCore::runRawCommand("cmd.exe /c call build.bat")) {
+                        cout << "\n[!] Build thất bại. Mã nguồn đã cập nhật nhưng file chạy chưa được thay thế.\n";
+                    }
                 }
             } else {
                 cout << "[!] Không tìm thấy kho lưu trữ Git cục bộ.\n";
