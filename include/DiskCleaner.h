@@ -55,7 +55,7 @@ public:
     void cleanDevCaches(bool interactive = false);
     void clearBrowserCache();
 
-    // Điều phối thực thi dọn dẹp theo nhiệm vụ
+    // Điều phối 2 nhóm: 1 = Plus (nhiệm vụ 1, 2, 3, 5), 2 = Pro (toàn bộ 5 nhiệm vụ)
     void runCleanChoice(int choice);
 };
 

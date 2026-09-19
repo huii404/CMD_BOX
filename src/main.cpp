@@ -81,10 +81,10 @@ public:
     void mainMenu() {
         renderStatusBox();
         cout << "\n"
-             << " [1] Tối ưu hệ thống              [một số tác vụ cần Admin]\n"
+             << " [1] Tối ưu hệ thống\n"
              << " [2] Mạng & Bảo mật\n"
              << " [3] Công cụ tự động\n"
-             << " [4] Xử lý Media                  [luôn giữ file gốc]\n"
+             << " [4] Xử lý Media\n"
              << " [5] Cập nhật phần mềm\n"
              << " [0] Thoát\n\n"
              << " [Chọn]: ";
@@ -111,21 +111,16 @@ public:
                 while (true) {
                     cls();
                     cout << "== DỌN RÁC ==\n"
-                         << " [1] Temp & cache người dùng\n"
-                         << " [2] Cache trình duyệt & ứng dụng\n"
-                         << " [3] Dọn hệ thống chuyên sâu       [Admin]\n"
-                         << " [4] Cache lập trình\n"
-                         << " [5] Bộ cài trong Downloads\n"
-                         << " [6] Dọn hệ thống (1, 2, 3, 5)\n"
-                         << " [7] Dọn tất cả (1 -> 5)\n\n"
+                         << " [1] Xóa rác Plus: hệ thống, cache & Downloads [Admin]\n"
+                         << " [2] Xóa rác Pro : Plus + cache lập trình      [Admin]\n\n"
                          << "== TỐI ƯU ==\n"
-                         << " [8] Ứng dụng khởi động\n"
-                         << " [9] Dịch vụ nền                    [Admin]\n"
-                         << " [10] Giao diện & Taskbar            [có thể restart Explorer]\n"
-                         << " [11] Tối ưu tất cả (8 -> 10)         [Admin]\n\n"
+                         << " [3] Ứng dụng khởi động\n"
+                         << " [4] Dịch vụ nền                    [Admin]\n"
+                         << " [5] Giao diện & Taskbar            [có thể restart Explorer]\n"
+                         << " [6] Tối ưu tất cả (3 -> 5)         [Admin]\n\n"
                          << "== HỆ THỐNG ==\n"
-                         << " [12] Sửa Windows Update             [Admin]\n"
-                         << " [13] Quản lý dịch vụ                 [Admin]\n"
+                         << " [7] Sửa Windows Update             [Admin]\n"
+                         << " [8] Quản lý dịch vụ                 [Admin]\n"
                          << " [0] Quay lại\n"
                          << " [Chọn]: ";
                     sub = readInt("");
@@ -134,17 +129,12 @@ public:
                     switch (sub) {
                     case 1:  getOptimizer().runCleanChoice(1); break;
                     case 2:  getOptimizer().runCleanChoice(2); break;
-                    case 3:  getOptimizer().runCleanChoice(3); break;
-                    case 4:  getOptimizer().runCleanChoice(4); break;
-                    case 5:  getOptimizer().runCleanChoice(5); break;
-                    case 6:  getOptimizer().runCleanChoice(6); break;
-                    case 7:  getOptimizer().runCleanChoice(7); break;
-                    case 8:  getOptimizer().runOptimizeChoice(1); break;
-                    case 9:  getOptimizer().runOptimizeChoice(2); break;
-                    case 10: getOptimizer().runOptimizeChoice(3); break;
-                    case 11: getOptimizer().runOptimizeChoice(4); break;
-                    case 12: getOptimizer().fixWindowsUpdate(); break;
-                    case 13: getOptimizer().turnOffServicesMenu(); break;
+                    case 3:  getOptimizer().runOptimizeChoice(1); break;
+                    case 4:  getOptimizer().runOptimizeChoice(2); break;
+                    case 5:  getOptimizer().runOptimizeChoice(3); break;
+                    case 6:  getOptimizer().runOptimizeChoice(4); break;
+                    case 7:  getOptimizer().fixWindowsUpdate(); break;
+                    case 8:  getOptimizer().turnOffServicesMenu(); break;
                     default: Sleep(300); break;
                     }
                 }
@@ -154,8 +144,7 @@ public:
             case 2:
                 while (true) {
                     cls();
-                    cout << "== MẠNG & BẢO MẬT ==\n"
-                         << " [1] Sửa mạng\n"
+                    cout << " [1] Sửa mạng\n"
                          << " [2] Bật bảo vệ\n"
                          << " [3] Trạng thái bảo mật\n"
                          << " [4] Mật khẩu Wi-Fi đã lưu\n"
@@ -252,7 +241,7 @@ public:
             cout << "CMD BOX v" << UpdateManager::CURRENT_VERSION << "\n\n"
                  << "Cách dùng:\n"
                  << "  main.exe                         Mở menu tương tác\n"
-                 << "  main.exe clean <1-7>             Dọn dẹp, có xem trước và xác nhận\n"
+                 << "  main.exe clean <1-2>             Xóa rác: 1 = Plus, 2 = Pro (có xác nhận)\n"
                  << "  main.exe optimize <1-4>          Tối ưu, có xem trước và xác nhận\n"
                  << "  main.exe scan-network            Quét thiết bị trong LAN\n"
                  << "  main.exe security-status         Kiểm tra trạng thái bảo mật\n"
@@ -262,8 +251,9 @@ public:
         }
         if (command == "clean" && argc >= 3) {
             int tier = 0;
-            try { tier = stoi(argv[2]); } catch (...) {}
-            if (tier < 1 || tier > 7) { cerr << "Tier phải từ 1 đến 7.\n"; return 2; }
+            if (string(argv[2]) == "1") tier = 1;
+            else if (string(argv[2]) == "2") tier = 2;
+            if (tier == 0) { cerr << "Chọn 1 (Plus) hoặc 2 (Pro).\n"; return 2; }
             getOptimizer().runCleanChoice(tier);
             return 0;
         }

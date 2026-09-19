@@ -184,13 +184,10 @@ Khi người dùng khởi chạy ứng dụng và chọn menu **[1] Dọn rác &
 
 | Lựa chọn | Tác vụ | Nội dung thực hiện |
 | :--- | :--- | :--- |
-| **[1]** | **Dọn rác bề mặt** | `%TEMP%`, CrashDumps, WER, D3DSCache, INetCache, Flush DNS, Recycle Bin |
-| **[2]** | **Dọn rác Trình duyệt & App** | Chrome, Edge, Brave, Cốc Cốc, Firefox, Discord, Telegram, NVIDIA Cache |
-| **[3]** | **Dọn chuyên sâu & Cập nhật** | DISM WinSxS ResetBase, $WINDOWS.~BT, Windows.old, Logs CBS, EventLogs |
-| **[4]** | **Dọn rác Dev** | node_modules, pip cache, gradle, cargo, nuget, go-build, VS Code cache |
-| **[5]** | **Dọn tệp cài đặt Downloads** | Xóa file `.exe`/`.msi` đã cài đặt, xóa bản trùng lặp `(1)`, xóa tệp dở dang >24h |
-| **[6]** | **[⚡] Dọn toàn diện Hệ thống** | Chạy liên hoàn **Mục 1 + 2 + 3 + 5** (Tất cả ngoại trừ rác Dev của lập trình viên) |
-| **[7]** | **[🚀] Dọn tất cả** | Chạy toàn bộ cả **5 mục** (Bao gồm cả rác Dev) |
+| **[1]** | **Xóa rác Plus** | Chạy nhiệm vụ 1, 2, 3, 5: temp, cache người dùng, trình duyệt, ứng dụng, hệ thống chuyên sâu và Downloads |
+| **[2]** | **Xóa rác Pro** | Toàn bộ Plus và nhiệm vụ 4: cache môi trường lập trình |
+
+CLI: `main.exe clean 1` (Plus), `main.exe clean 2` (Pro). Cả hai đều có xem trước và xác nhận; phần dọn chuyên sâu cần quyền Administrator. Năm hàm dọn rác được giữ nguyên, chỉ thay đổi cách nhóm và lựa chọn.
 
 ---
 

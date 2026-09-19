@@ -970,19 +970,17 @@ void DiskCleaner::clearBrowserCache() {
 // ----------------------------------------------------------------------------------
 
 void DiskCleaner::runCleanChoice(int choice) {
-    if (choice < 1 || choice > 7) return;
+    if (choice < 1 || choice > 2) return;
 
     sc.cls();
     static const char* scopes[] = {
-        "", "Temp, cache người dùng, CrashDump và DNS cache",
-        "Cache trình duyệt, ứng dụng và shader",
-        "Windows Update, log hệ thống, Windows.old và hibernation",
-        "Cache công cụ lập trình trong các thư mục dự án",
-        "Bộ cài đã cài và bản tải trùng trong Downloads",
-        "Các mục 1, 2, 3 và 5", "Toàn bộ mục 1 đến 5"
+        "",
+        "Plus: Temp, cache người dùng, trình duyệt, ứng dụng, hệ thống chuyên sâu và Downloads",
+        "Pro: Toàn bộ Plus và cache công cụ lập trình"
     };
     cout << "\n== XEM TRƯỚC TÁC VỤ DỌN DẸP ==\n"
          << " Phạm vi : " << scopes[choice] << "\n"
+         << " Chuyên sâu: Windows Update, log hệ thống, Windows.old và hibernation (cần Admin).\n"
          << " Khôi phục: Bộ cài Downloads được đưa vào Thùng rác; cache hệ thống không thể hoàn tác.\n\n";
     if (!sc.confirm(" Tiếp tục thực hiện? (y/N): ")) {
         cout << "\nĐã hủy, chưa có thay đổi nào được thực hiện.\n";
@@ -992,21 +990,21 @@ void DiskCleaner::runCleanChoice(int choice) {
     cout << "\n";
     long long totalFreed = 0;
 
-    if (choice == 1 || choice == 6 || choice == 7) {
+    {
         cout << "[*] Dọn temp & cache người dùng...\n";
         long long f1 = cleanSurfaceAndUserTemp();
         totalFreed += f1;
         cout << "     └── [✓] " << (f1 > 0 ? ("Giải phóng " + SystemCore::formatSize(f1)) : "Đã sạch sẽ từ trước") << "\n\n";
     }
 
-    if (choice == 2 || choice == 6 || choice == 7) {
+    {
         cout << "[*] Dọn cache trình duyệt & ứng dụng...\n";
         long long f2 = cleanBrowserAndAppCache();
         totalFreed += f2;
         cout << "     └── [✓] " << (f2 > 0 ? ("Giải phóng " + SystemCore::formatSize(f2)) : "Đã sạch sẽ từ trước") << "\n\n";
     }
 
-    if (choice == 3 || choice == 6 || choice == 7) {
+    {
         cout << "[*] Dọn hệ thống chuyên sâu...\n";
         long long f3 = cleanDeepSystemAndUpdates();
         if (f3 > 0) {
@@ -1019,7 +1017,7 @@ void DiskCleaner::runCleanChoice(int choice) {
         }
     }
 
-    if (choice == 4 || choice == 7) {
+    if (choice == 2) {
         cout << "[*] Dọn cache lập trình...\n";
         long long f4 = cleanDevArtifactsAndCaches();
         totalFreed += f4;
@@ -1027,7 +1025,7 @@ void DiskCleaner::runCleanChoice(int choice) {
     }
 
     long long totalRecycled = 0;
-    if (choice == 5 || choice == 6 || choice == 7) {
+    {
         cout << "[*] Dọn bộ cài Downloads...\n";
         long long f5 = cleanDownloadsExesAndDuplicates();
         totalRecycled += f5;

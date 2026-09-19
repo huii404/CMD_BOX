@@ -8,6 +8,8 @@ Từ phiên bản 1.0.0, các tác vụ media giữ nguyên file nguồn và ghi
 
 Có thể mở menu như cũ hoặc gọi nhanh từ terminal:
 
+Trong menu tương tác, dùng **↑/↓** để chọn và **Enter** để mở. Có thể gõ số rồi nhấn **Enter** để chọn nhanh; **Esc** hoặc **0 + Enter** để quay lại. Menu giữ nguyên khung khi di chuyển lựa chọn. Các màn hình tác vụ vẫn nhận đường dẫn và nội dung văn bản như trước.
+
 ```cmd
 main.exe --help
 main.exe clean 1
