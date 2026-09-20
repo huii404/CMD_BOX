@@ -116,6 +116,10 @@ CMD_BOX/
 │   ├── SystemCore.cpp       # Cài đặt quản lý tiến trình con & tương tác hệ thống
 │   ├── SystemOptimizer.cpp  # Cài đặt dọn dẹp rác đa tầng & tối ưu hệ thống
 │   └── UtilityTools.cpp     # Cài đặt tự động hóa chuột/bàn phím & đọc ACPI pin
+├── scripts/                 # Tác vụ quản trị Windows được gọi bởi chương trình
+│   ├── optimize_registry.bat       # Tinh chỉnh Registry, Taskbar và giao diện
+│   ├── repair_network.bat          # Reset DNS, Winsock, TCP/IP và DHCP
+│   └── reset_windows_update.bat    # Làm sạch cache Windows Update
 ├── build.bat                # Kịch bản biên dịch 1 file duy nhất với loading thời gian thực
 └── README.md                # Tài liệu hướng dẫn kỹ thuật của dự án
 ```

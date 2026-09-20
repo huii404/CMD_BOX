@@ -271,36 +271,10 @@ static bool disableSingleStartupApp(const StartupAppInfo &item) {
  */
 void SystemOptimizer::fixWindowsUpdate() {
     cout << "\n[*] Đang reset Windows Update (Admin)...\n";
-    string batContent = 
-        "@echo off\n"
-        "set \"failed=0\"\n"
-        "chcp 65001 >nul\n"
-        "echo [1/3] Dung cac dich vu Windows Update...\n"
-        "net stop wuauserv >nul 2>&1\n"
-        "net stop cryptSvc >nul 2>&1\n"
-        "net stop bits >nul 2>&1\n"
-        "net stop msiserver >nul 2>&1\n"
-        "if errorlevel 2 set \"failed=1\"\n"
-        "\n"
-        "echo [2/3] Xoa cache cap nhat ton dong...\n"
-        "del /f /q \"%windir%\\SoftwareDistribution\\*.*\" >nul 2>&1\n"
-        "rd /s /q \"%windir%\\SoftwareDistribution\" >nul 2>&1\n"
-        "rd /s /q \"%windir%\\system32\\catroot2\" >nul 2>&1\n"
-        "if exist \"%windir%\\SoftwareDistribution\" set \"failed=1\"\n"
-        "if exist \"%windir%\\system32\\catroot2\" set \"failed=1\"\n"
-        "\n"
-        "echo [3/3] Khoi dong lai cac dich vu...\n"
-        "net start msiserver >nul 2>&1\n"
-        "net start bits >nul 2>&1\n"
-        "net start cryptSvc >nul 2>&1\n"
-        "net start wuauserv >nul 2>&1\n"
-        "if errorlevel 1 set \"failed=1\"\n"
-        "exit /b %failed%\n";
-
-    if (SystemCore::runBatchAsAdmin(batContent, "Reset Windows Update")) {
+    if (SystemCore::runBundledBatch("reset_windows_update.bat", "", true)) {
         cout << "\n[✓] Đã reset Windows Update.\n";
     } else {
-        cout << "\n[!] Reset thất bại; cần quyền Admin.\n";
+        cout << "\n[!] Reset thất bại; kiểm tra quyền Admin hoặc thư mục scripts.\n";
     }
     sc.waitEnter();
 }
@@ -354,142 +328,9 @@ int SystemOptimizer::optimizeBackgroundServices() {
 
 // Nhiệm vụ 3: Tối ưu Giao diện, Taskbar & Độ nhạy Windows (Kiểm tra trạng thái 0/1 trước, chỉ khởi động lại Explorer khi có thay đổi thực sự)
 bool SystemOptimizer::optimizeVisualEffectsAndUI() {
-    struct TaskbarSetting {
-        string keyPath;
-        string valueName;
-        DWORD targetValue;
-        string desc;
-        bool affectsExplorer; // Cần khởi động lại Explorer nếu thay đổi
-    };
-
-    vector<TaskbarSetting> settings = {
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Search", "SearchboxTaskbarMode", 0, "Searchbox (Thu gọn ô tìm kiếm)", true},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "TaskbarDa", 0, "Widgets (Tắt tin tức widget)", true},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "TaskbarMn", 0, "Chat Teams (Tắt biểu tượng chat)", true},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "ShowTaskViewButton", 0, "Task View (Tắt xem tác vụ)", true},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Feeds", "ShellFeedsTaskbarViewMode", 2, "Feeds News (Tắt tin tức Win 10)", true},
-        {"Software\\Policies\\Microsoft\\Windows\\WindowsCopilot", "TurnOffWindowsCopilot", 1, "Copilot AI (Tắt nút Copilot)", true},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "EnableTransparency", 0, "Transparency (Tắt trong suốt tiết kiệm GPU)", false},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "SnapAssist", 0, "Snap Assist (Tắt gợi ý chia đôi cửa sổ)", true},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SilentInstalledAppsEnabled", 0, "Silent Apps (Chặn Store cài app rác ngầm)", false},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-310093Enabled", 0, "Start Ads (Tắt quảng cáo Start Menu)", false},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-338388Enabled", 0, "Settings Tips (Tắt mẹo gợi ý Settings)", false},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "SubscribedContent-338389Enabled", 0, "Explorer Ads (Tắt quảng cáo trong Explorer)", false},
-        {"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "ShowSyncProviderNotifications", 0, "Sync Notifications (Tắt quảng cáo OneDrive)", false}
-    };
-
-    bool explorerNeedsRestart = false;
-    int newlyChanged = 0;
-
-    for (const auto &item : settings) {
-        HKEY hKey;
-        DWORD currentVal = 0;
-        DWORD dataSize = sizeof(DWORD);
-        DWORD valType = 0;
-        bool alreadyOptimized = false;
-
-        // BƯỚC 1: Đọc kiểm tra trạng thái hiện tại (0 hay 1) bằng quyền đọc an toàn (KEY_QUERY_VALUE)
-        if (RegOpenKeyExA(HKEY_CURRENT_USER, item.keyPath.c_str(), 0, KEY_QUERY_VALUE, &hKey) == ERROR_SUCCESS) {
-            if (RegQueryValueExA(hKey, item.valueName.c_str(), NULL, &valType, (LPBYTE)&currentVal, &dataSize) == ERROR_SUCCESS) {
-                if (currentVal == item.targetValue) {
-                    alreadyOptimized = true;
-                }
-            }
-            RegCloseKey(hKey);
-        }
-
-        // BƯỚC 2: Nếu đã ở trạng thái tối ưu (0 hoặc targetValue) -> Bỏ qua, không ghi đè, không reset explorer!
-        if (alreadyOptimized) {
-            cout << "     ├── [✓ Đã tắt] " << item.desc << "\n";
-            continue;
-        }
-
-        // BƯỚC 3: Nếu đang bật (1) hoặc chưa cấu hình -> Tiến hành tắt và đánh dấu cần làm mới
-        bool changeSuccess = false;
-        if (RegOpenKeyExA(HKEY_CURRENT_USER, item.keyPath.c_str(), 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS) {
-            if (RegSetValueExA(hKey, item.valueName.c_str(), 0, REG_DWORD, (const BYTE*)&item.targetValue, sizeof(DWORD)) == ERROR_SUCCESS) {
-                changeSuccess = true;
-            }
-            RegCloseKey(hKey);
-        } else {
-            // Thử tạo key nếu key chưa tồn tại
-            if (RegCreateKeyExA(HKEY_CURRENT_USER, item.keyPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-                if (RegSetValueExA(hKey, item.valueName.c_str(), 0, REG_DWORD, (const BYTE*)&item.targetValue, sizeof(DWORD)) == ERROR_SUCCESS) {
-                    changeSuccess = true;
-                }
-                RegCloseKey(hKey);
-            }
-        }
-
-        if (changeSuccess) {
-            cout << "     ├── [Đã tắt mới] " << item.desc << "\n";
-            newlyChanged++;
-            if (item.affectsExplorer) {
-                explorerNeedsRestart = true;
-            }
-        }
-    }
-
-    // Kiểm tra độ trễ mở menu chuột phải (Desktop MenuShowDelay = 0)
-    HKEY hDesktop;
-    bool delayIsZero = false;
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, "Control Panel\\Desktop", 0, KEY_QUERY_VALUE, &hDesktop) == ERROR_SUCCESS) {
-        char valBuf[32] = {0};
-        DWORD valSz = sizeof(valBuf);
-        if (RegQueryValueExA(hDesktop, "MenuShowDelay", NULL, NULL, (LPBYTE)valBuf, &valSz) == ERROR_SUCCESS) {
-            if (string(valBuf) == "0") delayIsZero = true;
-        }
-        RegCloseKey(hDesktop);
-    }
-
-    if (delayIsZero) {
-        cout << "     ├── [✓ Đã tối ưu] Độ trễ Menu chuột phải (0ms)\n";
-    } else {
-        if (RegOpenKeyExA(HKEY_CURRENT_USER, "Control Panel\\Desktop", 0, KEY_SET_VALUE, &hDesktop) == ERROR_SUCCESS) {
-            const char zeroStr[] = "0";
-            if (RegSetValueExA(hDesktop, "MenuShowDelay", 0, REG_SZ, (const BYTE*)zeroStr, 2) == ERROR_SUCCESS) {
-                cout << "     ├── [Đã tối ưu mới] Giảm độ trễ Menu chuột phải về 0ms\n";
-                newlyChanged++;
-            }
-            RegCloseKey(hDesktop);
-        }
-    }
-
-    // Kiểm tra Telemetry chẩn đoán ngầm trong HKLM
-    HKEY hLM;
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", 0, KEY_QUERY_VALUE, &hLM) == ERROR_SUCCESS) {
-        DWORD curTelem = 1, szTelem = sizeof(DWORD);
-        bool telemZero = false;
-        if (RegQueryValueExA(hLM, "AllowTelemetry", NULL, NULL, (LPBYTE)&curTelem, &szTelem) == ERROR_SUCCESS && curTelem == 0) {
-            telemZero = true;
-        }
-        RegCloseKey(hLM);
-
-        if (telemZero) {
-            cout << "     ├── [✓ Đã tắt] Telemetry chẩn đoán ngầm Windows\n";
-        } else {
-            if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", 0, KEY_SET_VALUE, &hLM) == ERROR_SUCCESS) {
-                DWORD zeroVal = 0;
-                if (RegSetValueExA(hLM, "AllowTelemetry", 0, REG_DWORD, (const BYTE*)&zeroVal, sizeof(DWORD)) == ERROR_SUCCESS) {
-                    cout << "     ├── [Đã tắt mới] Telemetry chẩn đoán ngầm Windows\n";
-                    newlyChanged++;
-                }
-                RegCloseKey(hLM);
-            } else {
-                cout << "     ├── [⚠ Bỏ qua] Telemetry: Cần quyền Administrator để tắt\n";
-            }
-        }
-    } else {
-        cout << "     ├── [⚠ Bỏ qua] Telemetry: Key chưa tồn tại (chưa cần cấu hình)\n";
-    }
-
-    // CHỈ KHỞI ĐỘNG LẠI EXPLORER NẾU CÓ THAY ĐỔI TASKBAR MỚI THỰC SỰ!
-    // Nếu tất cả đã tắt rồi -> Tuyệt đối không reset explorer.exe tránh giật lag/khó chịu
-    if (explorerNeedsRestart) {
-        sc.runCMD("taskkill /f /im explorer.exe >nul 2>&1 & start explorer.exe");
-        return true;
-    }
-    return false;
+    bool userSettingsOk = SystemCore::runBundledBatch("optimize_registry.bat", "user", false);
+    bool machineSettingsOk = SystemCore::runBundledBatch("optimize_registry.bat", "machine", true);
+    return userSettingsOk && machineSettingsOk;
 }
 
 // Thực thi một nhiệm vụ Tăng tốc & Tối ưu cụ thể
@@ -529,11 +370,11 @@ void SystemOptimizer::runOptimizeChoice(int choice) {
 
     if (choice == 3 || choice == 4) {
         cout << "[*] Đang tối ưu giao diện...\n";
-        bool restarted = optimizeVisualEffectsAndUI();
-        if (restarted) {
-            cout << "     └── [✓] Đã áp dụng tinh chỉnh mới và làm mới Explorer.\n\n";
+        bool optimized = optimizeVisualEffectsAndUI();
+        if (optimized) {
+            cout << "     └── [✓] Đã kiểm tra và áp dụng các tinh chỉnh Registry.\n\n";
         } else {
-            cout << "     └── [✓] Taskbar & Giao diện đã tinh gọn từ trước (Bỏ qua reset Explorer, tránh chớp màn hình).\n\n";
+            cout << "     └── [!] Không áp dụng được đầy đủ; kiểm tra quyền Admin hoặc thư mục scripts.\n\n";
         }
     }
 

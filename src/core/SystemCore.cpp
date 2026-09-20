@@ -208,6 +208,42 @@ bool SystemCore::runBatchAsAdmin(const std::string& batContent, const std::strin
     return result;
 }
 
+bool SystemCore::runBundledBatch(const std::string& fileName,
+                                 const std::string& arguments,
+                                 bool requireAdmin) {
+    if (fileName.empty() || fileName.find_first_of("\\/:") != std::string::npos) {
+        std::cout << "[!] Tên script không hợp lệ: " << fileName << "\n";
+        return false;
+    }
+
+    char modulePath[MAX_PATH] = {};
+    DWORD pathLength = GetModuleFileNameA(NULL, modulePath, MAX_PATH);
+    if (pathLength == 0 || pathLength >= MAX_PATH) {
+        std::cout << "[!] Không xác định được thư mục chương trình.\n";
+        return false;
+    }
+
+    std::filesystem::path executableDir = std::filesystem::path(modulePath).parent_path();
+    std::filesystem::path scriptPath = executableDir / "scripts" / fileName;
+
+    // Hỗ trợ chạy bản build từ thư mục dự án trong lúc phát triển.
+    if (!std::filesystem::exists(scriptPath)) {
+        std::filesystem::path developmentPath = std::filesystem::current_path() / "scripts" / fileName;
+        if (std::filesystem::exists(developmentPath)) scriptPath = developmentPath;
+    }
+
+    if (!std::filesystem::exists(scriptPath)) {
+        std::cout << "[!] Thiếu script: " << scriptPath.string() << "\n";
+        return false;
+    }
+
+    std::string invocation = "\"" + scriptPath.string() + "\"";
+    if (!arguments.empty()) invocation += " " + arguments;
+
+    if (requireAdmin) return runAdmin(invocation, true);
+    return runRawCommand("cmd.exe /d /c call " + invocation);
+}
+
 void SystemCore::waitEnter() {
     std::cout << "\nEnter để tiếp tục";
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');

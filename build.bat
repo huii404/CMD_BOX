@@ -116,6 +116,10 @@ if not "!BUILD_RET!"=="0" (
 
 del /f /q "%TEMP%\cmd_build_err.log" 2>nul
 if exist "src\apps.txt" copy /y "src\apps.txt" "bin\apps.txt" >nul
+if not exist "bin\scripts" mkdir "bin\scripts"
+copy /y "scripts\optimize_registry.bat" "bin\scripts\optimize_registry.bat" >nul
+copy /y "scripts\reset_windows_update.bat" "bin\scripts\reset_windows_update.bat" >nul
+copy /y "scripts\repair_network.bat" "bin\scripts\repair_network.bat" >nul
 
 echo %C_GREEN%  [☸] Đã độ thành công: %C_YELLOW%bin\main.exe %C_GREEN%[Viên mãn - Vạn bug tiêu tán]%C_RESET%
 echo.
