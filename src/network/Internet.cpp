@@ -1,3 +1,4 @@
+#include "EmbeddedScripts.h"
 #include "Internet.h"
 #include "LocalDrop.h"
 #include "NetworkScanner.h"
@@ -68,10 +69,10 @@ void Internet::repairNetwork() {
     if (!sc.confirm("Tiếp tục sửa lỗi mạng? (y/n): ")) return;
 
     cout << "\nĐang sửa mạng (Admin)...\n";
-    if (SystemCore::runBundledBatch("repair_network.bat", "", true)) {
+    if (SystemCore::runEmbeddedBatch(EmbeddedScripts::REPAIR_NETWORK_BAT, "", true)) {
         cout << "[✓] Đã sửa mạng.\n";
     } else {
-        cout << "[!] Thất bại; kiểm tra quyền Admin hoặc thư mục scripts.\n";
+        cout << "[!] Thất bại; kiểm tra quyền Admin.\n";
     }
     sc.waitEnter();
 }

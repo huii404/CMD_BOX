@@ -1,4 +1,76 @@
-@echo off
+#ifndef EMBEDDED_SCRIPTS_H
+#define EMBEDDED_SCRIPTS_H
+
+#include <string>
+
+namespace EmbeddedScripts {
+
+// 1. Script sửa lỗi mạng (DNS, Winsock, TCP/IP, ARP, DHCP, WinNAT/HNS)
+inline const char REPAIR_NETWORK_BAT[] = R"bat(@echo off
+setlocal EnableExtensions
+chcp 65001 >nul
+set "failed=0"
+
+echo [1/6] Xoa bo dem DNS...
+ipconfig /flushdns >nul 2>&1
+if errorlevel 1 set "failed=1"
+
+echo [2/6] Dat lai Winsock Catalog...
+netsh winsock reset >nul 2>&1
+if errorlevel 1 set "failed=1"
+
+echo [3/6] Dat lai ngan xep TCP/IP...
+netsh int ip reset >nul 2>&1
+if errorlevel 1 set "failed=1"
+
+echo [4/6] Xoa bang ARP Cache...
+netsh interface ip delete arpcache >nul 2>&1
+if errorlevel 1 set "failed=1"
+
+echo [5/6] Lam moi dia chi IP (DHCP)...
+ipconfig /release >nul 2>&1
+ipconfig /renew >nul 2>&1
+
+echo [6/6] Khoi dong lai WinNAT va HNS...
+net stop winnat >nul 2>&1
+net start winnat >nul 2>&1
+net stop hns >nul 2>&1
+net start hns >nul 2>&1
+
+exit /b %failed%
+)bat";
+
+// 2. Script làm sạch và khôi phục Windows Update
+inline const char RESET_WINDOWS_UPDATE_BAT[] = R"bat(@echo off
+setlocal EnableExtensions
+chcp 65001 >nul
+set "failed=0"
+
+echo [1/3] Dung cac dich vu Windows Update...
+net stop wuauserv >nul 2>&1
+net stop cryptSvc >nul 2>&1
+net stop bits >nul 2>&1
+net stop msiserver >nul 2>&1
+
+echo [2/3] Xoa cache cap nhat ton dong...
+del /f /q "%windir%\SoftwareDistribution\*.*" >nul 2>&1
+rd /s /q "%windir%\SoftwareDistribution" >nul 2>&1
+rd /s /q "%windir%\System32\catroot2" >nul 2>&1
+
+if exist "%windir%\SoftwareDistribution" set "failed=1"
+if exist "%windir%\System32\catroot2" set "failed=1"
+
+echo [3/3] Khoi dong lai cac dich vu...
+net start msiserver >nul 2>&1
+net start bits >nul 2>&1
+net start cryptSvc >nul 2>&1
+net start wuauserv >nul 2>&1
+
+exit /b %failed%
+)bat";
+
+// 3. Script tinh chỉnh Registry & giao diện Taskbar
+inline const char OPTIMIZE_REGISTRY_BAT[] = R"bat(@echo off
 setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul
 
@@ -74,3 +146,8 @@ if errorlevel 1 (
     exit /b 1
 )
 exit /b 0
+)bat";
+
+} // namespace EmbeddedScripts
+
+#endif // EMBEDDED_SCRIPTS_H

@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
@@ -98,8 +99,11 @@ rem 3. Bien dich truc tiep de tranh loi bien moi truong cua PowerShell Start-Pro
 echo.
 if exist "%TEMP%\cmd_build_err.log" del /f /q "%TEMP%\cmd_build_err.log" 2>nul
 
+:: Giai phong tien trinh main.exe neu dang mo de tranh bi khoa file
+taskkill /f /im main.exe >nul 2>nul
+
 echo   [BUILD] Dang bien dich CMD BOX...
-"!GXX!" -std=c++17 -O3 -fopenmp -mavx2 -mfma -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp !RES_PARAM! -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -static-libgcc -static-libstdc++ -static -s 2>"%TEMP%\cmd_build_err.log"
+"!GXX!" -std=c++17 -O3 -fopenmp -mavx2 -mfma -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\diskcleaner\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp !RES_PARAM! -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -lversion -static-libgcc -static-libstdc++ -static -s 2>"%TEMP%\cmd_build_err.log"
 
 set BUILD_RET=%errorlevel%
 
@@ -116,26 +120,14 @@ if not "!BUILD_RET!"=="0" (
 
 del /f /q "%TEMP%\cmd_build_err.log" 2>nul
 if exist "src\apps.txt" copy /y "src\apps.txt" "bin\apps.txt" >nul
-if not exist "bin\scripts" mkdir "bin\scripts"
-copy /y "scripts\optimize_registry.bat" "bin\scripts\optimize_registry.bat" >nul
-copy /y "scripts\reset_windows_update.bat" "bin\scripts\reset_windows_update.bat" >nul
-copy /y "scripts\repair_network.bat" "bin\scripts\repair_network.bat" >nul
 
 echo %C_GREEN%  [☸] Đã độ thành công: %C_YELLOW%bin\main.exe %C_GREEN%[Viên mãn - Vạn bug tiêu tán]%C_RESET%
 echo.
 
-:: 4. Tuy chon mo app
-set "RUN_APP="
+:: 4. Tu dong khoi dong lai app
 echo %C_PINK%  ========================================================================%C_RESET%
-set /p "RUN_APP=%C_CYAN%[🧘] Xuất quan khởi động main.exe luôn không? [%C_YELLOW%y%C_CYAN% = Khởi động, %C_WHITE%Enter%C_CYAN% = Thôi]: %C_RESET%"
-
-if /i "!RUN_APP!"=="y" (
-    echo.
-    echo %C_GREEN%  [⚡] Vạn sự hanh thông! Đang phóng vào app... A Di Đà Phật!%C_RESET%
-    start "" "bin\main.exe"
-) else (
-    echo.
-    echo %C_YELLOW%  [🙏] Thiện tai thiện tai! Chúc thí chủ vạn dặm bình an!%C_RESET%
-)
-
+echo %C_GREEN%  [⚡] Vạn sự hanh thông! Đang tự động khởi động lại main.exe... A Di Đà Phật!%C_RESET%
 echo.
+timeout /t 1 >nul 2>nul
+start "" "bin\main.exe"
+exit /b 0

@@ -1,4 +1,11 @@
+#include "EmbeddedScripts.h"
 #include "SystemOptimizer.h"
+#include "CleanerCore.h"
+#include "TempCleaner.h"
+#include "BrowserCleaner.h"
+#include "SystemDeepCleaner.h"
+#include "DevCleaner.h"
+#include "DownloadsCleaner.h"
 #include <iostream>
 #include <algorithm>
 #include <windows.h>
@@ -13,7 +20,7 @@ namespace fs = std::filesystem;
 // MODULE: SYSTEM OPTIMIZER (Tối ưu hóa và dọn dẹp hệ thống)
 // =========================================================================================
 
-SystemOptimizer::SystemOptimizer(SystemCore &s) : sc(s), cleaner(s) {}
+SystemOptimizer::SystemOptimizer(SystemCore &s) : sc(s) {}
 
 /**
  * =========================================================================================
@@ -271,11 +278,67 @@ static bool disableSingleStartupApp(const StartupAppInfo &item) {
  */
 void SystemOptimizer::fixWindowsUpdate() {
     cout << "\n[*] Đang reset Windows Update (Admin)...\n";
-    if (SystemCore::runBundledBatch("reset_windows_update.bat", "", true)) {
+    if (SystemCore::runEmbeddedBatch(EmbeddedScripts::RESET_WINDOWS_UPDATE_BAT, "", true)) {
         cout << "\n[✓] Đã reset Windows Update.\n";
     } else {
-        cout << "\n[!] Reset thất bại; kiểm tra quyền Admin hoặc thư mục scripts.\n";
+        cout << "\n[!] Reset thất bại; kiểm tra quyền Admin.\n";
     }
+    sc.waitEnter();
+}
+
+// --- ỦY QUYỀN DỌN RÁC SANG DISKCLEANER MỚI (STATIC API) ---
+void SystemOptimizer::runCleanChoice(int choice) {
+    if (choice < 1 || choice > 2) return;
+
+    sc.cls();
+    static const char* scopes[] = {
+        "",
+        "Plus: Temp, cache người dùng, trình duyệt, ứng dụng, hệ thống chuyên sâu và Downloads",
+        "Pro: Toàn bộ Plus và cache công cụ lập trình"
+    };
+    cout << "\n== XEM TRƯỚC TÁC VỤ DỌN DẸP ==\n"
+         << " Phạm vi : " << scopes[choice] << "\n"
+         << " Chuyên sâu: Windows Update, log hệ thống, Windows.old và hibernation (cần Admin).\n"
+         << " Khôi phục: Bộ cài Downloads được đưa vào Thùng rác; cache hệ thống không thể hoàn tác.\n\n";
+    if (!sc.confirm(" Tiếp tục thực hiện? (y/N): ")) {
+        cout << "\nĐã hủy, chưa có thay đổi nào được thực hiện.\n";
+        Sleep(600);
+        return;
+    }
+    cout << "\n";
+
+    if (choice == 1) {
+        // Plus: Temp + Browser + Deep System + Downloads
+        CleanStats total;
+        cout << "[*] Dọn temp & cache người dùng...\n";
+        CleanStats s1 = TempCleaner::clean(false);
+        total.add(s1);
+        cout << "     └── [✓] Giải phóng " << CleanerCore::formatSize(s1.bytesFreed) << "\n\n";
+
+        cout << "[*] Dọn cache trình duyệt & ứng dụng...\n";
+        CleanStats s2 = BrowserCleaner::clean(false);
+        total.add(s2);
+        cout << "     └── [✓] Giải phóng " << CleanerCore::formatSize(s2.bytesFreed) << "\n\n";
+
+        cout << "[*] Dọn hệ thống chuyên sâu...\n";
+        CleanStats s3 = SystemDeepCleaner::clean(false, false);
+        total.add(s3);
+        cout << "     └── [✓] Giải phóng " << CleanerCore::formatSize(s3.bytesFreed) << "\n\n";
+
+        cout << "[*] Dọn bộ cài Downloads...\n";
+        CleanStats s5 = DownloadsCleaner::clean(false);
+        total.add(s5);
+        cout << "     └── [✓] Recycle: " << CleanerCore::formatSize(s5.bytesRecycled)
+             << " | Xóa cứng: " << CleanerCore::formatSize(s5.bytesFreed) << "\n\n";
+
+        long long totalBytes = total.bytesFreed + total.bytesRecycled;
+        cout << "\n [✓] TỔNG DUNG LƯỢNG ĐÃ GIẢI PHÓNG: \x1b[92m" << CleanerCore::formatSize(totalBytes) << "\x1b[0m\n";
+    } else {
+        // Pro: Toàn bộ (dùng luồng tự động với dashboard)
+        DiskCleaner::runAutomaticCleanup(false);
+    }
+
+    cout << "\n";
     sc.waitEnter();
 }
 
@@ -326,10 +389,10 @@ int SystemOptimizer::optimizeBackgroundServices() {
     return disabledCount;
 }
 
-// Nhiệm vụ 3: Tối ưu Giao diện, Taskbar & Độ nhạy Windows (Kiểm tra trạng thái 0/1 trước, chỉ khởi động lại Explorer khi có thay đổi thực sự)
+// Nhiệm vụ 3: Tối ưu Giao diện, Taskbar & Độ nhạy Windows (Ghi file tạm thực thi script nhúng)
 bool SystemOptimizer::optimizeVisualEffectsAndUI() {
-    bool userSettingsOk = SystemCore::runBundledBatch("optimize_registry.bat", "user", false);
-    bool machineSettingsOk = SystemCore::runBundledBatch("optimize_registry.bat", "machine", true);
+    bool userSettingsOk = SystemCore::runEmbeddedBatch(EmbeddedScripts::OPTIMIZE_REGISTRY_BAT, "user", false);
+    bool machineSettingsOk = SystemCore::runEmbeddedBatch(EmbeddedScripts::OPTIMIZE_REGISTRY_BAT, "machine", true);
     return userSettingsOk && machineSettingsOk;
 }
 

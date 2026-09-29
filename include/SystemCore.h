@@ -33,6 +33,9 @@ public:
     static std::vector<std::string> parsePaths(const std::string& rawInput);
     static std::string urlDecode(const std::string& str);
     static bool runBatchAsAdmin(const std::string& batContent, const std::string& description = "");
+    static bool runEmbeddedBatch(const std::string& batContent,
+                                 const std::string& arguments = "",
+                                 bool requireAdmin = false);
     static bool runBundledBatch(const std::string& fileName,
                                 const std::string& arguments = "",
                                 bool requireAdmin = false);

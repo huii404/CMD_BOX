@@ -208,6 +208,35 @@ bool SystemCore::runBatchAsAdmin(const std::string& batContent, const std::strin
     return result;
 }
 
+bool SystemCore::runEmbeddedBatch(const std::string& batContent,
+                                  const std::string& arguments,
+                                  bool requireAdmin) {
+    char tempPath[MAX_PATH];
+    DWORD len = GetTempPathA(MAX_PATH, tempPath);
+    if (len == 0 || len >= MAX_PATH) return false;
+
+    std::string batPath = std::string(tempPath) + "cmd_box_temp_" + std::to_string(GetCurrentProcessId()) + "_" + std::to_string(GetTickCount()) + ".bat";
+
+    std::ofstream batFile(batPath, std::ios::binary);
+    if (!batFile) return false;
+    batFile.write(batContent.data(), batContent.size());
+    batFile.close();
+
+    std::string invocation = "\"" + batPath + "\"";
+    if (!arguments.empty()) invocation += " " + arguments;
+
+    bool result = false;
+    if (requireAdmin) {
+        result = runAdmin(invocation, true);
+    } else {
+        result = runRawCommand("cmd.exe /d /c call " + invocation);
+    }
+
+    std::error_code ec;
+    std::filesystem::remove(batPath, ec);
+    return result;
+}
+
 bool SystemCore::runBundledBatch(const std::string& fileName,
                                  const std::string& arguments,
                                  bool requireAdmin) {

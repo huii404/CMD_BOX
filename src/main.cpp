@@ -86,6 +86,7 @@ public:
              << " [3] Công cụ tự động\n"
              << " [4] Xử lý Media\n"
              << " [5] Cập nhật phần mềm\n"
+             << " [6] Biên dịch lại app\n"
              << " [0] Thoát\n\n"
              << " [Chọn]: ";
     }
@@ -101,7 +102,7 @@ public:
             int mainChoice = readInt("");
             
             if (mainChoice == 0) break;      
-            if (mainChoice < 1 || mainChoice > 5) continue;
+            if (mainChoice < 1 || mainChoice > 6) continue;
 
             int sub;
             switch (mainChoice) {
@@ -111,16 +112,16 @@ public:
                 while (true) {
                     cls();
                     cout << "== DỌN RÁC ==\n"
-                         << " [1] Xóa rác Plus: hệ thống, cache & Downloads [Admin]\n"
-                         << " [2] Xóa rác Pro : Plus + cache lập trình      [Admin]\n\n"
+                         << " [1] Xóa rác Plus\n"
+                         << " [2] Xóa rác Pro\n\n"
                          << "== TỐI ƯU ==\n"
                          << " [3] Ứng dụng khởi động\n"
-                         << " [4] Dịch vụ nền                    [Admin]\n"
-                         << " [5] Giao diện & Taskbar            [có thể restart Explorer]\n"
-                         << " [6] Tối ưu tất cả (3 -> 5)         [Admin]\n\n"
+                         << " [4] Dịch vụ nền\n"
+                         << " [5] Giao diện & Taskbar\n"
+                         << " [6] Tối ưu tất cả\n\n"
                          << "== HỆ THỐNG ==\n"
-                         << " [7] Sửa Windows Update             [Admin]\n"
-                         << " [8] Quản lý dịch vụ                 [Admin]\n"
+                         << " [7] Sửa Windows Update\n"
+                         << " [8] Quản lý dịch vụ\n"
                          << " [0] Quay lại\n"
                          << " [Chọn]: ";
                     sub = readInt("");
@@ -227,6 +228,29 @@ public:
             case 5:
                 UpdateManager::showUpdateMenu();
                 break;
+
+            // Biên dịch lại & khởi động lại qua build.bat
+            case 6: {
+                cls();
+                cout << "\n [*] Đang khởi chạy build.bat để biên dịch lại...\n";
+                fs::path batPath;
+                if (fs::exists("build.bat")) {
+                    batPath = fs::absolute("build.bat");
+                } else if (fs::exists("..\\build.bat")) {
+                    batPath = fs::absolute("..\\build.bat");
+                }
+
+                if (!batPath.empty()) {
+                    string batStr = batPath.string();
+                    string dirStr = batPath.parent_path().string();
+                    ShellExecuteA(NULL, "open", batStr.c_str(), NULL, dirStr.c_str(), SW_SHOWNORMAL);
+                    return;
+                } else {
+                    cout << "\n [!] Không tìm thấy file build.bat!\n";
+                    SystemCore::waitEnter();
+                }
+                break;
+            }
             }
         }
     }
