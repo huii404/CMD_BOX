@@ -18,7 +18,8 @@ public:
     SystemOptimizer(SystemCore &s);
 
     // --- ỦY QUYỀN SANG DISKCLEANER (API MỚI - STATIC) ---
-    void runCleanChoice(int choice);
+    void runClean();
+    void runCleanChoice(int choice = 0);
 
     // --- CÁC HÀM TỐI ƯU HIỆU NĂNG THEO NHIỆM VỤ (TASK-BASED) ---
     // Tối ưu ứng dụng khởi động (Tắt app bên thứ ba làm chậm máy, bảo vệ 100% Bộ gõ & Driver)

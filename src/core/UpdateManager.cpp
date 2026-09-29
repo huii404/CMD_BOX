@@ -16,7 +16,7 @@
 
 using namespace std;
 
-const string UpdateManager::CURRENT_VERSION = "1.3.0";
+const string UpdateManager::CURRENT_VERSION = "2.0.0";
 const string UpdateManager::API_RELEASES_URL = "https://api.github.com/repos/huii404/CMD_BOX/releases/latest";
 
 static const long long UPDATE_COOLDOWN_SECONDS = 2 * 24 * 3600; // 2 ngày (48 giờ)
@@ -304,7 +304,7 @@ void UpdateManager::showUpdateMenu() {
         } else if (choice == 2) {
             cout << "\n[*] Đang kéo mã nguồn mới nhất từ GitHub...\n\n";
             if (SystemCore::runRawCommand("git rev-parse --is-inside-work-tree")) {
-                bool pullOk = SystemCore::runRawCommand("git pull --ff-only origin main");
+                bool pullOk = SystemCore::runRawCommand("git pull --ff-only") || SystemCore::runRawCommand("git pull");
                 if (!pullOk) {
                     cout << "\n[!] Cập nhật thất bại hoặc nhánh cục bộ có thay đổi xung đột.\n";
                     SystemCore::waitEnter();

@@ -15,6 +15,19 @@
 using namespace std;
 namespace fs = std::filesystem;
 
+namespace UI {
+    inline const char* RESET   = "\x1b[0m";
+    inline const char* BOLD    = "\x1b[1m";
+    inline const char* DIM     = "\x1b[90m";
+    inline const char* RED     = "\x1b[91m";
+    inline const char* GREEN   = "\x1b[92m";
+    inline const char* YELLOW  = "\x1b[93m";
+    inline const char* BLUE    = "\x1b[94m";
+    inline const char* MAGENTA = "\x1b[95m";
+    inline const char* CYAN    = "\x1b[96m";
+    inline const char* WHITE   = "\x1b[97m";
+}
+
 class AppUI : public SystemCore {
 private:
     std::unique_ptr<Internet> internet;
@@ -71,26 +84,31 @@ public:
         bool admin = SystemCore::isElevated();
         std::string devInfo = SystemCore::getDeviceStatus();
         std::string verStatus = UpdateManager::getVersionStatusText();
-        cout << " ┌─ TRẠNG THÁI ──────────────────────────────┐\n"
-             << " │ Phiên bản : " << verStatus << "\n"
-             << " │ Quyền     : " << (admin ? "Admin" : "User") << "\n"
-             << " │ Thiết bị  : " << devInfo << "\n"
-             << " └───────────────────────────────────────────┘\n";
+
+        cout << "\n"
+             << UI::CYAN << "  ── THÔNG TIN HỆ THỐNG ────────────────────────────────\n"
+             << UI::DIM  << "   Phiên bản : " << UI::WHITE << verStatus << "\n"
+             << UI::DIM  << "   Quyền hạn : " << (admin ? (string(UI::GREEN) + "Administrator") : (string(UI::YELLOW) + "Standard User")) << "\n"
+             << UI::DIM  << "   Thiết bị  : " << UI::WHITE << devInfo << "\n"
+             << UI::CYAN << "  ──────────────────────────────────────────────────────\n"
+             << UI::RESET;
     }
 
     void mainMenu() {
         renderStatusBox();
         cout << "\n"
-             << " [1] Tối ưu hệ thống\n"
-             << " [2] Mạng & Bảo mật\n"
-             << " [3] Công cụ tự động\n"
-             << " [4] Xử lý Media\n"
-             << " [5] Cập nhật phần mềm\n"
-             << " [6] Biên dịch lại app\n"
-             << " [0] Thoát\n\n"
-             << " [Chọn]: ";
+             << UI::CYAN << "  ┌── MENU CHÍNH ───────────────────────────────────────\n"
+             << "  │ " << UI::YELLOW << " [1] " << UI::WHITE << "Tối ưu & Dọn dẹp hệ thống\n"
+             << "  │ " << UI::YELLOW << " [2] " << UI::WHITE << "Quản trị mạng & Bảo mật\n"
+             << "  │ " << UI::YELLOW << " [3] " << UI::WHITE << "Công cụ tự động & Tiện ích\n"
+             << "  │ " << UI::YELLOW << " [4] " << UI::WHITE << "Xử lý Media (FFmpeg)\n"
+             << "  │ " << UI::YELLOW << " [5] " << UI::WHITE << "Kiểm tra cập nhật phần mềm\n"
+             << "  │ " << UI::YELLOW << " [6] " << UI::WHITE << "Biên dịch lại ứng dụng\n"
+             << "  │ " << UI::RED    << " [0] " << UI::DIM   << "Thoát chương trình\n"
+             << UI::CYAN << "  └─────────────────────────────────────────────────────\n"
+             << UI::RESET << "\n"
+             << UI::BOLD << UI::CYAN << "  [Chọn]: " << UI::RESET;
     }
-
 
     void run() {
         SetConsoleTitleA("CMD BOX");
@@ -111,31 +129,36 @@ public:
             case 1:
                 while (true) {
                     cls();
-                    cout << "== DỌN RÁC ==\n"
-                         << " [1] Xóa rác Plus\n"
-                         << " [2] Xóa rác Pro\n\n"
-                         << "== TỐI ƯU ==\n"
-                         << " [3] Ứng dụng khởi động\n"
-                         << " [4] Dịch vụ nền\n"
-                         << " [5] Giao diện & Taskbar\n"
-                         << " [6] Tối ưu tất cả\n\n"
-                         << "== HỆ THỐNG ==\n"
-                         << " [7] Sửa Windows Update\n"
-                         << " [8] Quản lý dịch vụ\n"
-                         << " [0] Quay lại\n"
-                         << " [Chọn]: ";
+                    cout << "\n"
+                         << UI::CYAN << "  ┌── TỐI ƯU & DỌN DẸP HỆ THỐNG ────────────────────────\n"
+                         << "  │ " << UI::DIM    << "--- Dọn rác ---\n"
+                         << "  │ " << UI::YELLOW << " [1] " << UI::WHITE << "Dọn dẹp hệ thống toàn diện\n"
+                         << "  │\n"
+                         << "  │ " << UI::DIM    << "--- Hiệu năng ---\n"
+                         << "  │ " << UI::YELLOW << " [2] " << UI::WHITE << "Tối ưu ứng dụng khởi động\n"
+                         << "  │ " << UI::YELLOW << " [3] " << UI::WHITE << "Tắt dịch vụ nền vô ích\n"
+                         << "  │ " << UI::YELLOW << " [4] " << UI::WHITE << "Tối ưu giao diện & Taskbar\n"
+                         << "  │ " << UI::YELLOW << " [5] " << UI::GREEN << "Tối ưu toàn bộ (Khuyên dùng)\n"
+                         << "  │\n"
+                         << "  │ " << UI::DIM    << "--- Bảo trì ---\n"
+                         << "  │ " << UI::YELLOW << " [6] " << UI::WHITE << "Sửa lỗi kẹt Windows Update\n"
+                         << "  │ " << UI::YELLOW << " [7] " << UI::WHITE << "Quản lý dịch vụ hệ thống\n"
+                         << "  │\n"
+                         << "  │ " << UI::RED    << " [0] " << UI::DIM   << "Quay lại menu chính\n"
+                         << UI::CYAN << "  └─────────────────────────────────────────────────────\n"
+                         << UI::RESET << "\n"
+                         << UI::BOLD << UI::CYAN << "  [Chọn]: " << UI::RESET;
                     sub = readInt("");
                     if (sub == 0) break;
                     
                     switch (sub) {
-                    case 1:  getOptimizer().runCleanChoice(1); break;
-                    case 2:  getOptimizer().runCleanChoice(2); break;
-                    case 3:  getOptimizer().runOptimizeChoice(1); break;
-                    case 4:  getOptimizer().runOptimizeChoice(2); break;
-                    case 5:  getOptimizer().runOptimizeChoice(3); break;
-                    case 6:  getOptimizer().runOptimizeChoice(4); break;
-                    case 7:  getOptimizer().fixWindowsUpdate(); break;
-                    case 8:  getOptimizer().turnOffServicesMenu(); break;
+                    case 1:  getOptimizer().runClean(); break;
+                    case 2:  getOptimizer().runOptimizeChoice(1); break;
+                    case 3:  getOptimizer().runOptimizeChoice(2); break;
+                    case 4:  getOptimizer().runOptimizeChoice(3); break;
+                    case 5:  getOptimizer().runOptimizeChoice(4); break;
+                    case 6:  getOptimizer().fixWindowsUpdate(); break;
+                    case 7:  getOptimizer().turnOffServicesMenu(); break;
                     default: Sleep(300); break;
                     }
                 }
@@ -145,14 +168,19 @@ public:
             case 2:
                 while (true) {
                     cls();
-                    cout << " [1] Sửa mạng\n"
-                         << " [2] Bật bảo vệ\n"
-                         << " [3] Trạng thái bảo mật\n"
-                         << " [4] Mật khẩu Wi-Fi đã lưu\n"
-                         << " [5] Thiết bị Wi-Fi\n"
-                         << " [6] Truyền file LAN\n"
-                         << " [0] Quay lại\n"
-                         << " [Chọn]: ";
+                    cout << "\n"
+                         << UI::CYAN << "  ┌── QUẢN TRỊ MẠNG & BẢO MẬT ──────────────────────────\n"
+                         << "  │ " << UI::YELLOW << " [1] " << UI::WHITE << "Sửa lỗi mạng & Reset kết nối\n"
+                         << "  │ " << UI::YELLOW << " [2] " << UI::WHITE << "Kích hoạt tường lửa bảo vệ\n"
+                         << "  │ " << UI::YELLOW << " [3] " << UI::WHITE << "Kiểm tra an ninh mạng\n"
+                         << "  │ " << UI::YELLOW << " [4] " << UI::WHITE << "Xem mật khẩu Wi-Fi đã lưu\n"
+                         << "  │ " << UI::YELLOW << " [5] " << UI::WHITE << "Quét thiết bị trong mạng LAN\n"
+                         << "  │ " << UI::YELLOW << " [6] " << UI::WHITE << "Chia sẻ file cục bộ (LocalDrop)\n"
+                         << "  │\n"
+                         << "  │ " << UI::RED    << " [0] " << UI::DIM   << "Quay lại menu chính\n"
+                         << UI::CYAN << "  └─────────────────────────────────────────────────────\n"
+                         << UI::RESET << "\n"
+                         << UI::BOLD << UI::CYAN << "  [Chọn]: " << UI::RESET;
                     sub = readInt("");
                     if (sub == 0) break;
                     
@@ -172,15 +200,19 @@ public:
             case 3:
                 while (true) {
                     cls();
-                    cout << "== CÔNG CỤ ==\n"
-                         << " [1] Tự động click\n"
-                         << " [2] Gửi văn bản\n"
-                         << " [3] Dán nhiều dòng\n"
-                         << " [4] Tải phần mềm\n"
-                         << " [5] Gỡ ứng dụng rác\n"
-                         << " [6] Kiểm tra pin\n"
-                         << " [0] Quay lại\n"
-                         << " [Chọn]: ";
+                    cout << "\n"
+                         << UI::CYAN << "  ┌── CÔNG CỤ TỰ ĐỘNG & TIỆN ÍCH ───────────────────────\n"
+                         << "  │ " << UI::YELLOW << " [1] " << UI::WHITE << "Auto Clicker\n"
+                         << "  │ " << UI::YELLOW << " [2] " << UI::WHITE << "Gửi văn bản tự động\n"
+                         << "  │ " << UI::YELLOW << " [3] " << UI::WHITE << "Dán dữ liệu nhiều dòng\n"
+                         << "  │ " << UI::YELLOW << " [4] " << UI::WHITE << "Tải phần mềm nhanh\n"
+                         << "  │ " << UI::YELLOW << " [5] " << UI::WHITE << "Gỡ ứng dụng rác (Bloatware)\n"
+                         << "  │ " << UI::YELLOW << " [6] " << UI::WHITE << "Kiểm tra pin laptop\n"
+                         << "  │\n"
+                         << "  │ " << UI::RED    << " [0] " << UI::DIM   << "Quay lại menu chính\n"
+                         << UI::CYAN << "  └─────────────────────────────────────────────────────\n"
+                         << UI::RESET << "\n"
+                         << UI::BOLD << UI::CYAN << "  [Chọn]: " << UI::RESET;
                     sub = readInt("");
                     if (sub == 0) break;
 
@@ -200,15 +232,19 @@ public:
             case 4:
                 while (true) {
                     cls(); 
-                    cout << "== MEDIA ==\n"
-                         << " [1] Nén video/ảnh\n"
-                         << " [2] MP4 → MP3\n"
-                         << " [3] Đổi tốc độ video\n"
-                         << " [4] Đổi định dạng\n"
-                         << " [5] Chuẩn hóa tên file\n"
-                         << " [6] Ẩn file trong media\n"
-                         << " [0] Quay lại\n"
-                         << " [Chọn]: ";
+                    cout << "\n"
+                         << UI::CYAN << "  ┌── XỬ LÝ MEDIA (FFMPEG) ─────────────────────────────\n"
+                         << "  │ " << UI::YELLOW << " [1] " << UI::WHITE << "Nén video / hình ảnh\n"
+                         << "  │ " << UI::YELLOW << " [2] " << UI::WHITE << "Tách âm thanh (MP3)\n"
+                         << "  │ " << UI::YELLOW << " [3] " << UI::WHITE << "Đổi tốc độ phát video\n"
+                         << "  │ " << UI::YELLOW << " [4] " << UI::WHITE << "Đổi định dạng tệp\n"
+                         << "  │ " << UI::YELLOW << " [5] " << UI::WHITE << "Chuẩn hóa tên file\n"
+                         << "  │ " << UI::YELLOW << " [6] " << UI::WHITE << "Ẩn file trong media\n"
+                         << "  │\n"
+                         << "  │ " << UI::RED    << " [0] " << UI::DIM   << "Quay lại menu chính\n"
+                         << UI::CYAN << "  └─────────────────────────────────────────────────────\n"
+                         << UI::RESET << "\n"
+                         << UI::BOLD << UI::CYAN << "  [Chọn]: " << UI::RESET;
                     sub = readInt("");
                     if (sub == 0) break; 
 
@@ -273,12 +309,8 @@ public:
                  << "  main.exe --version               Xem phiên bản\n";
             return 0;
         }
-        if (command == "clean" && argc >= 3) {
-            int tier = 0;
-            if (string(argv[2]) == "1") tier = 1;
-            else if (string(argv[2]) == "2") tier = 2;
-            if (tier == 0) { cerr << "Chọn 1 (Plus) hoặc 2 (Pro).\n"; return 2; }
-            getOptimizer().runCleanChoice(tier);
+        if (command == "clean") {
+            getOptimizer().runClean();
             return 0;
         }
         if (command == "optimize" && argc >= 3) {
