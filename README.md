@@ -52,9 +52,9 @@ Chương trình được phân tách thành 4 phân hệ chính theo từng lĩn
   - *Dọn liên hoàn:* Yêu cầu xác nhận trước khi thực hiện các nhóm trên.
 - **Tăng tốc & Tối ưu Đa Tầng:**
   - *Tầng 1 (Tối ưu Khởi động):* Phân tích các khóa Registry `Run` và `RunOnce` (`HKCU` & `HKLM`). Tích hợp Whitelist thông minh bảo vệ driver phần cứng (Realtek, Waves, NVIDIA, AMD, Intel) và phần mềm điều khiển OEM (ASUS, Dell, HP, Lenovo).
-  - *Tầng 2 (Tối ưu Dịch vụ ngầm):* Vô hiệu hóa các dịch vụ ngầm không thiết yếu (Windows Telemetry, Maps Broker, Xbox Services, Error Reporting Service, DiagTrack).
+  - *Tầng 2 (Tối ưu Dịch vụ ngầm):* Giữ nhóm 8 dịch vụ cũ: MapsBroker, WalletService, RetailDemo, DiagTrack, dmwappushservice, WerSvc, RemoteRegistry và wisvc.
   - *Tầng 3 (Tối ưu Giao diện & Độ nhạy Windows):* Tùy biến nhanh thanh tác vụ Taskbar Windows 11 (Search Box, Widget, Chat/Teams, Task View, Copilot) và giảm độ trễ phản hồi UI.
-  - *Quản lý dịch vụ Windows nâng cao:* Bật/tắt trạng thái dịch vụ hệ thống linh hoạt qua Win32 Service Control API.
+  - *Quản lý dịch vụ Windows nâng cao:* Danh sách 40 dịch vụ, chọn từng mục để chuyển Manual hoặc Disabled; mô tả ảnh hưởng được hiển thị trước khi áp dụng. CMD thường xin quyền Admin cho từng dịch vụ; mở chương trình bằng quyền Admin để chạy liên tục.
 - **Sửa lỗi Windows Update:** Tạm dừng các dịch vụ điều phối cập nhật (`wuauserv`, `bits`, `cryptsvc`), giải phóng các gói dữ liệu cập nhật bị hỏng trong `SoftwareDistribution` và `catroot2`, tái kích hoạt dịch vụ về trạng thái chuẩn.
 
 ### 2. Mạng & An toàn Hệ thống (`Internet`)

@@ -514,51 +514,53 @@ bool SystemOptimizer::ServiceControlAPI(std::string serviceName, DWORD startupTy
     CloseServiceHandle(service); CloseServiceHandle(manager); return ok;
 }
 
-/**
- * =========================================================================================
- * 8. MENU QUẢN LÝ DỊCH VỤ WINDOWS (turnOffServicesMenu)
- * =========================================================================================
- * TÍNH NĂNG:
- * - Cung cấp danh sách 24 dịch vụ chạy ngầm phổ biến có thể tắt an toàn hoặc chuyển Manual:
- *   + Windows Update (wuauserv, UsoSvc, WaaSMedicSvc)
- *   + Báo cáo lỗi (WerSvc) & Thông báo ngầm (WpnService, WpnUserService)
- *   + Xbox Live services (XblAuthManager, XblGameSave, XboxNetApiSvc)
- *   + Telemetry thu thập dữ liệu (DiagTrack, dmwappushservice)
- *   + Trình cập nhật ngầm Edge (EdgeUpdate), Thử nghiệm Insider (wisvc)
- *   + Dịch vụ in ấn Spooler, Bluetooth (BthServ), Maps ngoại tuyến, Remote Registry, SysMain (Superfetch), Wallet...
- * - Cho phép chọn [A] Cấu hình tất cả thành Manual / Disabled hoặc cấu hình từng dịch vụ riêng lẻ.
- * - Tự động nâng quyền Administrator khi cần, hỗ trợ triệt để các User Service có hậu tố ngẫu nhiên.
- */
+// Quản lý 40 dịch vụ theo từng mục; xem ảnh hưởng trước khi chọn Manual/Disabled.
 void SystemOptimizer::turnOffServicesMenu() {
     sc.cls();
     struct SvcInfo { std::string name; std::string desc; };
     
     // Danh sách các dịch vụ Windows có thể tối ưu
     std::vector<SvcInfo> targetSvcs = {
-        {"CDPSvc", "Connected Devices Platform (Nền tảng Phone Link / Cross Device)"},
-        {"CDPUserSvc", "CDP User Service (Tiến trình liên kết Phone Link chạy ngầm)"},
-        {"OneSyncSvc", "Sync Host (Đồng bộ dữ liệu ngầm Phone / Mail / People)"},
-        {"wuauserv", "Windows Update (Ngăn tự động cập nhật hệ thống)"},
-        {"UsoSvc", "Update Orchestrator Service (Điều phối cập nhật Windows)"},
-        {"WaaSMedicSvc", "Windows Update Medic Service (Ngăn tự động bật lại Update)"},
-        {"WerSvc", "Windows Error Reporting Service (Báo cáo lỗi về Microsoft)"},
-        {"WpnService", "Windows Push Notifications System (Hệ thống thông báo/Widgets)"},
-        {"WpnUserService", "Windows Push Notifications User Service (Tắt WebView2 ngầm)"},
-        {"WpcSvc", "Parental Controls (Tính năng quản lý trẻ em gia đình)"},
-        {"XblAuthManager", "Xbox Live AuthManager (Xác thực tài khoản Xbox)"},
-        {"XblGameSave", "Xbox Live Game Save (Đồng bộ dữ liệu game)"},
-        {"XboxNetApiSvc", "Xbox Live Networking Service (Mạng Xbox)"},
-        {"DiagTrack", "Connected User Experiences and Telemetry (Thu thập dữ liệu ngầm)"},
-        {"dmwappushservice", "WAP Push Message Routing Service (Định tuyến trắc lượng)"},
-        {"EdgeUpdate", "Microsoft Edge Update Service (Cập nhật trình duyệt ngầm)"},
-        {"wisvc", "Windows Insider Service (Dịch vụ chương trình thử nghiệm)"},
-        {"BthServ", "Bluetooth Support Service (Tắt nếu PC không có Bluetooth)"},
-        {"MapsBroker", "Downloaded Maps Manager (Quản lý bản đồ ngoại tuyến)"},
-        {"RemoteRegistry", "Remote Registry (Cho phép sửa Registry từ xa)"},
-        {"SysMain", "Superfetch / SysMain (Nên tắt hoàn toàn nếu dùng SSD)"},
-        {"WalletService", "Wallet Service (Ví điện tử và thanh toán Windows)"},
-        {"RetailDemo", "Retail Demo Service (Chế độ demo cửa hàng trưng bày)"},
-        {"lfsvc", "Geolocation Service (Dịch vụ định vị vị trí ngầm)"}
+        {"MapsBroker", "Bản đồ ngoại tuyến — Không tự quản lý/tải bản đồ offline."},
+        {"WalletService", "Ví điện tử Windows — Ứng dụng dùng Windows Wallet có thể không hoạt động."},
+        {"RetailDemo", "Chế độ trình diễn cửa hàng — Không dùng được chế độ Retail Demo."},
+        {"DiagTrack", "Connected User Experiences / Telemetry — Giảm chức năng chẩn đoán và thu thập telemetry của dịch vụ này."},
+        {"dmwappushservice", "WAP Push / quản lý thiết bị — Có thể ảnh hưởng máy được doanh nghiệp quản lý qua MDM."},
+        {"WerSvc", "Báo cáo lỗi Windows — Không gửi báo cáo lỗi qua dịch vụ này; giảm hỗ trợ chẩn đoán."},
+        {"RemoteRegistry", "Registry từ xa — Công cụ quản trị từ xa không sửa được Registry qua dịch vụ này."},
+        {"wisvc", "Windows Insider — Ảnh hưởng chương trình nhận bản Windows thử nghiệm."},
+        {"Fax", "Gửi và nhận fax — Không gửi/nhận fax trên máy này."},
+        {"AJRouter", "AllJoyn Router — Ứng dụng/thiết bị AllJoyn không có router riêng có thể ngừng hoạt động."},
+        {"XblAuthManager", "Xác thực Xbox Live — Có thể không đăng nhập Xbox Live được trong một số game."},
+        {"XblGameSave", "Đồng bộ save Xbox Live — Save game không được đồng bộ Xbox Live."},
+        {"XboxNetApiSvc", "Mạng Xbox Live — Ảnh hưởng multiplayer và chức năng mạng Xbox Live."},
+        {"XboxGipSvc", "Phụ kiện Xbox — Có thể ảnh hưởng tay cầm/phụ kiện Xbox."},
+        {"WMPNetworkSvc", "Chia sẻ media Windows Media Player — Không chia sẻ thư viện media qua mạng."},
+        {"PhoneSvc", "Phone Service — Ảnh hưởng ứng dụng dùng chức năng điện thoại của Windows."},
+        {"lfsvc", "Định vị địa lý — Ứng dụng không lấy được vị trí qua dịch vụ này."},
+        {"CDPSvc", "Connected Devices Platform — Ảnh hưởng liên kết/chia sẻ giữa các thiết bị."},
+        {"Spooler", "In ấn / Print Spooler — Mất in ấn, gồm cả một số máy in PDF ảo."},
+        {"bthserv", "Bluetooth Support — Có thể mất kết nối/ghép đôi Bluetooth, gồm chuột và bàn phím."},
+        {"icssvc", "Mobile Hotspot — Không dùng được điểm phát Wi-Fi di động của Windows."},
+        {"SharedAccess", "Internet Connection Sharing — Ảnh hưởng chia sẻ Internet/hotspot và phần mềm phụ thuộc ICS."},
+        {"WSearch", "Windows Search / lập chỉ mục — Tìm file và tìm kiếm nội dung/Outlook có thể chậm hoặc thiếu kết quả."},
+        {"SensorDataService", "Dữ liệu cảm biến — Ứng dụng không nhận được dữ liệu cảm biến."},
+        {"SensrSvc", "Theo dõi cảm biến — Ảnh hưởng thích ứng ánh sáng và các tính năng dùng cảm biến."},
+        {"SensorService", "Quản lý cảm biến — Có thể mất tự xoay màn hình và cảm biến định hướng."},
+        {"SSDPSRV", "Phát hiện thiết bị SSDP / UPnP — Không tìm được một số TV/thiết bị media/UPnP trong LAN."},
+        {"upnphost", "UPnP Device Host — Không host được thiết bị UPnP trên máy."},
+        {"workfolderssvc", "Work Folders — Không đồng bộ Work Folders của tổ chức."},
+        {"WpcSvc", "Parental Controls — Ảnh hưởng kiểm soát trẻ em / quản lý gia đình."},
+        {"CDPUserSvc", "Connected Devices theo người dùng (mẫu) — Ảnh hưởng liên kết thiết bị; instance có hậu tố là mục riêng, không đổi tự động."},
+        {"OneSyncSvc", "Sync Host theo người dùng (mẫu) — Ảnh hưởng mail/liên hệ/lịch; instance có hậu tố không đổi tự động."},
+        {"wuauserv", "Windows Update — Ngừng cập nhật qua Windows Update; có thể thiếu bản vá."},
+        {"UsoSvc", "Update Orchestrator — Ảnh hưởng điều phối cập nhật Windows."},
+        {"WaaSMedicSvc", "Windows Update Medic — Ảnh hưởng sửa chữa Windows Update; Windows có thể từ chối quyền thay đổi."},
+        {"WpnService", "Thông báo Windows — Ảnh hưởng thông báo Windows và ứng dụng; không phải chỉ Widgets."},
+        {"WpnUserService", "Thông báo theo người dùng (mẫu) — Ảnh hưởng toast/push; instance có hậu tố không đổi tự động."},
+        {"edgeupdate", "Cập nhật Microsoft Edge — Ngừng cập nhật Edge qua dịch vụ này, gồm các bản vá bảo mật."},
+        {"edgeupdatem", "Cập nhật Edge theo yêu cầu — Ảnh hưởng cập nhật Edge qua dịch vụ theo yêu cầu."},
+        {"SysMain", "Tối ưu truy cập ứng dụng — Có thể giảm hiệu năng; SSD không phải lý do tự động tắt."},
     };
 
     while (true) {

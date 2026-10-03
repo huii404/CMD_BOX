@@ -41,7 +41,7 @@ public:
     // 3. Sửa lỗi kẹt cập nhật Windows Update
     void fixWindowsUpdate();
 
-    // 4. Các tiện ích phụ trợ & Quản lý dịch vụ
+    // 4. Quản lý 40 dịch vụ theo từng mục (Manual/Disabled)
     bool ServiceControlAPI(std::string serviceName, DWORD startupType, bool stopService);
     void turnOffServicesMenu();
 };
