@@ -1,5 +1,7 @@
 # BÁO CÁO KỸ THUẬT: LOCAL WEB DROP & AUTO-DISCOVERY BEACON
 
+> Giới hạn hiện tại: file truyền qua HTTP không mã hóa. Beacon LAN phát tên file, kích thước và token; chưa có ghép đôi xác thực. QR được tạo qua API bên thứ ba. Các mô tả bên dưới về “bảo mật”, “ghép đôi” và “Zero-Cloud” không phải bảo đảm riêng tư mật mã. Xem [bản sửa](docs/FIXES_2026-10-04.md).
+
 **Trạm truyền file P2P nội bộ & cơ chế bắn sóng tự động ghép đôi**
 
 > **Phân hệ:** `Internet` / `internet` | **Ngôn ngữ:** C++17 Native (Winsock2)

@@ -2,9 +2,9 @@
 
 > **Nền tảng:** Windows (x64) | **Ngôn ngữ:** C++17 | **Biên dịch:** MinGW-w64 (GCC / UCRT64)
 >
-> **Phiên bản:** 1.3.0
+> **Phiên bản trong source:** 2.0.0; các sửa sau review chưa phát hành.
 
-Từ phiên bản 1.0.0, các tác vụ media giữ nguyên file nguồn và ghi kết quả vào thư mục `CMD_BOX_Output` nằm cạnh file nguồn. Tác vụ dọn dẹp và tối ưu hiển thị phạm vi ảnh hưởng trước khi chạy.
+Các tác vụ media giữ nguyên file nguồn và ghi kết quả vào thư mục `CMD_BOX_Output` nằm cạnh file nguồn. Dọn tự động yêu cầu xác nhận, giữ Thùng rác và thư mục rollback Windows; chưa có manifest preview/apply/undo. Xem [bản sửa và giới hạn kiểm chứng](docs/FIXES_2026-10-04.md).
 
 Có thể mở menu như cũ hoặc gọi nhanh từ terminal:
 
@@ -12,7 +12,7 @@ Trong menu tương tác, dùng **↑/↓** để chọn và **Enter** để mở
 
 ```cmd
 main.exe --help
-main.exe clean 1
+main.exe clean
 main.exe optimize 1
 main.exe scan-network
 main.exe security-status
@@ -27,10 +27,10 @@ main.exe media
 
 **CMD BOX** là bộ công cụ dòng lệnh (CLI) hiệu năng cao dành cho quản trị, bảo trì, tối ưu hóa hệ điều hành, bảo mật mạng và xử lý đa phương tiện trên nền tảng Windows.
 
-Dự án được xây dựng hoàn toàn bằng **C++ native**, can thiệp trực tiếp qua hệ thống Win32 API, Windows Imaging Component (WIC), SIMD (AVX2, FMA) và tối ưu hóa tính toán song song với OpenMP. Phần mềm không sử dụng các dịch vụ đám mây bên thứ ba, không thu thập dữ liệu người dùng và vận hành độc lập không cần cài đặt (portable).
+Dự án dùng **C++ native**, Win32 API và OpenMP. Bản build mặc định không yêu cầu AVX2/FMA. Media cần FFmpeg; tải ứng dụng và kiểm tra release cần Internet. Web Drop dùng API QR bên thứ ba để tạo mã QR, còn nội dung file được truyền trực tiếp trong LAN.
 
 ### Đặc tính Kỹ thuật
-- **Quản lý tiến trình an toàn (Windows Job Objects):** Tất cả tiến trình con do công cụ khởi tạo đều được kiểm soát trong Job Object của hệ điều hành. Khi đóng ứng dụng hoặc nhận tín hiệu ngắt (`Ctrl + C`), toàn bộ cây tiến trình con được giải phóng triệt để, ngăn ngừa rò rỉ bộ nhớ hoặc tiến trình chạy ngầm.
+- **Quản lý tiến trình:** Runner trực tiếp dùng Job Object và timeout để dừng cây child. Lệnh UAC qua ShellExecute và một số đường gọi system/_popen không có cùng bảo đảm; xem giới hạn trong báo cáo sửa.
 - **Khởi tạo trễ (Lazy Loading):** Áp dụng mô hình con trỏ thông minh `std::unique_ptr` kết hợp cơ chế kiểm tra đa luồng (Double-Checked Locking / Thread-safe). Ứng dụng chỉ cấp phát bộ nhớ khi người dùng truy cập phân hệ tương ứng, duy trì mức chiếm dụng RAM cực thấp ở trạng thái chờ.
 - **Bảo toàn 100% Siêu dữ liệu (Metadata Preservation):** Sao chép nguyên vẹn khối siêu dữ liệu cấp thấp (EXIF, GPS tọa độ, Model máy ảnh, Ống kính, Giờ chụp) và đồng bộ ngày giờ tạo/sửa đổi tệp tin (`last_write_time`) trên hệ điều hành trùng khớp ảnh gốc.
 - **Tương thích toàn diện:** Hoạt động ổn định trên Windows 10 và Windows 11 (64-bit).
@@ -44,12 +44,12 @@ Chương trình được phân tách thành 4 phân hệ chính theo từng lĩn
 ### 1. Bảo trì & Tối ưu Hệ thống (`SystemOptimizer` & `DiskCleaner`)
 > *Xem tài liệu kỹ thuật chi tiết tại:* [README_WINDOWS_CLEANER.md](file:///g:/Code/C++/project/CMD/README_WINDOWS_CLEANER.md)
 - **Dọn rác Đa Tầng Chuyên Trách (`DiskCleaner`):**
-  - *Tầng 1 (Rác bề mặt & User Cache):* Dọn `%TEMP%`, `Windows\Temp`, `CrashDumps`, `WER Reports`, `D3DSCache`, `INetCache`, làm sạch Thùng rác và `Flush DNS`.
+  - *Tầng 1 (Rác bề mặt & User Cache):* Dọn Temp, `Windows\Temp`, `CrashDumps`, WER, D3DSCache, INetCache và Flush DNS. Giữ Thùng rác.
   - *Tầng 2 (Trình duyệt & Ứng dụng):* Quét đa profile tất cả trình duyệt Chromium (Chrome, Edge, Cốc Cốc, Brave, Vivaldi, Opera, Opera GX) và Firefox; dọn cache Discord, Telegram, NVIDIA Shader Cache.
-  - *Tầng 3 (Chuyên sâu Hệ thống):* Làm sạch `WinSxS` qua `DISM /ResetBase`, giải phóng `Windows.old`, `$WINDOWS.~BT`, `Delivery Optimization`, xóa logs sự kiện (`wevtutil`) và tắt `hiberfil`.
-  - *Tầng 4 (Môi trường lập trình):* Quét toàn bộ ổ đĩa dọn rác Dev: `node_modules`, cache NPM/Yarn/pnpm, Pip, Gradle, Rust/Cargo, Go build, VS Code và Cursor storage (bảo vệ 100% `.git`).
-  - *Tầng 5 (Quản lý Downloads Thông minh):* Phân tích bộ cài đặt `.exe`/`.msi` trong thư mục Downloads; đối chiếu Registry (`HKLM`, `HKCU`) để xóa bộ cài của ứng dụng đã cài đặt; khử trùng lặp `setup (1).exe` giữ lại bản gốc; dọn tệp tải dở dang >24h. Xóa vĩnh viễn thu hồi dung lượng thực tế (không đưa vào Recycle Bin).
-  - *Dọn liên hoàn:* Tùy chọn dọn toàn diện Hệ thống (Tầng 1+2+3+5) hoặc dọn tất cả cả 5 tầng chỉ với 1 click.
+  - *Tầng 3 (Chuyên sâu Hệ thống):* Dọn cache Windows Update sau kiểm tra trạng thái dịch vụ, Delivery Optimization và log/dump cho phép. DISM dùng `/StartComponentCleanup`; giữ Windows.old và thư mục rollback.
+  - *Tầng 4 (Môi trường lập trình):* Dọn cache công cụ. Dọn tự động không quét project; chốt engine chặn `.git`, marker bảo vệ và reparse point.
+  - *Tầng 5 (Downloads):* File trùng và bộ cài được nhận diện đưa vào Thùng rác; file tải dở đủ điều kiện được xóa trực tiếp.
+  - *Dọn liên hoàn:* Yêu cầu xác nhận trước khi thực hiện các nhóm trên.
 - **Tăng tốc & Tối ưu Đa Tầng:**
   - *Tầng 1 (Tối ưu Khởi động):* Phân tích các khóa Registry `Run` và `RunOnce` (`HKCU` & `HKLM`). Tích hợp Whitelist thông minh bảo vệ driver phần cứng (Realtek, Waves, NVIDIA, AMD, Intel) và phần mềm điều khiển OEM (ASUS, Dell, HP, Lenovo).
   - *Tầng 2 (Tối ưu Dịch vụ ngầm):* Vô hiệu hóa các dịch vụ ngầm không thiết yếu (Windows Telemetry, Maps Broker, Xbox Services, Error Reporting Service, DiagTrack).
@@ -130,24 +130,24 @@ CMD_BOX/
 
 ### 1. Yêu cầu Hệ thống
 - **Hệ điều hành:** Windows 10 hoặc Windows 11 (phiên bản 64-bit).
-- **Bộ biên dịch C++:** GCC/G++ từ bộ công cụ MinGW-w64 (MSYS2 UCRT64 hoặc MINGW64) hỗ trợ đầy đủ tiêu chuẩn **C++17**, OpenMP (`-fopenmp`) và tập lệnh vector **AVX2 + FMA**.
+- **Bộ biên dịch C++:** GCC/G++ từ MinGW-w64 (MSYS2 UCRT64 hoặc MINGW64), hỗ trợ C++17 và OpenMP.
 
 ### 2. Biên dịch Tự động
 Chỉ cần nhấp đúp chuột vào tệp script:
 ```cmd
 build.bat
 ```
-Script sẽ tự động dò tìm trình biên dịch `g++`, kích hoạt chế độ tối ưu hóa phần cứng cao nhất (`-O3 -fopenmp -mavx2 -mfma`), hiển thị hiệu ứng loading đếm giây thời gian thực và hỏi bạn có muốn mở `bin\main.exe` ngay sau khi hoàn tất hay không.
+Đóng CMD BOX trước khi build. Script dò g++, dùng `-O3 -fopenmp`, build `bin\main.next.exe` rồi thay `bin\main.exe` khi thành công và mở ứng dụng. Script không cưỡng ép kết thúc các tiến trình main.exe.
 
 ### 3. Biên dịch Thủ công qua Dòng lệnh
 Nếu muốn tự biên dịch thủ công qua Command Prompt hoặc PowerShell:
 ```cmd
-g++ -std=c++17 -O3 -fopenmp -mavx2 -mfma -Iinclude src\*.cpp -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -static-libgcc -static-libstdc++ -static -s
+g++ -std=c++17 -O3 -fopenmp -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\diskcleaner\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -lversion -static-libgcc -static-libstdc++ -static -s
 copy /y "src\apps.txt" "bin\apps.txt"
 ```
 
 *Giải thích các cờ liên kết (Linker Flags):*
-- `-mavx2 -mfma`: Tận dụng tập lệnh phần cứng AVX2 và FMA giúp tăng tốc độ xử lý điểm ảnh gấp 2-4 lần.
+- Bản mặc định không bật `-mavx2 -mfma` để chạy trên CPU không có các tập lệnh này.
 - `-fopenmp`: Kích hoạt xử lý đa luồng CPU song song cho tất cả các thuật toán đồ họa.
 - `-lws2_32 -liphlpapi`: Giao diện mạng Windows Sockets và IP Helper API.
 - `-lole32 -lwindowscodecs -loleaut32 -luuid`: Hỗ trợ giao tiếp COM và Windows Imaging Component (WIC) để giải mã ảnh và sao chép metadata.

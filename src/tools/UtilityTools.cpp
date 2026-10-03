@@ -1,3 +1,6 @@
+#include "FileSafety.h"
+#include <shlobj.h>
+#include <shellapi.h>
 #include "UtilityTools.h"
 #include <iostream>
 #include <windows.h>
@@ -209,10 +212,11 @@ void UtilityTools::autoPasteData() {
     sc.cls();
     
     int n = sc.readInt("Số dòng dữ liệu: ");
-    if (n <= 0) return;
+    if (n <= 0 || n > 100000) return;
     
     int delayMs = sc.readInt("Delay giữa các dòng (ms) [200]: ", 200);
     if (delayMs <= 0) delayMs = 200;
+    if (delayMs > 60000) { cout << "Delay tối đa 60000 ms.\n"; return; }
     
     vector<string> dataList(n);
     cout << "\nNhập " << n << " dòng dữ liệu:\n";
@@ -354,52 +358,68 @@ static string formatFileSizeStr(const string &filePath) {
 // Phân tích chuỗi số người dùng nhập (vd: "1", "1 3 5", "1,3,5", "1-5", "1-3, 5, 8-10")
 static vector<int> parseSelectedIndices(const string &input, int maxCount) {
     vector<int> result;
-    string s = input;
-    for (char &c : s) {
-        if (c == ',') c = ' ';
-    }
-    stringstream ss(s);
-    string token;
+    if (maxCount <= 0) return result;
+    auto number = [](const string& token, int& value) {
+        if (token.empty() || token.find_first_not_of("0123456789") != string::npos) return false;
+        try { size_t used = 0; value = stoi(token, &used); return used == token.size(); }
+        catch (...) { return false; }
+    };
+    vector<bool> seen(static_cast<size_t>(maxCount), false);
+    string s = input; for (char& c : s) if (c == ',') c = ' ';
+    stringstream ss(s); string token;
     while (ss >> token) {
-        size_t dashPos = token.find('-');
-        if (dashPos != string::npos && dashPos > 0 && dashPos < token.length() - 1) {
-            try {
-                int start = stoi(token.substr(0, dashPos));
-                int end = stoi(token.substr(dashPos + 1));
-                if (start > end) swap(start, end);
-                for (int i = start; i <= end; ++i) {
-                    if (i >= 1 && i <= maxCount) {
-                        result.push_back(i - 1);
-                    }
-                }
-                continue;
-            } catch (...) {}
-        }
-        try {
-            int idx = stoi(token);
-            if (idx >= 1 && idx <= maxCount) {
-                result.push_back(idx - 1);
-            }
-        } catch (...) {}
+        int start = 0, end = 0;
+        size_t dash = token.find('-');
+        if (dash == string::npos) { if (!number(token, start)) continue; end = start; }
+        else if (!number(token.substr(0, dash), start) || !number(token.substr(dash + 1), end)) continue;
+        if (start > end) swap(start, end);
+        start = (std::max)(1, start); end = (std::min)(maxCount, end);
+        // Zero-based index stays below INT_MAX, including when end == INT_MAX.
+        for (int i = start - 1; i < end; ++i) if (!seen[i]) { seen[i] = true; result.push_back(i); }
     }
+    return result;
+}
 
-    // Khử trùng lặp giữ nguyên thứ tự
-    vector<int> uniqueRes;
-    for (int idx : result) {
-        if (find(uniqueRes.begin(), uniqueRes.end(), idx) == uniqueRes.end()) {
-            uniqueRes.push_back(idx);
-        }
-    }
-    return uniqueRes;
+
+static bool downloadSafely(const AppItem& app, const string& directory, string& targetPath) {
+    if (app.url.rfind("https://", 0) != 0 || app.url.size() > 8192 ||
+        app.url.find_first_of("\"\r\n\t ") != string::npos ||
+        std::any_of(app.url.begin(), app.url.end(), [](unsigned char c) { return c < 32 || c == 127; })) return false;
+    const string& name = app.fileName;
+    if (name.empty() || name.size() > 240 || name == "." || name == ".." ||
+        name.find_first_of("<>:\"/\\|?*\r\n\t") != string::npos || name.back() == '.' || name.back() == ' ' ||
+        std::any_of(name.begin(), name.end(), [](unsigned char c) { return c < 32 || c == 127; })) return false;
+    string base = name.substr(0, name.find('.'));
+    transform(base.begin(), base.end(), base.begin(), [](unsigned char c) { return char(toupper(c)); });
+    if (base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" ||
+        (base.size() == 4 && (base.rfind("COM", 0) == 0 || base.rfind("LPT", 0) == 0) && base[3] >= '0' && base[3] <= '9')) return false;
+    const fs::path target = fs::u8path(directory) / fs::u8path(name);
+    FileSafety::AncestorLocks parents;
+    if (!parents.acquire(target)) return false;
+    // Fail instead of silently replacing an installer the user already has.
+    if (GetFileAttributesW(target.c_str()) != INVALID_FILE_ATTRIBUTES) return false;
+    FileSafety::TemporaryDirectory temporary;
+    if (!temporary) return false;
+    const auto part = temporary.path() / L"download.part";
+    string command = "curl.exe --fail --location --proto =https --proto-redir =https --connect-timeout 15 --max-time 1800 --output \"" +
+                     part.u8string() + "\" -- \"" + app.url + "\"";
+    if (!SystemCore::runRawCommand(command)) return false;
+    std::error_code ec;
+    if (!fs::is_regular_file(part, ec) || ec || fs::file_size(part, ec) == 0 || ec) return false;
+    DWORD attrs = GetFileAttributesW(part.c_str());
+    if (attrs == INVALID_FILE_ATTRIBUTES || (attrs & FILE_ATTRIBUTE_REPARSE_POINT)) return false;
+    // MoveFileEx without REPLACE_EXISTING also refuses a destination created during the download.
+    if (!MoveFileExW(part.c_str(), target.c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH)) return false;
+    targetPath = target.u8string(); return true;
 }
 
 // Trình tải & Cài đặt phần mềm tự động (Đọc từ file src/apps.txt)
 void UtilityTools::downloadManager() {
-    char* userProf = getenv("USERPROFILE");
-    string downloadDir = userProf ? (string(userProf) + "\\Downloads") : "C:\\Downloads";
-    if (!fs::exists(downloadDir)) {
-        try { fs::create_directories(downloadDir); } catch (...) {}
+    PWSTR knownPath = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_Downloads, KF_FLAG_CREATE, nullptr, &knownPath))) {
+        cout << "Không xác định được thư mục Downloads.\n"; return;
     }
+    string downloadDir = fs::path(knownPath).u8string(); CoTaskMemFree(knownPath);
 
     string configPath = resolveAppConfigPath();
     vector<AppItem> apps = loadAppsFromTxt(configPath);
@@ -449,9 +469,8 @@ void UtilityTools::downloadManager() {
             int successCount = 0;
             for (size_t i = 0; i < apps.size(); ++i) {
                 cout << "  [" << setw(2) << right << (i + 1) << "/" << apps.size() << "] Đang tải: " << apps[i].name << "...\n";
-                string targetPath = downloadDir + "\\" + apps[i].fileName;
-                string cmd = "curl -# -f -L \"" + apps[i].url + "\" -o \"" + targetPath + "\"";
-                int ret = system(cmd.c_str());
+                string targetPath;
+                int ret = downloadSafely(apps[i], downloadDir, targetPath) ? 0 : 1;
 
                 if (ret == 0 && fs::exists(targetPath)) {
                     string sizeStr = formatFileSizeStr(targetPath);
@@ -461,9 +480,6 @@ void UtilityTools::downloadManager() {
                     successCount++;
                 } else {
                     cout << "        [!] Thất bại: " << apps[i].name << "\n\n";
-                    if (fs::exists(targetPath)) {
-                        try { fs::remove(targetPath); } catch (...) {}
-                    }
                 }
             }
 
@@ -493,9 +509,8 @@ void UtilityTools::downloadManager() {
             cout << "== TẢI [" << (selectedIndices[0] + 1) << "/" << apps.size() << "] " << app.name << " ==\n"
                  << " Tệp: " << app.fileName << " | Thư mục: " << downloadDir << "\n";
 
-            string targetPath = downloadDir + "\\" + app.fileName;
-            string cmd = "curl -# -f -L \"" + app.url + "\" -o \"" + targetPath + "\"";
-            int ret = system(cmd.c_str());
+            string targetPath;
+                int ret = downloadSafely(app, downloadDir, targetPath) ? 0 : 1;
 
             if (ret == 0 && fs::exists(targetPath)) {
                 string sizeStr = formatFileSizeStr(targetPath);
@@ -503,18 +518,15 @@ void UtilityTools::downloadManager() {
                 if (!sizeStr.empty()) cout << " (Dung lượng: " << sizeStr << ")";
                 cout << "\n  [✓] Vị trí: " << targetPath << "\n\n";
 
-                cout << "  Mở file cài đặt ngay? (y/n, mặc định y): ";
+                cout << "  Mở file cài đặt ngay? (y/N): ";
                 string runChoice;
                 getline(cin, runChoice);
                 runChoice = SystemCore::trim(runChoice);
-                if (runChoice.empty() || runChoice == "y" || runChoice == "Y") {
+                if (runChoice == "y" || runChoice == "Y") {
                     ShellExecuteA(NULL, "open", targetPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
                 }
             } else {
                 cout << "\n  [!] Tải thất bại! Kiểm tra kết nối mạng hoặc link tải.\n";
-                if (fs::exists(targetPath)) {
-                    try { fs::remove(targetPath); } catch (...) {}
-                }
                 sc.waitEnter();
             }
         } else {
@@ -526,9 +538,8 @@ void UtilityTools::downloadManager() {
             for (size_t i = 0; i < selectedIndices.size(); ++i) {
                 const auto &app = apps[selectedIndices[i]];
                 cout << "  [" << (i + 1) << "/" << selectedIndices.size() << "] Đang tải: " << app.name << " (" << app.fileName << ")...\n";
-                string targetPath = downloadDir + "\\" + app.fileName;
-                string cmd = "curl -# -f -L \"" + app.url + "\" -o \"" + targetPath + "\"";
-                int ret = system(cmd.c_str());
+                string targetPath;
+                int ret = downloadSafely(app, downloadDir, targetPath) ? 0 : 1;
 
                 if (ret == 0 && fs::exists(targetPath)) {
                     string sizeStr = formatFileSizeStr(targetPath);
@@ -538,9 +549,6 @@ void UtilityTools::downloadManager() {
                     successCount++;
                 } else {
                     cout << "        [!] Thất bại: " << app.name << "\n\n";
-                    if (fs::exists(targetPath)) {
-                        try { fs::remove(targetPath); } catch (...) {}
-                    }
                 }
             }
 
@@ -651,28 +659,27 @@ struct AdvancedBloatStatus {
 
 // Thực thi an toàn đoạn mã PowerShell quản trị thông qua file .ps1 tạm thời
 static bool runPowerShellScriptAsAdmin(SystemCore &sc, const string &psScript) {
-    char tempPath[MAX_PATH];
-    if (GetTempPathA(MAX_PATH, tempPath) == 0) return false;
-    string ps1Path = string(tempPath) + "cmd_bloat_task_" + to_string(GetCurrentProcessId()) + ".ps1";
-    
-    ofstream ps1File(ps1Path);
-    if (!ps1File.is_open()) return false;
-    ps1File << psScript;
-    ps1File.close();
-
-    string cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + ps1Path + "\"";
-    bool ok = sc.runAdmin(cmd, true);
-    try { fs::remove(ps1Path); } catch (...) {}
-    return ok;
+    const string wrapped = "\xEF\xBB\xBF$ErrorActionPreference = 'Stop'\ntry {\n" + psScript +
+                           "\n} catch { Write-Error $_ -ErrorAction Continue; exit 1 }\nexit 0\n";
+    FileSafety::LockedScript script(wrapped, L".ps1");
+    if (!script) return false;
+    return sc.runAdmin("powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + script.path().u8string() + "\"", true);
 }
 
 // Dò quét thực tế trên máy tính (hỗ trợ cả Appx cài đặt cho All Users và Provisioned Package)
-static void scanBloatware(vector<BloatAppInfo> &outSecondary, AdvancedBloatStatus &outAdv) {
-    char tempPath[MAX_PATH];
-    GetTempPathA(MAX_PATH, tempPath);
-    string scanFile = string(tempPath) + "cmd_installed_apps_" + to_string(GetCurrentProcessId()) + ".txt";
-    string scanCmd = "powershell.exe -NoProfile -Command \"& { (Get-AppxPackage -AllUsers).Name; (Get-AppxProvisionedPackage -Online).DisplayName; (Get-AppxProvisionedPackage -Online).PackageName } | Out-File -FilePath '" + scanFile + "' -Encoding ascii\"";
-    SystemCore::runRawCommand(scanCmd);
+static bool scanBloatware(vector<BloatAppInfo> &outSecondary, AdvancedBloatStatus &outAdv) {
+    FileSafety::TemporaryDirectory temporary;
+    if (!temporary) return false;
+    string scanFile = (temporary.path() / L"installed.txt").u8string();
+    string escaped = scanFile;
+    size_t quote = 0;
+    while ((quote = escaped.find('\'', quote)) != string::npos) { escaped.insert(quote, 1, '\''); quote += 2; }
+    const string scanScript = "$ErrorActionPreference='Stop'\ntry { & { (Get-AppxPackage -AllUsers).Name; (Get-AppxProvisionedPackage -Online).DisplayName; (Get-AppxProvisionedPackage -Online).PackageName } | Out-File -LiteralPath '" + escaped + "' -Encoding utf8 } catch { exit 1 }\nexit 0\n";
+    FileSafety::LockedScript script(scanScript, L".ps1");
+    if (!script || !SystemCore::runRawCommand("powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + script.path().u8string() + "\"")) {
+        cout << " [!] Quét Appx thất bại; cần chạy ứng dụng bằng quyền Admin để kiểm tra toàn bộ.\n";
+        return false;
+    }
 
     string installed = "";
     if (fs::exists(scanFile)) {
@@ -704,13 +711,14 @@ static void scanBloatware(vector<BloatAppInfo> &outSecondary, AdvancedBloatStatu
     outAdv.hasCortana = isProcessRunning("Cortana.exe") || (installed.find("Microsoft.549981C3F5F10") != string::npos);
     outAdv.widgetsRunning = isProcessRunning("Widgets.exe") || isProcessRunning("WidgetService.exe");
     outAdv.hasWidgets = outAdv.widgetsRunning || (installed.find("WebExperience") != string::npos);
+    return true;
 }
 
 // Luồng 1: Xử lý gỡ sạch app rác thứ cấp
-static void cleanSecondaryBloat(SystemCore &sc, const vector<BloatAppInfo> &list) {
+static bool cleanSecondaryBloat(SystemCore &sc, const vector<BloatAppInfo> &list) {
     if (list.empty()) {
         cout << " [✓] Không có ứng dụng rác thứ cấp nào cần gỡ.\n";
-        return;
+        return true;
     }
     cout << " [-] Đang gỡ bỏ " << list.size() << " ứng dụng rác thứ cấp\n";
     string psScript = "$apps = @(\n";
@@ -721,92 +729,37 @@ static void cleanSecondaryBloat(SystemCore &sc, const vector<BloatAppInfo> &list
     }
     psScript += ");\n";
     psScript += "foreach ($pkg in $apps) {\n";
-    psScript += "    Get-AppxPackage -AllUsers -Name ('*' + $pkg + '*') -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
-    psScript += "    Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like ('*' + $pkg + '*') -or $_.PackageName -like ('*' + $pkg + '*') } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue;\n";
+    psScript += "    Get-AppxPackage -AllUsers -Name ('*' + $pkg + '*') -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction Stop;\n";
+    psScript += "    Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like ('*' + $pkg + '*') -or $_.PackageName -like ('*' + $pkg + '*') } | Remove-AppxProvisionedPackage -Online -ErrorAction Stop;\n";
     psScript += "}\n";
 
-    runPowerShellScriptAsAdmin(sc, psScript);
+    if (!runPowerShellScriptAsAdmin(sc, psScript)) { cout << " [!] Gỡ ứng dụng thất bại hoặc chưa hoàn tất.\n"; return false; }
     cout << " [✓] Đã dọn sạch " << list.size() << " ứng dụng rác thứ cấp thành công!\n";
+    return true;
 }
 
 // Luồng 2: Xử lý tận gốc app rác nâng cao (Chỉ chạy khi phát hiện có trên máy)
 static void cleanAdvancedBloat(SystemCore &sc, const AdvancedBloatStatus &adv) {
-    if (!adv.hasOneDrive && !adv.hasPhoneLink && !adv.hasCortana && !adv.hasWidgets) {
-        cout << " [✓] Các ứng dụng rác nâng cao đều sạch sẽ, không có gì cần gỡ!\n";
-        return;
-    }
-
-    cout << " [-] Đang xử lý gỡ bỏ các ứng dụng nâng cao được phát hiện\n";
-    string psScript = "";
-
-    // 1. Kiểm tra & Gỡ Microsoft OneDrive nếu có
+    string script;
     if (adv.hasOneDrive) {
-        psScript += "Stop-Process -Name 'OneDrive' -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "if (Test-Path \"$env:SystemRoot\\SysWOW64\\OneDriveSetup.exe\") {\n";
-        psScript += "    Start-Process \"$env:SystemRoot\\SysWOW64\\OneDriveSetup.exe\" -ArgumentList '/uninstall' -Wait -NoNewWindow -ErrorAction SilentlyContinue;\n";
-        psScript += "} elseif (Test-Path \"$env:SystemRoot\\System32\\OneDriveSetup.exe\") {\n";
-        psScript += "    Start-Process \"$env:SystemRoot\\System32\\OneDriveSetup.exe\" -ArgumentList '/uninstall' -Wait -NoNewWindow -ErrorAction SilentlyContinue;\n";
-        psScript += "} elseif (Test-Path \"$env:LocalAppData\\Microsoft\\OneDrive\\Update\\OneDriveSetup.exe\") {\n";
-        psScript += "    Start-Process \"$env:LocalAppData\\Microsoft\\OneDrive\\Update\\OneDriveSetup.exe\" -ArgumentList '/uninstall' -Wait -NoNewWindow -ErrorAction SilentlyContinue;\n";
-        psScript += "}\n";
-        psScript += "Remove-Item -Path \"$env:LocalAppData\\Microsoft\\OneDrive\" -Recurse -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Remove-Item -Path \"$env:ProgramData\\Microsoft OneDrive\" -Recurse -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Remove-Item -Path \"C:\\OneDriveTemp\" -Recurse -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Remove-Item -Path 'HKCR:\\CLSID\\{018D5C66-4533-4307-9B53-224DE2ED1FE6}' -Recurse -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Remove-Item -Path 'HKCR:\\Wow6432Node\\CLSID\\{018D5C66-4533-4307-9B53-224DE2ED1FE6}' -Recurse -Force -ErrorAction SilentlyContinue;\n";
+        script += "$setup = @('SysWOW64\\OneDriveSetup.exe','System32\\OneDriveSetup.exe') | ForEach-Object { Join-Path $env:SystemRoot $_ } | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1;\n";
+        script += "if (-not $setup) { $setup = Join-Path $env:LocalAppData 'Microsoft\\OneDrive\\Update\\OneDriveSetup.exe' };\n";
+        script += "if (-not (Test-Path -LiteralPath $setup)) { throw 'OneDrive uninstaller missing' };\n";
+        script += "$p = Start-Process -FilePath $setup -ArgumentList '/uninstall' -Wait -PassThru; if ($p.ExitCode -ne 0) { throw 'OneDrive uninstall failed' };\n";
+        // Keep user data, sync folders and notifications intact.
     }
-
-    // 2. Kiểm tra & Gỡ Phone Link, vô hiệu hóa Service CDPUserSvc nếu có
-    if (adv.hasPhoneLink) {
-        psScript += "Stop-Process -Name 'CrossDeviceService' -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Stop-Process -Name 'PhoneExperienceHost' -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-AppxPackage -AllUsers -Name '*YourPhone*' -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-AppxPackage -AllUsers -Name '*CrossDevice*' -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like '*YourPhone*' -or $_.DisplayName -like '*CrossDevice*' } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue;\n";
-        psScript += "Stop-Service -Name 'CDPUserSvc*' -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\CDPUserSvc' -Name 'Start' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services' | Where-Object { $_.PSChildName -like 'CDPUserSvc*' } | ForEach-Object { Set-ItemProperty -Path $_.PSPath -Name 'Start' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue };\n";
-        psScript += "New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Force -ErrorAction SilentlyContinue | Out-Null;\n";
-        psScript += "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Name 'EnableMmx' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
+    vector<string> names;
+    if (adv.hasPhoneLink) { names.push_back("*YourPhone*"); names.push_back("*CrossDevice*"); }
+    if (adv.hasCortana) { names.push_back("*Cortana*"); names.push_back("*549981C3F5F10*"); }
+    if (adv.hasWidgets) names.push_back("*WebExperience*");
+    for (const auto& name : names) {
+        script += "Get-AppxPackage -AllUsers -Name '" + name + "' | Remove-AppxPackage -AllUsers -ErrorAction Stop;\n";
+        script += "Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like '" + name + "' } | Remove-AppxProvisionedPackage -Online -ErrorAction Stop;\n";
+        script += "if (Get-AppxPackage -AllUsers -Name '" + name + "') { throw 'Package remains installed' };\n";
     }
-
-    // 3. Kiểm tra & Gỡ Cortana nếu có
-    if (adv.hasCortana) {
-        psScript += "Stop-Process -Name 'Cortana' -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-AppxPackage -AllUsers -Name '*Cortana*' -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-AppxPackage -AllUsers -Name '*549981C3F5F10*' -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like '*Cortana*' -or $_.DisplayName -like '*549981C3F5F10*' } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue;\n";
-        psScript += "New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search' -Force -ErrorAction SilentlyContinue | Out-Null;\n";
-        psScript += "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search' -Name 'AllowCortana' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-    }
-
-    // 4. Kiểm tra & Gỡ Windows Widgets (Tin tức góc dưới bên trái Taskbar & Service ngầm)
-    if (adv.hasWidgets) {
-        psScript += "Stop-Process -Name 'Widgets','WidgetService' -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-AppxPackage -AllUsers -Name '*WebExperience*' -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like '*WebExperience*' -or $_.PackageName -like '*WebExperience*' } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue;\n";
-        psScript += "Stop-Service -Name 'WpnService' -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Stop-Service -Name 'WpnUserService*' -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\WpnService' -Name 'Start' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services' | Where-Object { $_.PSChildName -like 'WpnUserService*' } | ForEach-Object { Set-ItemProperty -Path $_.PSPath -Name 'Start' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue };\n";
-        psScript += "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'TaskbarDa' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Dsh' -Force -ErrorAction SilentlyContinue | Out-Null;\n";
-        psScript += "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Dsh' -Name 'AllowNewsAndInterests' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Feeds' -Name 'ShellFeedsTaskbarViewMode' -Value 2 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Feeds' -Force -ErrorAction SilentlyContinue | Out-Null;\n";
-        psScript += "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Feeds' -Name 'EnableFeeds' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Stop-Process -Name 'explorer' -Force -ErrorAction SilentlyContinue;\n";
-        psScript += "Start-Process 'explorer.exe';\n";
-    }
-
-    if (!psScript.empty()) {
-        runPowerShellScriptAsAdmin(sc, psScript);
-    }
-
-    if (adv.hasOneDrive) cout << " [✓] Đã gỡ triệt để Microsoft OneDrive (tiến trình, thư mục C:, icon Explorer).\n";
-    if (adv.hasPhoneLink) cout << " [✓] Đã gỡ Phone Link & vô hiệu hóa dịch vụ ngầm CDPUserSvc.\n";
-    if (adv.hasCortana) cout << " [✓] Đã gỡ Cortana & chặn Policy tìm kiếm.\n";
-    if (adv.hasWidgets) cout << " [✓] Đã gỡ Widgets (WebExperience), tắt icon góc dưới Taskbar & vô hiệu hóa WpnService.\n";
+    if (script.empty()) return;
+    if (!runPowerShellScriptAsAdmin(sc, script)) cout << " [!] Gỡ nâng cao thất bại hoặc chưa hoàn tất.\n";
+    else cout << " [✓] Lệnh gỡ nâng cao đã hoàn tất.\n";
 }
 
 // Gỡ bỏ ứng dụng rác Bloatware (Dọn dẹp toàn diện cả 2 luồng: Thứ cấp & Nâng cao)
@@ -816,7 +769,7 @@ void UtilityTools::uninstallBloatware() {
 
     vector<BloatAppInfo> detectedSec;
     AdvancedBloatStatus advStatus;
-    scanBloatware(detectedSec, advStatus);
+    if (!scanBloatware(detectedSec, advStatus)) { sc.waitEnter(); return; }
 
     cout << "== KẾT QUẢ QUÉT ==\n";
     
@@ -858,10 +811,10 @@ void UtilityTools::uninstallBloatware() {
     }
 
     cout << "\n";
-    cleanSecondaryBloat(sc, detectedSec);
+    bool secondaryOk = cleanSecondaryBloat(sc, detectedSec);
     cleanAdvancedBloat(sc, advStatus);
 
-    cout << "\n[✓] Hoàn tất quá trình dọn dẹp toàn diện!\n";
+    cout << (secondaryOk ? "\nĐã kết thúc các tác vụ; xem kết quả từng nhóm ở trên.\n" : "\nCó tác vụ thất bại; xem kết quả ở trên.\n");
     sc.waitEnter();
 }
 

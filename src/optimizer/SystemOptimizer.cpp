@@ -1,3 +1,4 @@
+#include "FileSafety.h"
 #include "EmbeddedScripts.h"
 #include "SystemOptimizer.h"
 #include "CleanerCore.h"
@@ -53,7 +54,7 @@ struct StartupAppInfo {
 // Bộ phân tích ứng dụng khởi động thông minh
 static pair<bool, string> analyzeStartupApp(const string &name, const string &cmd) {
     string combined = name + " " + cmd;
-    transform(combined.begin(), combined.end(), combined.begin(), ::tolower);
+    transform(combined.begin(), combined.end(), combined.begin(), [](unsigned char c) { return char(std::tolower(c)); });
 
     // 1. Bộ gõ tiếng Việt (Ưu tiên số 1 - Tuyệt đối không tắt)
     if (combined.find("unikey") != string::npos || combined.find("evkey") != string::npos ||
@@ -126,7 +127,7 @@ static pair<bool, string> analyzeStartupApp(const string &name, const string &cm
     if (combined.find("telegram") != string::npos) return {false, "Telegram"};
     if (combined.find("chrome") != string::npos || combined.find("msedge") != string::npos) return {false, "Trình duyệt chạy ngầm"};
 
-    return {false, "Ứng dụng bên thứ ba"};
+    return {true, "Chưa nhận diện (giữ nguyên)"};
 }
 
 // Quét toàn bộ ứng dụng khởi động từ Registry & Thư mục Startup
@@ -171,7 +172,9 @@ static vector<StartupAppInfo> scanAllStartupApps() {
 
                 if (type == REG_SZ || type == REG_EXPAND_SZ) {
                     string nameStr(valNameBuf.data(), valNameSize);
-                    string cmdStr(valDataBuf.data());
+                    auto terminator = std::find(valDataBuf.begin(), valDataBuf.begin() + valDataSize, char(0));
+                    if (terminator == valDataBuf.begin() + valDataSize) { index++; continue; }
+                    string cmdStr(valDataBuf.begin(), terminator);
                     auto analysis = analyzeStartupApp(nameStr, cmdStr);
 
                     StartupAppInfo info;
@@ -202,7 +205,7 @@ static vector<StartupAppInfo> scanAllStartupApps() {
                 for (const auto &entry : fs::directory_iterator(startupFolder)) {
                     if (entry.is_regular_file()) {
                         string ext = entry.path().extension().string();
-                        transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                        transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return char(std::tolower(c)); });
                         if (ext == ".lnk" || ext == ".bat" || ext == ".cmd") {
                             string fName = entry.path().filename().string();
                             auto analysis = analyzeStartupApp(fName, entry.path().string());
@@ -242,9 +245,12 @@ static bool disableSingleStartupApp(const StartupAppInfo &item) {
         // Sao lưu sang subKey + "_Disabled"
         string backupKeyPath = item.subKey + "_Disabled";
         HKEY hBackup = NULL;
-        if (RegCreateKeyExA(item.hKeyRoot, backupKeyPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hBackup, NULL) != ERROR_SUCCESS) {
+        if (RegCreateKeyExA(item.hKeyRoot, backupKeyPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE | KEY_QUERY_VALUE, NULL, &hBackup, NULL) != ERROR_SUCCESS) {
             return false;
         }
+        DWORD backupSize = 0;
+        LONG exists = RegQueryValueExA(hBackup, item.name.c_str(), nullptr, nullptr, nullptr, &backupSize);
+        if (exists != ERROR_FILE_NOT_FOUND) { RegCloseKey(hBackup); return false; }
         DWORD rType = (item.regType == REG_EXPAND_SZ) ? REG_EXPAND_SZ : REG_SZ;
         LONG setRes = RegSetValueExA(hBackup, item.name.c_str(), 0, rType, (const BYTE*)item.command.c_str(), (DWORD)(item.command.length() + 1));
         RegCloseKey(hBackup);
@@ -277,12 +283,40 @@ static bool disableSingleStartupApp(const StartupAppInfo &item) {
  * - Bước 3: Khởi động lại toàn bộ dịch vụ để Windows tải lại bản update mới nguyên bản.
  */
 void SystemOptimizer::fixWindowsUpdate() {
-    cout << "\n[*] Đang reset Windows Update (Admin)...\n";
-    if (SystemCore::runEmbeddedBatch(EmbeddedScripts::RESET_WINDOWS_UPDATE_BAT, "", true)) {
-        cout << "\n[✓] Đã reset Windows Update.\n";
-    } else {
-        cout << "\n[!] Reset thất bại; kiểm tra quyền Admin.\n";
+    if (!SystemCore::confirm("Reset Windows Update: dừng dịch vụ tạm thời, giữ cache cũ làm bản dự phòng?")) return;
+    const string script = R"PS($ErrorActionPreference='Stop'
+$running = @(); $moved = @(); $failed = $false
+try {
+    $services = @('wuauserv','cryptSvc','bits','msiserver') | ForEach-Object { Get-Service -Name $_ }
+    foreach ($service in $services) {
+        if ($service.Status -eq 'Running') { $running += $service.Name }
+        elseif ($service.Status -ne 'Stopped') { throw 'Service is transitioning; try again later' }
     }
+    foreach ($name in $running) { Stop-Service -Name $name; (Get-Service -Name $name).WaitForStatus('Stopped',[TimeSpan]::FromSeconds(30)) }
+    foreach ($service in $services) { if ((Get-Service -Name $service.Name).Status -ne 'Stopped') { throw 'Service did not stop' } }
+    foreach ($path in @((Join-Path $env:SystemRoot 'SoftwareDistribution'),(Join-Path $env:SystemRoot 'System32\catroot2'))) {
+        if (Test-Path -LiteralPath $path) {
+            $item = Get-Item -LiteralPath $path -Force
+            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Cache is a reparse point' }
+            $backup = $path + '.cmd-box-backup-' + [guid]::NewGuid().ToString('N')
+            Move-Item -LiteralPath $path -Destination $backup
+            $moved += [pscustomobject]@{Original=$path; Backup=$backup}
+        }
+    }
+} catch {
+    $failed = $true; Write-Error $_ -ErrorAction Continue
+    foreach ($move in $moved) { try { if (-not (Test-Path -LiteralPath $move.Original)) { Move-Item -LiteralPath $move.Backup -Destination $move.Original } } catch { Write-Error $_ -ErrorAction Continue } }
+} finally {
+    foreach ($name in $running) {
+        try { Start-Service -Name $name; (Get-Service -Name $name).WaitForStatus('Running',[TimeSpan]::FromSeconds(30)) }
+        catch { $failed = $true; Write-Error $_ -ErrorAction Continue }
+    }
+}
+if ($failed) { exit 1 }; exit 0
+)PS";
+    FileSafety::LockedScript file(script, L".ps1");
+    bool ok = file && sc.runAdmin("powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + file.path().u8string() + "\"", true);
+    cout << (ok ? "Đã reset; cache cũ vẫn được giữ dưới tên .cmd-box-backup-*.\n" : "Reset thất bại/chưa hoàn tất; kiểm tra dịch vụ và cache dự phòng.\n");
     sc.waitEnter();
 }
 
@@ -433,83 +467,51 @@ void SystemOptimizer::multiTierPerformanceOptimize() {
  * @return bool true nếu cấu hình thành công, false nếu thất bại (thiếu quyền Admin hoặc service không tồn tại)
  */
 bool SystemOptimizer::ServiceControlAPI(std::string serviceName, DWORD startupType, bool stopService) {
-    DWORD regStart = (startupType == SERVICE_DISABLED) ? 4 : ((startupType == SERVICE_AUTO_START) ? 2 : 3);
-    std::string subKey = "SYSTEM\\CurrentControlSet\\Services\\" + serviceName;
-
-    auto stopServiceCmd = [&]() {
-        std::string stopCmd = "net stop \"" + serviceName + "\" >nul 2>&1";
-        system(stopCmd.c_str());
-    };
-
-    // 1. Kiểm tra cấu hình Registry xem đã ở đúng giá trị mong muốn chưa
-    HKEY hKeyCheck;
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subKey.c_str(), 0, KEY_READ, &hKeyCheck) == ERROR_SUCCESS) {
-        DWORD curVal = 0, sz = sizeof(curVal);
-        if (RegQueryValueExA(hKeyCheck, "Start", NULL, NULL, (LPBYTE)&curVal, &sz) == ERROR_SUCCESS) {
-            if (curVal == regStart) {
-                RegCloseKey(hKeyCheck);
-                if (stopService) {
-                    stopServiceCmd();
-                }
-                return true;
-            }
-        }
-        RegCloseKey(hKeyCheck);
+    if (serviceName.empty() || serviceName.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != string::npos ||
+        (startupType != SERVICE_DISABLED && startupType != SERVICE_DEMAND_START && startupType != SERVICE_AUTO_START)) return false;
+    if (!SystemCore::isElevated()) {
+        string mode = startupType == SERVICE_DISABLED ? "Disabled" : startupType == SERVICE_AUTO_START ? "Automatic" : "Manual";
+        string script = "$ErrorActionPreference='Stop'\ntry {\nSet-Service -Name '" + serviceName + "' -StartupType " + mode + ";\n";
+        if (stopService) script += "$s = Get-Service -Name '" + serviceName + "'; if ($s.Status -ne 'Stopped') { Stop-Service -Name $s.Name -ErrorAction Stop; $s.WaitForStatus('Stopped',[TimeSpan]::FromSeconds(30)) };\n";
+        script += "} catch { Write-Error $_ -ErrorAction Continue; exit 1 }\n";
+        FileSafety::LockedScript file(script, L".ps1");
+        if (!file || !sc.runAdmin("powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + file.path().u8string() + "\"", true)) return false;
     }
-
-    // 2. Thử qua Win32 SCM API (nếu tiến trình có đủ quyền)
-    bool scmSuccess = false;
-    SC_HANDLE scm = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT | SC_MANAGER_ENUMERATE_SERVICE);
-    if (!scm) scm = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
-    if (scm) {
-        SC_HANDLE svc = OpenServiceA(scm, serviceName.c_str(), SERVICE_QUERY_CONFIG | SERVICE_CHANGE_CONFIG | SERVICE_STOP | SERVICE_START);
-        if (svc) {
-            if (ChangeServiceConfigA(svc, SERVICE_NO_CHANGE, startupType, SERVICE_NO_CHANGE, NULL, NULL, NULL, NULL, NULL, NULL, NULL)) {
-                scmSuccess = true;
+    SC_HANDLE manager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+    if (!manager) return false;
+    DWORD access = SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS;
+    if (SystemCore::isElevated()) access |= SERVICE_CHANGE_CONFIG | (stopService ? SERVICE_STOP : 0);
+    SC_HANDLE service = OpenServiceA(manager, serviceName.c_str(), access);
+    if (!service) { CloseServiceHandle(manager); return false; }
+    bool ok = true;
+    if (SystemCore::isElevated()) {
+        ok = ChangeServiceConfigA(service, SERVICE_NO_CHANGE, startupType, SERVICE_NO_CHANGE,
+                                  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr) != FALSE;
+        if (ok && stopService) {
+            SERVICE_STATUS status{};
+            ok = QueryServiceStatus(service, &status) != FALSE;
+            if (ok && status.dwCurrentState != SERVICE_STOPPED && status.dwCurrentState != SERVICE_STOP_PENDING)
+                ok = ControlService(service, SERVICE_CONTROL_STOP, &status) != FALSE;
+            ULONGLONG deadline = GetTickCount64() + 30000;
+            while (ok && status.dwCurrentState != SERVICE_STOPPED && GetTickCount64() < deadline) {
+                Sleep(100); ok = QueryServiceStatus(service, &status) != FALSE;
             }
-            if (stopService) {
-                SERVICE_STATUS status;
-                ControlService(svc, SERVICE_CONTROL_STOP, &status);
-            }
-            CloseServiceHandle(svc);
-        }
-        CloseServiceHandle(scm);
-    }
-    if (scmSuccess) {
-        if (stopService) stopServiceCmd();
-        return true;
-    }
-
-    // 3. Thử ghi trực tiếp vào Registry
-    HKEY hKeyWrite;
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subKey.c_str(), 0, KEY_SET_VALUE, &hKeyWrite) == ERROR_SUCCESS) {
-        LONG setValRes = RegSetValueExA(hKeyWrite, "Start", 0, REG_DWORD, (const BYTE*)&regStart, sizeof(regStart));
-        RegCloseKey(hKeyWrite);
-        if (setValRes == ERROR_SUCCESS) {
-            if (stopService) stopServiceCmd();
-            return true;
+            ok = ok && status.dwCurrentState == SERVICE_STOPPED;
         }
     }
-
-    // 4. Nếu thiếu quyền Administrator, dùng cơ chế tự nâng quyền runAdmin của CMD Box
-    std::string scStart = (startupType == SERVICE_DISABLED) ? "disabled" : ((startupType == SERVICE_AUTO_START) ? "auto" : "demand");
-    std::string adminCmd = "sc config \"" + serviceName + "\" start= " + scStart + " & reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\" + serviceName + "\" /v Start /t REG_DWORD /d " + std::to_string(regStart) + " /f";
-    if (stopService) {
-        adminCmd += " & net stop \"" + serviceName + "\" >nul 2>&1";
+    DWORD required = 0;
+    QueryServiceConfigA(service, nullptr, 0, &required);
+    vector<unsigned char> buffer(required);
+    if (required < sizeof(QUERY_SERVICE_CONFIGA)) ok = false;
+    else {
+        auto config = reinterpret_cast<QUERY_SERVICE_CONFIGA*>(buffer.data());
+        ok = ok && QueryServiceConfigA(service, config, required, &required) && config->dwStartType == startupType;
     }
-    if (sc.runAdmin(adminCmd, true)) {
-        HKEY hKeyVerify;
-        if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subKey.c_str(), 0, KEY_READ, &hKeyVerify) == ERROR_SUCCESS) {
-            DWORD finalVal = 0, fsz = sizeof(finalVal);
-            LONG qRes = RegQueryValueExA(hKeyVerify, "Start", NULL, NULL, (LPBYTE)&finalVal, &fsz);
-            RegCloseKey(hKeyVerify);
-            if (qRes == ERROR_SUCCESS) {
-                return (finalVal == regStart);
-            }
-        }
-        return false;
+    if (ok && stopService) {
+        SERVICE_STATUS status{};
+        ok = QueryServiceStatus(service, &status) && status.dwCurrentState == SERVICE_STOPPED;
     }
-    return false;
+    CloseServiceHandle(service); CloseServiceHandle(manager); return ok;
 }
 
 /**
@@ -567,7 +569,7 @@ void SystemOptimizer::turnOffServicesMenu() {
                       << std::left << std::setw(30) << (targetSvcs[i].desc.substr(0, 45) + "...") 
                       << " [" << targetSvcs[i].name << "]\n";
         }
-        std::cout << "\n [A] Cấu hình tất cả\n"
+        std::cout << "\n [A] Hướng dẫn về cấu hình hàng loạt\n"
                   << " [0] Quay lại\n\n"
                   << "Chọn dịch vụ, hoặc [A]/[0]: ";
         std::string input;
@@ -580,63 +582,8 @@ void SystemOptimizer::turnOffServicesMenu() {
 
         // --- CẤU HÌNH HÀNG LOẠT TẤT CẢ DỊCH VỤ ---
         if (input == "A" || input == "a") {
-            std::cout << "\nCấu hình tất cả dịch vụ:\n"
-                      << " [1] Manual   (Chỉ khi cần)\n"
-                      << " [2] Disabled (Tắt hoàn toàn)\n"
-                      << " [0] Hủy\n\n";
-            int action = sc.readInt("Chọn: ");
-            if (action == 0) continue;
-            if (action != 1 && action != 2) {
-                std::cout << "Lựa chọn không hợp lệ! Vui lòng chọn 1 hoặc 2.\n";
-                Sleep(1000);
-                continue;
-            }
-
-            startType = (action == 1) ? SERVICE_DEMAND_START : SERVICE_DISABLED;
-            modeName = (action == 1) ? "MANUAL" : "DISABLED";
-            DWORD regVal = (action == 1) ? 3 : 4;
-            std::string scVal = (action == 1) ? "demand" : "disabled";
-
-            std::cout << "\nĐang thực thi cấu hình dịch vụ (" << modeName << ")...\n";
-
-            // Nếu chưa chạy quyền Admin, gom tất cả vào 1 batch script chạy quyền Admin duy nhất
-            if (!sc.isElevated()) {
-                std::string batContent = "@echo off\n";
-                for (const auto &s : targetSvcs) {
-                    batContent += "sc config \"" + s.name + "\" start= " + scVal + " >nul 2>&1\n";
-                    batContent += "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\" + s.name + "\" /v Start /t REG_DWORD /d " + std::to_string(regVal) + " /f >nul 2>&1\n";
-                    batContent += "net stop \"" + s.name + "\" >nul 2>&1\n";
-                    batContent += "powershell -NoProfile -Command \"Get-Service -Name '" + s.name + "*' -ErrorAction SilentlyContinue | Stop-Service -Force -ErrorAction SilentlyContinue\" >nul 2>&1\n";
-                }
-                SystemCore::runBatchAsAdmin(batContent, "Cấu hình dịch vụ hệ thống");
-            } else {
-                for (const auto &s : targetSvcs) {
-                    ServiceControlAPI(s.name, startType, true);
-                }
-            }
-
-            // Vòng lặp báo cáo kết quả: CHỈ ĐỌC (READ-ONLY), không kích hoạt UAC
-            int successCount = 0;
-            for (const auto &s : targetSvcs) {
-                DWORD curVal = 0;
-                std::string subKey = "SYSTEM\\CurrentControlSet\\Services\\" + s.name;
-                HKEY hCheck;
-                bool ok = false;
-                if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subKey.c_str(), 0, KEY_READ, &hCheck) == ERROR_SUCCESS) {
-                    DWORD sz = sizeof(curVal);
-                    if (RegQueryValueExA(hCheck, "Start", NULL, NULL, (LPBYTE)&curVal, &sz) == ERROR_SUCCESS) {
-                        ok = (curVal == regVal);
-                    }
-                    RegCloseKey(hCheck);
-                }
-                if (ok) {
-                    std::cout << "  [✓] " << modeName << ": " << s.name << "\n";
-                    successCount++;
-                } else {
-                    std::cout << "  [!] Thất bại: " << s.name << "\n";
-                }
-            }
-            std::cout << "\n[✓] Đã cấu hình " << successCount << "/" << targetSvcs.size() << " dịch vụ.\n";
+            cout << "Cấu hình hàng loạt có thể tắt cập nhật/thông báo. Hãy chọn từng dịch vụ để kiểm tra trước.\n";
+            cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
             sc.waitEnter();
         }
         // --- CẤU HÌNH TỪNG DỊCH VỤ RIÊNG LẺ THEO SỐ THỨ TỰ ---
@@ -647,7 +594,9 @@ void SystemOptimizer::turnOffServicesMenu() {
                 continue;
             }
             try {
-                int idx = std::stoi(input) - 1;
+                size_t used = 0; int selected = std::stoi(input, &used);
+                if (used != input.size() || selected < 1) throw std::invalid_argument("selection");
+                int idx = selected - 1;
                 if (idx >= 0 && idx < (int)targetSvcs.size()) {
                     sc.cls();
                     std::cout << "Dịch vụ: " << targetSvcs[idx].desc << " [" << targetSvcs[idx].name << "]\n\n"
@@ -666,7 +615,7 @@ void SystemOptimizer::turnOffServicesMenu() {
                     modeName = (action == 1) ? "MANUAL" : "DISABLED";
 
                     std::cout << "\nĐang xử lý " << targetSvcs[idx].name << "\n";
-                    if (ServiceControlAPI(targetSvcs[idx].name, startType, true)) {
+                    if (ServiceControlAPI(targetSvcs[idx].name, startType, startType == SERVICE_DISABLED)) {
                         std::cout << "Đã chuyển sang: " << modeName << "\n";
                     } else {
                         std::cout << "Thất bại! Cần quyền Administrator.\n";

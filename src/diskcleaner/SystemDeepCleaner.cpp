@@ -1,3 +1,4 @@
+#include "FileSafety.h"
 #include "SystemDeepCleaner.h"
 #include <iostream>
 #include <vector>
@@ -18,7 +19,10 @@ bool queryServiceRunning(const wchar_t* serviceName, bool& running) {
     bool ok = QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO,
                                    reinterpret_cast<LPBYTE>(&status), sizeof(status),
                                    &bytesNeeded) != FALSE;
-    if (ok) running = status.dwCurrentState == SERVICE_RUNNING;
+    if (ok) {
+        running = status.dwCurrentState == SERVICE_RUNNING;
+        ok = running || status.dwCurrentState == SERVICE_STOPPED;
+    }
     CloseServiceHandle(service);
     CloseServiceHandle(scm);
     return ok;
@@ -33,66 +37,47 @@ CleanStats SystemDeepCleaner::clean(bool dryRun, bool runDismCleanup) {
         return stats;
     }
 
-    std::string sysDrive = CleanerCore::getSystemDriveRoot();
-    char* sysRootEnv = std::getenv("SYSTEMROOT");
-    char* progDataEnv = std::getenv("PROGRAMDATA");
-    std::string sysRoot = sysRootEnv ? std::string(sysRootEnv) : "C:\\Windows";
-    std::string progData = progDataEnv ? std::string(progDataEnv) : "C:\\ProgramData";
+    std::string sysRoot = FileSafety::windowsDirectory();
+    std::string progData = FileSafety::knownFolder(FOLDERID_ProgramData);
+    if (sysRoot.empty() || progData.empty()) { stats.errorsCount++; return stats; }
 
     // 1. Dọn dẹp cache tải về của Windows Update
     std::string wuDownloadPath = sysRoot + "\\SoftwareDistribution\\Download";
     
-    // RAII Scope Guard: Đảm bảo các dịch vụ cập nhật luôn được khôi phục dù có sự cố xảy ra
-    struct WuServiceGuard {
-        bool restartBits = false;
-        bool restartWuauserv = false;
-        ~WuServiceGuard() {
-            if (restartBits) {
-                CleanerCore::runCommand("net start bits >nul 2>&1", true);
+    // Abort cache deletion if service state cannot be established/stopped.
+    {
+        struct WuServiceGuard {
+            CleanStats& stats;
+            bool bits = false, update = false;
+            ~WuServiceGuard() {
+                if (bits && !CleanerCore::runCommand("net start bits >nul 2>&1", true)) stats.errorsCount++;
+                if (update && !CleanerCore::runCommand("net start wuauserv >nul 2>&1", true)) stats.errorsCount++;
             }
-            if (restartWuauserv) {
-                CleanerCore::runCommand("net start wuauserv >nul 2>&1", true);
+        } guard{stats};
+        bool ready = true;
+        if (!dryRun) {
+            bool update = false, bits = false;
+            ready = queryServiceRunning(L"wuauserv", update) && queryServiceRunning(L"bits", bits);
+            if (ready && update) {
+                guard.update = true;
+                ready = CleanerCore::runCommand("net stop wuauserv >nul 2>&1", true);
             }
+            if (ready && bits) {
+                guard.bits = true;
+                ready = CleanerCore::runCommand("net stop bits >nul 2>&1", true);
+            }
+            bool stillUpdate = true, stillBits = true;
+            ready = ready && queryServiceRunning(L"wuauserv", stillUpdate) &&
+                    queryServiceRunning(L"bits", stillBits) && !stillUpdate && !stillBits;
         }
-    } wuGuard;
-
-    if (!dryRun) {
-        // Chỉ khởi động lại những dịch vụ vốn đang chạy trước tác vụ.
-        bool wuauservRunning = false;
-        bool bitsRunning = false;
-        if (queryServiceRunning(L"wuauserv", wuauservRunning) && wuauservRunning) {
-            wuGuard.restartWuauserv = CleanerCore::runCommand("net stop wuauserv >nul 2>&1", true);
-        }
-        if (queryServiceRunning(L"bits", bitsRunning) && bitsRunning) {
-            wuGuard.restartBits = CleanerCore::runCommand("net stop bits >nul 2>&1", true);
-        }
-    }
-
-    CleanerCore::wipeFolderContents(wuDownloadPath, dryRun, stats);
-
-    // Không restart service thủ công ở đây — RAII WuServiceGuard destructor
-    // sẽ tự restart đúng lúc khi hàm này kết thúc (sau tất cả các bước dọn).
+        if (ready) CleanerCore::wipeFolderContents(wuDownloadPath, dryRun, stats);
+        else stats.itemsSkipped++;
+    } // Restore services before subsequent cleanup and DISM.
 
     // 2. Dọn Delivery Optimization Cache
     CleanerCore::wipeFolderContents(progData + "\\Microsoft\\Windows\\DeliveryOptimization\\Cache", dryRun, stats);
 
-    // 3. Tồn dư các bản cập nhật lớn: $WINDOWS.~BT, $WINDOWS.~WS, Windows.old
-    std::vector<std::string> upgradeRemnants = {
-        sysDrive + "$WINDOWS.~BT",
-        sysDrive + "$WINDOWS.~WS",
-        sysDrive + "Windows.old"
-    };
-
-    for (const auto& remDirStr : upgradeRemnants) {
-        fs::path remPath(remDirStr);
-        std::error_code ec;
-        if (fs::exists(remPath, ec)) {
-            if (!dryRun) {
-                CleanerCore::takeOwnershipAndGrantAdmin(remPath);
-            }
-            CleanerCore::forceDeleteFolder(remPath, dryRun, stats);
-        }
-    }
+    // Giữ Windows.old và các thư mục rollback; dọn cache không được phá khả năng khôi phục.
 
     // 4. Log cài đặt Windows & Kernel Dumps
     std::vector<std::string> logAndDumpFolders = {

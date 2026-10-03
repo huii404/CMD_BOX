@@ -17,6 +17,10 @@
 #pragma comment(lib, "ws2_32.lib")
 
 using namespace std;
+static unsigned short readNetworkWord(const char* data) {
+    return (static_cast<unsigned char>(data[0]) << 8) | static_cast<unsigned char>(data[1]);
+}
+
 
 // Cache IP nội bộ
 static string cachedScannerIP = "";
@@ -163,7 +167,7 @@ string NetworkScanner::queryNetBiosName(const string& ipStr) {
         int offset = 57;
         for (int i = 0; i < numNames && offset + 18 <= recvLen; i++) {
             unsigned char nameType = (unsigned char)buf[offset + 15];
-            unsigned short flags = ntohs(*(unsigned short*)(buf + offset + 16));
+            unsigned short flags = readNetworkWord(buf + offset + 16);
             bool isGroup = (flags & 0x8000) != 0;
             if (!isGroup && nameType == 0x00) {
                 char name[16] = {0};
@@ -235,10 +239,10 @@ string NetworkScanner::queryLocalDnsPtr(const string& ipStr, const string& route
     // Xác thực Transaction ID (0x24 0x68)
     if ((unsigned char)recvBuf[0] != 0x24 || (unsigned char)recvBuf[1] != 0x68) return "";
 
-    unsigned short flags = ntohs(*(unsigned short*)(recvBuf + 2));
-    if ((flags & 0x8000) == 0 || (flags & 0x000F) != 0) return "";
+    unsigned short flags = readNetworkWord(recvBuf + 2);
+    if ((flags & 0x8000) == 0 || (flags & 0x0200) != 0 || (flags & 0x000F) != 0) return "";
 
-    unsigned short anCount = ntohs(*(unsigned short*)(recvBuf + 6));
+    unsigned short anCount = readNetworkWord(recvBuf + 6);
     if (anCount == 0) return "";
 
     int ansIdx = idx;
@@ -252,9 +256,9 @@ string NetworkScanner::queryLocalDnsPtr(const string& ipStr, const string& route
     }
 
     if (ansIdx + 10 > recvLen) return "";
-    unsigned short aType = ntohs(*(unsigned short*)(recvBuf + ansIdx));
+    unsigned short aType = readNetworkWord(recvBuf + ansIdx);
     ansIdx += 8;
-    unsigned short dataLen = ntohs(*(unsigned short*)(recvBuf + ansIdx));
+    unsigned short dataLen = readNetworkWord(recvBuf + ansIdx);
     ansIdx += 2;
 
     if (aType != 12 || ansIdx + dataLen > recvLen) return "";
@@ -266,7 +270,7 @@ string NetworkScanner::queryLocalDnsPtr(const string& ipStr, const string& route
         unsigned char len = (unsigned char)recvBuf[rIdx++];
         if (len == 0) break;
         if ((len & 0xC0) == 0xC0) {
-            if (rIdx >= recvLen) break;
+            if (rIdx >= recvLen) return "";
             int ptrOffset = ((len & 0x3F) << 8) | (unsigned char)recvBuf[rIdx++];
             if (ptrOffset < recvLen) {
                 rIdx = ptrOffset;
@@ -276,12 +280,14 @@ string NetworkScanner::queryLocalDnsPtr(const string& ipStr, const string& route
                 break;
             }
         }
+        if ((len & 0xC0) || len > 63 || rIdx + len > recvLen || hostname.size() + len + 1 > 253) return "";
         if (!hostname.empty()) hostname += ".";
         for (int i = 0; i < len && rIdx < recvLen; ++i) {
             hostname += recvBuf[rIdx++];
         }
     }
 
+    if (hops >= 10 || rIdx > recvLen || rIdx == 0 || recvBuf[rIdx - 1] != 0) return "";
     size_t firstDot = hostname.find('.');
     if (firstDot != string::npos) {
         string tld = hostname.substr(firstDot);

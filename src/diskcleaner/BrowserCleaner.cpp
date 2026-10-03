@@ -1,3 +1,4 @@
+#include "FileSafety.h"
 #include "BrowserCleaner.h"
 #include <iostream>
 #include <vector>
@@ -10,8 +11,8 @@ CleanStats BrowserCleaner::clean(bool dryRun) {
     char* appEnv = std::getenv("APPDATA");
     if (!localAppEnv && !appEnv) return stats;
 
-    std::string baseLocal = localAppEnv ? std::string(localAppEnv) : "";
-    std::string baseApp   = appEnv ? std::string(appEnv) : "";
+    std::string baseLocal = localAppEnv ? FileSafety::knownFolder(FOLDERID_LocalAppData) : "";
+    std::string baseApp   = appEnv ? FileSafety::knownFolder(FOLDERID_RoamingAppData) : "";
 
     // 1. Danh sách các trình duyệt Chromium phổ biến
     std::vector<std::string> chromiumBases;
@@ -116,43 +117,7 @@ CleanStats BrowserCleaner::clean(bool dryRun) {
     // LƯU Ý BẢO VỆ: Giữ nguyên tuyệt đối Database chat (*.db), lịch sử tin nhắn và phiên đăng nhập.
 
     if (!baseLocal.empty()) {
-        // A. Xóa các bản cài đặt cũ còn tồn đọng sau khi Zalo tự cập nhật (thường chiếm > 500MB)
-        // Ví dụ: Zalo-26.8.20 cũ vẫn nằm cạnh Zalo-26.9.10 đang chạy.
-        fs::path zaloPrograms = fs::path(baseLocal) / "Programs" / "Zalo";
-        std::error_code ec;
-        if (fs::exists(zaloPrograms, ec)) {
-            std::vector<fs::path> versionDirs;
-            for (const auto& entry : fs::directory_iterator(zaloPrograms, fs::directory_options::skip_permission_denied, ec)) {
-                if (ec) { ec.clear(); continue; }
-                if (entry.is_directory(ec)) {
-                    std::string name = entry.path().filename().string();
-                    if (name.rfind("Zalo-", 0) == 0) {
-                        versionDirs.push_back(entry.path());
-                    }
-                }
-            }
-
-            // Nếu có từ 2 bản cài đặt trở lên, giữ lại bản mới nhất, xóa các bản cũ
-            if (versionDirs.size() > 1) {
-                auto latestIt = std::max_element(versionDirs.begin(), versionDirs.end(),
-                    [](const fs::path& a, const fs::path& b) {
-                        std::error_code e1, e2;
-                        auto t1 = fs::last_write_time(a, e1);
-                        auto t2 = fs::last_write_time(b, e2);
-                        if (!e1 && !e2) return t1 < t2;
-                        return a.filename().string() < b.filename().string();
-                    });
-
-                for (const auto& p : versionDirs) {
-                    if (p != *latestIt) {
-                        CleanerCore::forceDeleteFolder(p, dryRun, stats);
-                    }
-                }
-            }
-        }
-
-        // B. Gói cài đặt update đã tải xong còn tồn dư của Zalo updater (chiếm ~180MB installer.exe)
-        CleanerCore::wipeFolderContents(baseLocal + "\\zalo-updater", dryRun, stats);
+        // Giữ nguyên các bản cài Zalo và gói updater: mtime không xác định bản đang dùng.
 
         // C. Bộ đệm file tải tạm xem trước của Zalo (TempDownloads)
         CleanerCore::wipeFolderContents(baseLocal + "\\Temp\\Zalo Temp", dryRun, stats);

@@ -1,3 +1,4 @@
+#include "FileSafety.h"
 #include "DevCleaner.h"
 #include <vector>
 #include <string>
@@ -6,7 +7,7 @@ std::vector<fs::path> DevCleaner::detectDevScanRoots() {
     std::vector<fs::path> scanRoots;
 
     char* userProfileEnv = std::getenv("USERPROFILE");
-    std::string baseUser = userProfileEnv ? std::string(userProfileEnv) : "";
+    std::string baseUser = userProfileEnv ? FileSafety::knownFolder(FOLDERID_Profile) : "";
 
     // Duyệt qua các ổ đĩa cố định (Fixed Drives)
     DWORD driveMask = GetLogicalDrives();
@@ -136,9 +137,9 @@ CleanStats DevCleaner::clean(bool dryRun, bool scanProjects) {
     char* appEnv = std::getenv("APPDATA");
     char* userProfileEnv = std::getenv("USERPROFILE");
 
-    std::string baseLocal = localAppEnv ? std::string(localAppEnv) : "";
-    std::string baseApp   = appEnv ? std::string(appEnv) : "";
-    std::string baseUser  = userProfileEnv ? std::string(userProfileEnv) : "";
+    std::string baseLocal = localAppEnv ? FileSafety::knownFolder(FOLDERID_LocalAppData) : "";
+    std::string baseApp   = appEnv ? FileSafety::knownFolder(FOLDERID_RoamingAppData) : "";
+    std::string baseUser  = userProfileEnv ? FileSafety::knownFolder(FOLDERID_Profile) : "";
 
     // 1. Python Caches (pip)
     if (!baseLocal.empty()) {

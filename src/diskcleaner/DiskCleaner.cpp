@@ -213,6 +213,10 @@ CleanStats DiskCleaner::runScope(CleanScope scope, bool dryRun) {
 
 
 void DiskCleaner::runAutomaticCleanup(bool waitAtEnd) {
+    std::cout << "Dọn cache và đưa file Downloads trùng vào Thùng rác. Tiếp tục? (y/N): ";
+    std::string answer;
+    if (!std::getline(std::cin, answer) || (answer != "y" && answer != "Y")) return;
+
     std::vector<AutoStageResult> stages = {
         {"Temp & Cache cơ bản",        {}},
         {"Trình duyệt & Zalo PC",      {}},
@@ -247,7 +251,7 @@ void DiskCleaner::runAutomaticCleanup(bool waitAtEnd) {
         renderAutoDashboard(stages, 3, false);
     }
 
-    executeStage(3, [] { return DevCleaner::clean(false, true); });
+    executeStage(3, [] { return DevCleaner::clean(false, false); });
     // Downloads luôn cuối để file vừa vào Recycle Bin không bị dọn tiếp.
     executeStage(4, [] { return DownloadsCleaner::clean(false); });
 

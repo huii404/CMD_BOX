@@ -1,4 +1,6 @@
 #include "SystemCore.h"
+#include "ProcessRunner.h"
+#include "FileSafety.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -71,39 +73,7 @@ std::string SystemCore::formatSize(long long b) {
     return std::string(buf);
 }
 
-bool SystemCore::runRawCommand(const std::string& command) {
-    int wchars_num = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, NULL, 0);
-    if (wchars_num == 0) return false;
-    
-    std::vector<wchar_t> wcmd(wchars_num);
-    if (MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, wcmd.data(), wchars_num) == 0) return false;
-
-    STARTUPINFOW si = {sizeof(si)};
-    PROCESS_INFORMATION pi = {};
-    si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-    si.wShowWindow = SW_HIDE;
-    
-    SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
-    HANDLE hNull = CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_WRITE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hNull != INVALID_HANDLE_VALUE) {
-        si.hStdOutput = hNull;
-        si.hStdError = hNull;
-        si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-    }
-    
-    bool success = false;
-    if (CreateProcessW(NULL, wcmd.data(), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
-        WaitForSingleObject(pi.hProcess, INFINITE);
-        DWORD exitCode = 0;
-        if (GetExitCodeProcess(pi.hProcess, &exitCode)) {
-            success = (exitCode == 0);
-        }
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-    }
-    if (hNull != INVALID_HANDLE_VALUE) CloseHandle(hNull);
-    return success;
-}
+bool SystemCore::runRawCommand(const std::string& command) { return ProcessRunner::run(command); }
 
 std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
     std::string str = trim(rawInput);
@@ -194,47 +164,20 @@ std::string SystemCore::urlDecode(const std::string& str) {
 }
 
 bool SystemCore::runBatchAsAdmin(const std::string& batContent, const std::string& description) {
-    char tempPath[MAX_PATH];
-    GetTempPathA(MAX_PATH, tempPath);
-    std::string batPath = std::string(tempPath) + "SystemCoreBatch_" + std::to_string(GetCurrentProcessId()) + ".bat";
-    
-    std::ofstream batFile(batPath);
-    if (!batFile) return false;
-    batFile << "@echo off\nchcp 65001 >nul\n" << batContent << "\nexit /b %ERRORLEVEL%\n";
-    batFile.close();
-
-    bool result = SystemCore::runAdmin("\"" + batPath + "\"", true);
-    std::filesystem::remove(batPath);
-    return result;
+    (void)description;
+    FileSafety::LockedScript script("@echo off\r\nchcp 65001 >nul\r\n" + batContent + "\r\nexit /b %ERRORLEVEL%\r\n", L".bat");
+    if (!script) return false;
+    return runAdmin("call \"" + script.path().u8string() + "\"", true);
 }
 
 bool SystemCore::runEmbeddedBatch(const std::string& batContent,
                                   const std::string& arguments,
                                   bool requireAdmin) {
-    char tempPath[MAX_PATH];
-    DWORD len = GetTempPathA(MAX_PATH, tempPath);
-    if (len == 0 || len >= MAX_PATH) return false;
-
-    std::string batPath = std::string(tempPath) + "cmd_box_temp_" + std::to_string(GetCurrentProcessId()) + "_" + std::to_string(GetTickCount()) + ".bat";
-
-    std::ofstream batFile(batPath, std::ios::binary);
-    if (!batFile) return false;
-    batFile.write(batContent.data(), batContent.size());
-    batFile.close();
-
-    std::string invocation = "\"" + batPath + "\"";
+    FileSafety::LockedScript script(batContent, L".bat");
+    if (!script) return false;
+    std::string invocation = "call \"" + script.path().u8string() + "\"";
     if (!arguments.empty()) invocation += " " + arguments;
-
-    bool result = false;
-    if (requireAdmin) {
-        result = runAdmin(invocation, true);
-    } else {
-        result = runRawCommand("cmd.exe /d /c call " + invocation);
-    }
-
-    std::error_code ec;
-    std::filesystem::remove(batPath, ec);
-    return result;
+    return requireAdmin ? runAdmin(invocation, true) : runRawCommand("cmd.exe /d /c " + invocation);
 }
 
 bool SystemCore::runBundledBatch(const std::string& fileName,
@@ -310,7 +253,10 @@ int SystemCore::readInt(const std::string &prompt, int defaultValue) {
         }
         
         try {
-            return std::stoi(line);
+            size_t consumed = 0;
+            int value = std::stoi(line, &consumed);
+            if (consumed != line.size()) throw std::invalid_argument("trailing input");
+            return value;
         } catch (...) {
             std::cout << "Số không hợp lệ.\n";
         }
@@ -318,22 +264,7 @@ int SystemCore::readInt(const std::string &prompt, int defaultValue) {
 }
 
 // Thực thi lệnh hệ thống
-void SystemCore::runCMD(const std::string &cmd) {
-    STARTUPINFOA si = {sizeof(si)};
-    PROCESS_INFORMATION pi = {};
-    std::string fullCmd = "cmd.exe /c " + cmd;
-    std::vector<char> commandLine(fullCmd.begin(), fullCmd.end());
-    commandLine.push_back('\0');
-
-    if (CreateProcessA(NULL, commandLine.data(), NULL, NULL, FALSE, 
-                       CREATE_SUSPENDED, NULL, NULL, &si, &pi)) {
-        AssignProcessToJobObject(hJob, pi.hProcess);
-        ResumeThread(pi.hThread);
-        WaitForSingleObject(pi.hProcess, INFINITE);
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-    }
-}
+void SystemCore::runCMD(const std::string &cmd) { ProcessRunner::run("cmd.exe /d /c " + cmd, false); }
 
 bool SystemCore::isElevated() {
     bool elevated = false;
@@ -394,10 +325,11 @@ bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
         }
     }
     
-    int wlen = MultiByteToWideChar(CP_UTF8, 0, cmd.c_str(), -1, NULL, 0);
+    int wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, cmd.c_str(), -1, NULL, 0);
+    if (!wlen) return false;
     std::wstring wCmd(wlen, 0);
     MultiByteToWideChar(CP_UTF8, 0, cmd.c_str(), -1, &wCmd[0], wlen);
-    std::wstring params = L"/c " + wCmd;
+    std::wstring params = L"/d /c " + wCmd;
 
     SHELLEXECUTEINFOW sei = {sizeof(sei)};
     sei.lpVerb    = L"runas";
@@ -410,7 +342,10 @@ bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
         std::cout << "Đang chạy lệnh với quyền Admin\n";
         bool success = false;
         if (sei.hProcess) {
-            WaitForSingleObject(sei.hProcess, INFINITE);
+            if (WaitForSingleObject(sei.hProcess, 45 * 60 * 1000) != WAIT_OBJECT_0) {
+                std::cout << "Lệnh Admin quá thời gian; chưa xác nhận hoàn tất.\n";
+                CloseHandle(sei.hProcess); return false;
+            }
             DWORD exitCode = 0;
             if (GetExitCodeProcess(sei.hProcess, &exitCode)) {
                 success = (exitCode == 0);

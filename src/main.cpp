@@ -301,7 +301,7 @@ public:
             cout << "CMD BOX v" << UpdateManager::CURRENT_VERSION << "\n\n"
                  << "Cách dùng:\n"
                  << "  main.exe                         Mở menu tương tác\n"
-                 << "  main.exe clean <1-2>             Xóa rác: 1 = Plus, 2 = Pro (có xác nhận)\n"
+                 << "  main.exe clean                   Dọn cache/Downloads (có xác nhận)\n"
                  << "  main.exe optimize <1-4>          Tối ưu, có xem trước và xác nhận\n"
                  << "  main.exe scan-network            Quét thiết bị trong LAN\n"
                  << "  main.exe security-status         Kiểm tra trạng thái bảo mật\n"
@@ -310,12 +310,13 @@ public:
             return 0;
         }
         if (command == "clean") {
+            if (argc != 2) { cerr << "Dùng main.exe clean; không có mức 1/2.\n"; return 2; }
             getOptimizer().runClean();
             return 0;
         }
         if (command == "optimize" && argc >= 3) {
             int tier = 0;
-            try { tier = stoi(argv[2]); } catch (...) {}
+            try { size_t used = 0; string value = argv[2]; tier = stoi(value, &used); if (used != value.size()) tier = 0; } catch (...) {}
             if (tier < 1 || tier > 4) { cerr << "Mức tối ưu phải từ 1 đến 4.\n"; return 2; }
             getOptimizer().runOptimizeChoice(tier);
             return 0;

@@ -1,3 +1,4 @@
+#include "FileSafety.h"
 #include "TempCleaner.h"
 #include <iostream>
 #include <vector>
@@ -5,17 +6,12 @@
 CleanStats TempCleaner::clean(bool dryRun) {
     CleanStats stats;
 
-    char* tempEnv = std::getenv("TEMP");
-    char* localAppEnv = std::getenv("LOCALAPPDATA");
-    char* appEnv = std::getenv("APPDATA");
-    char* sysRootEnv = std::getenv("SYSTEMROOT");
-    char* progDataEnv = std::getenv("PROGRAMDATA");
-
-    std::string tempDir = tempEnv ? std::string(tempEnv) : "";
-    std::string localApp = localAppEnv ? std::string(localAppEnv) : "";
-    std::string appData = appEnv ? std::string(appEnv) : "";
-    std::string sysRoot = sysRootEnv ? std::string(sysRootEnv) : "C:\\Windows";
-    std::string progData = progDataEnv ? std::string(progDataEnv) : "C:\\ProgramData";
+    std::string localApp = FileSafety::knownFolder(FOLDERID_LocalAppData);
+    std::string tempDir = localApp.empty() ? "" : (fs::u8path(localApp) / "Temp").u8string();
+    std::string appData = FileSafety::knownFolder(FOLDERID_RoamingAppData);
+    std::string sysRoot = FileSafety::windowsDirectory();
+    std::string progData = FileSafety::knownFolder(FOLDERID_ProgramData);
+    if (sysRoot.empty() || progData.empty()) { stats.errorsCount++; return stats; }
 
     // 1. Thư mục Temp người dùng
     if (!tempDir.empty()) {
@@ -65,7 +61,7 @@ CleanStats TempCleaner::clean(bool dryRun) {
     }
 
     // 6. Làm rỗng Thùng rác cho phạm vi dọn nhanh và dọn toàn bộ.
-    CleanerCore::emptyRecycleBin(dryRun, stats);
+    // Thùng rác chỉ được làm rỗng bằng thao tác riêng có xác nhận.
 
     // 7. Xóa sạch cache phân giải tên miền DNS
     if (!dryRun) {

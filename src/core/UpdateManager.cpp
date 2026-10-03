@@ -64,100 +64,132 @@ static void saveCache(long long checkTime, const string& version, const string& 
 }
 
 static string extractJsonField(const string& json, const string& field) {
-    string key = "\"" + field + "\"";
-    size_t pos = json.find(key);
-    if (pos == string::npos) return "";
-    pos = json.find(":", pos + key.length());
-    if (pos == string::npos) return "";
-    pos = json.find("\"", pos + 1);
-    if (pos == string::npos) return "";
-
-    // Handle escaped quotes inside the value
-    string result;
-    for (size_t i = pos + 1; i < json.length(); ++i) {
-        if (json[i] == '\\' && i + 1 < json.length()) {
-            // Escaped character: \" \\  \/ \n \r \t etc.
-            char next = json[i + 1];
-            if (next == '"')       result += '"';
-            else if (next == '\\') result += '\\';
-            else if (next == '/')  result += '/';
-            else if (next == 'n')  result += '\n';
-            else if (next == 'r')  result += '\r';
-            else if (next == 't')  result += '\t';
-            else { result += '\\'; result += next; }
-            ++i;
-        } else if (json[i] == '"') {
-            break; // Unescaped quote = end of value
-        } else {
-            result += json[i];
+    // Walk string tokens; a null/number value must not consume the next key.
+    for (size_t pos = 0; pos < json.size();) {
+        if (json[pos++] != '"') continue;
+        string key; bool complete = false;
+        while (pos < json.size()) {
+            char c = json[pos++];
+            if (c == '"') { complete = true; break; }
+            if (c == '\\') { if (pos == json.size()) return ""; key += json[pos++]; }
+            else key += c;
         }
+        if (!complete) return "";
+        size_t value = pos;
+        while (value < json.size() && isspace(static_cast<unsigned char>(json[value]))) ++value;
+        if (key != field || value == json.size() || json[value] != ':') continue;
+        ++value;
+        while (value < json.size() && isspace(static_cast<unsigned char>(json[value]))) ++value;
+        if (value == json.size() || json[value++] != '"') return "";
+        string result;
+        while (value < json.size()) {
+            unsigned char c = json[value++];
+            if (c == '"') return result;
+            if (c < 32) return "";
+            if (c != '\\') { result += char(c); continue; }
+            if (value == json.size()) return "";
+            char escape = json[value++];
+            switch (escape) {
+                case '"': case '\\': case '/': result += escape; break;
+                case 'n': result += '\n'; break;
+                case 'r': result += '\r'; break;
+                case 't': result += '\t'; break;
+                case 'b': result += '\b'; break;
+                case 'f': result += '\f'; break;
+                case 'u': {
+                    auto hex = [](char h) -> int {
+                        if (h >= '0' && h <= '9') return h - '0';
+                        if (h >= 'a' && h <= 'f') return h - 'a' + 10;
+                        if (h >= 'A' && h <= 'F') return h - 'A' + 10;
+                        return -1;
+                    };
+                    auto word = [&](unsigned& code) {
+                        code = 0;
+                        if (value + 4 > json.size()) return false;
+                        for (int i = 0; i < 4; ++i) { int n = hex(json[value++]); if (n < 0) return false; code = code * 16 + unsigned(n); }
+                        return true;
+                    };
+                    unsigned code = 0;
+                    if (!word(code)) return "";
+                    if (code >= 0xD800 && code <= 0xDBFF) {
+                        if (value + 2 > json.size() || json.substr(value, 2) != "\\u") return "";
+                        value += 2; unsigned low = 0;
+                        if (!word(low) || low < 0xDC00 || low > 0xDFFF) return "";
+                        code = 0x10000 + (code - 0xD800) * 1024 + low - 0xDC00;
+                    } else if (code >= 0xDC00 && code <= 0xDFFF) return "";
+                    if (code < 0x80) result += char(code);
+                    else if (code < 0x800) { result += char(0xC0 | (code >> 6)); result += char(0x80 | (code & 63)); }
+                    else if (code < 0x10000) {
+                        result += char(0xE0 | (code >> 12)); result += char(0x80 | ((code >> 6) & 63)); result += char(0x80 | (code & 63));
+                    } else {
+                        result += char(0xF0 | (code >> 18)); result += char(0x80 | ((code >> 12) & 63));
+                        result += char(0x80 | ((code >> 6) & 63)); result += char(0x80 | (code & 63));
+                    }
+                    break;
+                }
+                default: return "";
+            }
+        }
+        return ""; // Unterminated string.
     }
-    return result;
+    return "";
 }
 
 static string extractCleanVersion(const string& raw) {
-    if (raw.empty()) return "";
-
-    // Nếu chuỗi có dạng cmd_base3 hoặc tương tự
-    string lower = raw;
-    for (char &c : lower) c = (char)tolower((unsigned char)c);
-    
-    // Tìm vị trí chữ số đầu tiên
-    size_t start = string::npos;
-    for (size_t i = 0; i < raw.length(); ++i) {
-        if (isdigit((unsigned char)raw[i])) {
-            start = i;
-            break;
-        }
-    }
-    if (start == string::npos) return raw;
-
-    string ver = "";
-    for (size_t i = start; i < raw.length(); ++i) {
-        char c = raw[i];
-        if (isdigit((unsigned char)c) || c == '.') {
-            ver += c;
-        } else {
-            break;
-        }
-    }
-    return ver;
+    string text = raw;
+    size_t begin = text.find_first_not_of(" \t\r\n");
+    if (begin == string::npos) return "";
+    text = text.substr(begin, text.find_last_not_of(" \t\r\n") - begin + 1);
+    if (text.rfind("cmd_base", 0) == 0) text.erase(0, 8);
+    if (!text.empty() && (text[0] == 'v' || text[0] == 'V')) text.erase(0, 1);
+    if (text.empty() || text.find_first_not_of("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-+") != string::npos) return "";
+    return text; // Retain prerelease identifiers; comparison validates the core.
 }
 
 static vector<int> parseVersionParts(string v) {
-    if (!v.empty() && (v[0] == 'v' || v[0] == 'V')) v = v.substr(1);
-    
-    // Xử lý tiền tố cmd_base nếu còn sót
-    string lower = v;
-    for (char &c : lower) c = (char)tolower((unsigned char)c);
-    size_t basePos = lower.find("cmd_base");
-    if (basePos != string::npos) {
-        v = v.substr(basePos + 8);
-    }
-
-    vector<int> parts;
-    stringstream ss(v);
-    string token;
-    while (getline(ss, token, '.')) {
-        try {
-            parts.push_back(stoi(token));
-        } catch (...) {
-            parts.push_back(0);
-        }
+    v = extractCleanVersion(v);
+    auto suffix = v.find_first_of("-+");
+    string core = v.substr(0, suffix);
+    if (core.empty() || core.back() == '.') return {};
+    vector<int> parts; stringstream stream(core); string token;
+    while (getline(stream, token, '.')) {
+        if (token.empty() || token.find_first_not_of("0123456789") != string::npos || parts.size() == 3) return {};
+        try { parts.push_back(stoi(token)); } catch (...) { return {}; }
     }
     while (parts.size() < 3) parts.push_back(0);
     return parts;
 }
 
 bool UpdateManager::isNewer(const string& currentVer, const string& remoteVer) {
-    if (remoteVer.empty()) return false;
-    auto c = parseVersionParts(currentVer);
-    auto r = parseVersionParts(remoteVer);
+    const string current = extractCleanVersion(currentVer), remote = extractCleanVersion(remoteVer);
+    const auto c = parseVersionParts(current), r = parseVersionParts(remote);
+    if (c.size() != 3 || r.size() != 3) return false;
     for (size_t i = 0; i < 3; ++i) {
-        if (r[i] > c[i]) return true;
-        if (r[i] < c[i]) return false;
+        if (r[i] != c[i]) return r[i] > c[i];
     }
-    return false;
+    auto pre = [](const string& v) {
+        size_t metadata = v.find('+'), dash = v.find('-');
+        if (dash == string::npos || (metadata != string::npos && dash > metadata)) return string();
+        return v.substr(dash + 1, metadata == string::npos ? string::npos : metadata - dash - 1);
+    };
+    string cp = pre(current), rp = pre(remote);
+    if (cp.empty() || rp.empty()) return !cp.empty() && rp.empty();
+    stringstream cs(cp), rs(rp); string ct, rt;
+    while (true) {
+        bool hasC = bool(getline(cs, ct, '.')), hasR = bool(getline(rs, rt, '.'));
+        if (!hasC || !hasR) return hasR && !hasC;
+        if (ct.empty() || rt.empty()) return false;
+        if (ct == rt) continue;
+        bool cn = ct.find_first_not_of("0123456789") == string::npos;
+        bool rn = rt.find_first_not_of("0123456789") == string::npos;
+        if (cn != rn) return !rn;
+        if (cn) {
+            auto strip = [](string x) { size_t first = x.find_first_not_of('0'); return first == string::npos ? string("0") : x.substr(first); };
+            ct = strip(ct); rt = strip(rt);
+            if (ct.size() != rt.size()) return rt.size() > ct.size();
+        }
+        return rt > ct;
+    }
 }
 
 ReleaseInfo UpdateManager::fetchLatestRelease() {
@@ -206,7 +238,7 @@ void UpdateManager::checkUpdateAsync() {
         {
             lock_guard<mutex> lock(g_versionMutex);
             g_remoteVersion = cachedVer;
-            if (!cachedUrl.empty()) g_releaseUrl = cachedUrl;
+            if (cachedUrl.rfind("https://github.com/huii404/CMD_BOX/releases", 0) == 0) g_releaseUrl = cachedUrl;
             if (isNewer(CURRENT_VERSION, cachedVer)) {
                 g_hasNewVersion = true;
             }
@@ -226,7 +258,7 @@ void UpdateManager::checkUpdateAsync() {
         lock_guard<mutex> lock(g_versionMutex);
         if (rel.valid) {
             g_remoteVersion = rel.version;
-            if (!rel.htmlUrl.empty()) g_releaseUrl = rel.htmlUrl;
+            if (rel.htmlUrl.rfind("https://github.com/huii404/CMD_BOX/releases", 0) == 0) g_releaseUrl = rel.htmlUrl;
             g_hasNewVersion = isNewer(CURRENT_VERSION, rel.version);
             // Lưu cache mới kèm mốc thời gian
             saveCache(static_cast<long long>(time(nullptr)), rel.version, g_releaseUrl);
@@ -271,7 +303,7 @@ void UpdateManager::showUpdateMenu() {
         } else {
             lock_guard<mutex> lock(g_versionMutex);
             g_remoteVersion = rel.version;
-            if (!rel.htmlUrl.empty()) g_releaseUrl = rel.htmlUrl;
+            if (rel.htmlUrl.rfind("https://github.com/huii404/CMD_BOX/releases", 0) == 0) g_releaseUrl = rel.htmlUrl;
 
             if (isNewer(CURRENT_VERSION, rel.version)) {
                 g_hasNewVersion = true;
@@ -304,7 +336,7 @@ void UpdateManager::showUpdateMenu() {
         } else if (choice == 2) {
             cout << "\n[*] Đang kéo mã nguồn mới nhất từ GitHub...\n\n";
             if (SystemCore::runRawCommand("git rev-parse --is-inside-work-tree")) {
-                bool pullOk = SystemCore::runRawCommand("git pull --ff-only") || SystemCore::runRawCommand("git pull");
+                bool pullOk = SystemCore::runRawCommand("git pull --ff-only");
                 if (!pullOk) {
                     cout << "\n[!] Cập nhật thất bại hoặc nhánh cục bộ có thay đổi xung đột.\n";
                     SystemCore::waitEnter();

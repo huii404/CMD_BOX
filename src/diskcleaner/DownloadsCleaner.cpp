@@ -42,8 +42,6 @@ std::string DownloadsCleaner::getDownloadsPath() {
         CoTaskMemFree(path);
         if (!res.empty()) return res;
     }
-    const char *userProf = getenv("USERPROFILE");
-    if (userProf) return std::string(userProf) + "\\Downloads";
     return "";
 }
 
@@ -88,7 +86,10 @@ std::unordered_set<std::string> DownloadsCleaner::getInstalledAppNames() {
                 if (RegOpenKeyExA(hKey, keyName, 0, KEY_READ, &hSubKey) == ERROR_SUCCESS) {
                     char displayName[512] = {0};
                     DWORD dataSize = sizeof(displayName);
-                    if (RegQueryValueExA(hSubKey, "DisplayName", NULL, NULL, (LPBYTE)displayName, &dataSize) == ERROR_SUCCESS) {
+                    DWORD type = 0;
+                    if (RegQueryValueExA(hSubKey, "DisplayName", NULL, &type, (LPBYTE)displayName, &dataSize) == ERROR_SUCCESS &&
+                        (type == REG_SZ || type == REG_EXPAND_SZ) && dataSize > 0 && dataSize <= sizeof(displayName) &&
+                        std::find(displayName, displayName + dataSize, char(0)) != displayName + dataSize) {
                         std::string name = CleanerCore::trim(CleanerCore::toLower(displayName));
                         if (!name.empty()) {
                             installed.insert(name);
