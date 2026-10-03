@@ -1,6 +1,23 @@
 # CMD BOX - SYSTEM TOOLKIT
 
 > **Nền tảng:** Windows (x64) | **Ngôn ngữ:** C++17 | **Biên dịch:** MinGW-w64 (GCC / UCRT64)
+>
+> **Phiên bản trong source:** 2.0.0; các sửa sau review chưa phát hành.
+
+Các tác vụ media giữ nguyên file nguồn và ghi kết quả vào thư mục `CMD_BOX_Output` nằm cạnh file nguồn. Dọn tự động yêu cầu xác nhận, giữ Thùng rác và thư mục rollback Windows; chưa có manifest preview/apply/undo. Xem [bản sửa và giới hạn kiểm chứng](docs/FIXES_2026-10-04.md).
+
+Có thể mở menu như cũ hoặc gọi nhanh từ terminal:
+
+Trong menu tương tác, dùng **↑/↓** để chọn và **Enter** để mở. Có thể gõ số rồi nhấn **Enter** để chọn nhanh; **Esc** hoặc **0 + Enter** để quay lại. Menu giữ nguyên khung khi di chuyển lựa chọn. Các màn hình tác vụ vẫn nhận đường dẫn và nội dung văn bản như trước.
+
+```cmd
+main.exe --help
+main.exe clean
+main.exe optimize 1
+main.exe scan-network
+main.exe security-status
+main.exe media
+```
 
 **Tra cứu:** [Sổ tay lệnh Windows CMD](README_WINDOWS_COMMANDS.md) — lệnh hữu ích, tác dụng, ví dụ và mức quyền cần thiết.
 
@@ -10,12 +27,11 @@
 
 **CMD BOX** là bộ công cụ dòng lệnh (CLI) hiệu năng cao dành cho quản trị, bảo trì, tối ưu hóa hệ điều hành, bảo mật mạng và xử lý đa phương tiện trên nền tảng Windows.
 
-Dự án được xây dựng hoàn toàn bằng **C++ native**, can thiệp trực tiếp qua hệ thống Win32 API, Windows Imaging Component (WIC), SIMD (AVX2, FMA) và tối ưu hóa tính toán song song với OpenMP. Phần mềm không sử dụng các dịch vụ đám mây bên thứ ba, không thu thập dữ liệu người dùng và vận hành độc lập không cần cài đặt (portable).
+Dự án dùng **C++ native**, Win32 API và OpenMP. Bản build mặc định không yêu cầu AVX2/FMA. Media cần FFmpeg; tải ứng dụng và kiểm tra release cần Internet. Web Drop dùng API QR bên thứ ba để tạo mã QR, còn nội dung file được truyền trực tiếp trong LAN.
 
 ### Đặc tính Kỹ thuật
-- **Quản lý tiến trình an toàn (Windows Job Objects):** Tất cả tiến trình con do công cụ khởi tạo đều được kiểm soát trong Job Object của hệ điều hành. Khi đóng ứng dụng hoặc nhận tín hiệu ngắt (`Ctrl + C`), toàn bộ cây tiến trình con được giải phóng triệt để, ngăn ngừa rò rỉ bộ nhớ hoặc tiến trình chạy ngầm.
+- **Quản lý tiến trình:** Runner trực tiếp dùng Job Object và timeout để dừng cây child. Lệnh UAC qua ShellExecute và một số đường gọi system/_popen không có cùng bảo đảm; xem giới hạn trong báo cáo sửa.
 - **Khởi tạo trễ (Lazy Loading):** Áp dụng mô hình con trỏ thông minh `std::unique_ptr` kết hợp cơ chế kiểm tra đa luồng (Double-Checked Locking / Thread-safe). Ứng dụng chỉ cấp phát bộ nhớ khi người dùng truy cập phân hệ tương ứng, duy trì mức chiếm dụng RAM cực thấp ở trạng thái chờ.
-- **Xử lý đồ họa & thuật toán song song:** Module xử lý hình ảnh được tối ưu hóa ở mức số học điểm động (float), hỗ trợ vector hóa phần cứng AVX2 + FMA và tăng tốc đa luồng CPU (OpenMP). Giải mã và mã hóa định dạng ảnh trực tiếp từ bộ giải mã hệ thống WIC.
 - **Bảo toàn 100% Siêu dữ liệu (Metadata Preservation):** Sao chép nguyên vẹn khối siêu dữ liệu cấp thấp (EXIF, GPS tọa độ, Model máy ảnh, Ống kính, Giờ chụp) và đồng bộ ngày giờ tạo/sửa đổi tệp tin (`last_write_time`) trên hệ điều hành trùng khớp ảnh gốc.
 - **Tương thích toàn diện:** Hoạt động ổn định trên Windows 10 và Windows 11 (64-bit).
 
@@ -28,12 +44,12 @@ Chương trình được phân tách thành 4 phân hệ chính theo từng lĩn
 ### 1. Bảo trì & Tối ưu Hệ thống (`SystemOptimizer` & `DiskCleaner`)
 > *Xem tài liệu kỹ thuật chi tiết tại:* [README_WINDOWS_CLEANER.md](file:///g:/Code/C++/project/CMD/README_WINDOWS_CLEANER.md)
 - **Dọn rác Đa Tầng Chuyên Trách (`DiskCleaner`):**
-  - *Tầng 1 (Rác bề mặt & User Cache):* Dọn `%TEMP%`, `Windows\Temp`, `CrashDumps`, `WER Reports`, `D3DSCache`, `INetCache`, làm sạch Thùng rác và `Flush DNS`.
+  - *Tầng 1 (Rác bề mặt & User Cache):* Dọn Temp, `Windows\Temp`, `CrashDumps`, WER, D3DSCache, INetCache và Flush DNS. Giữ Thùng rác.
   - *Tầng 2 (Trình duyệt & Ứng dụng):* Quét đa profile tất cả trình duyệt Chromium (Chrome, Edge, Cốc Cốc, Brave, Vivaldi, Opera, Opera GX) và Firefox; dọn cache Discord, Telegram, NVIDIA Shader Cache.
-  - *Tầng 3 (Chuyên sâu Hệ thống):* Làm sạch `WinSxS` qua `DISM /ResetBase`, giải phóng `Windows.old`, `$WINDOWS.~BT`, `Delivery Optimization`, xóa logs sự kiện (`wevtutil`) và tắt `hiberfil`.
-  - *Tầng 4 (Môi trường lập trình):* Quét toàn bộ ổ đĩa dọn rác Dev: `node_modules`, cache NPM/Yarn/pnpm, Pip, Gradle, Rust/Cargo, Go build, VS Code và Cursor storage (bảo vệ 100% `.git`).
-  - *Tầng 5 (Quản lý Downloads Thông minh):* Phân tích bộ cài đặt `.exe`/`.msi` trong thư mục Downloads; đối chiếu Registry (`HKLM`, `HKCU`) để xóa bộ cài của ứng dụng đã cài đặt; khử trùng lặp `setup (1).exe` giữ lại bản gốc; dọn tệp tải dở dang >24h. Xóa vĩnh viễn thu hồi dung lượng thực tế (không đưa vào Recycle Bin).
-  - *Dọn liên hoàn:* Tùy chọn dọn toàn diện Hệ thống (Tầng 1+2+3+5) hoặc dọn tất cả cả 5 tầng chỉ với 1 click.
+  - *Tầng 3 (Chuyên sâu Hệ thống):* Dọn cache Windows Update sau kiểm tra trạng thái dịch vụ, Delivery Optimization và log/dump cho phép. DISM dùng `/StartComponentCleanup`; giữ Windows.old và thư mục rollback.
+  - *Tầng 4 (Môi trường lập trình):* Dọn cache công cụ. Dọn tự động không quét project; chốt engine chặn `.git`, marker bảo vệ và reparse point.
+  - *Tầng 5 (Downloads):* File trùng và bộ cài được nhận diện đưa vào Thùng rác; file tải dở đủ điều kiện được xóa trực tiếp.
+  - *Dọn liên hoàn:* Yêu cầu xác nhận trước khi thực hiện các nhóm trên.
 - **Tăng tốc & Tối ưu Đa Tầng:**
   - *Tầng 1 (Tối ưu Khởi động):* Phân tích các khóa Registry `Run` và `RunOnce` (`HKCU` & `HKLM`). Tích hợp Whitelist thông minh bảo vệ driver phần cứng (Realtek, Waves, NVIDIA, AMD, Intel) và phần mềm điều khiển OEM (ASUS, Dell, HP, Lenovo).
   - *Tầng 2 (Tối ưu Dịch vụ ngầm):* Vô hiệu hóa các dịch vụ ngầm không thiết yếu (Windows Telemetry, Maps Broker, Xbox Services, Error Reporting Service, DiagTrack).
@@ -65,25 +81,9 @@ Chương trình được phân tách thành 4 phân hệ chính theo từng lĩn
 - **Gỡ bỏ ứng dụng rác (Bloatware Removal):** Quét và gỡ bỏ tận gốc các gói ứng dụng UWP dư thừa được cài sẵn trên Windows.
 - **Kiểm tra Pin Laptop chuyên sâu (Battery Diagnostic):** Đọc trực tiếp từ ACPI và báo cáo pin Windows (`powercfg`), trích xuất công suất thiết kế, công suất sạc đầy hiện tại, chu kỳ sạc, tỷ lệ hao mòn chai pin thực tế và tình trạng sạc.
 
-### 4. Xử lý Đa phương tiện & Làm nét Ảnh (`MediaProcessor`, `ImageEnhancer` & `ImageEnhancerPro`)
+### 4. Xử lý Đa phương tiện (`MediaProcessor`)
 
-#### A. Thuật toán Làm nét Ảnh (2 Phiên bản):
-- **Bản Base (`ImageEnhancer`):**
-  - Hỗ trợ đầy đủ các định dạng: JPG, PNG, BMP, TIFF, WebP, HEIC, DNG (RAW).
-  - Phóng đại siêu mẫu Lanczos-3 bảo toàn dải tần số cao.
-  - Bộ lọc dẫn đường 2 tầng (2-Scale Guided Filter) tách bạch chi tiết vi mô ($r=1$) và cấu trúc ($r=3$).
-  - Khử bệt màu liên tục Cauchy (Cauchy Continuous Coring) chống dính hạt pixel.
-  - Bù màu Constant-Saturation Chroma Tracking giữ sắc tươi xanh tự nhiên cho cỏ cây hoa lá.
-  - Bảo vệ vùng da chân dung chuẩn ITU-R BT.601 (làm mịn da phẳng, sắc nét ngũ quan).
-- **Bản Pro v2 (`ImageEnhancerPro`) - Nâng cấp Vượt trội:**
-  - **7 Góc độ phân tích chuyên sâu:** Tự động đo đạc năng lượng biên đa hướng Tenengrad, tỷ lệ tần số cao, độ nhòe blur, mức nhiễu nền MAD, vỡ khối JPEG blockiness 8x8, dải tương phản động và độ phức tạp kết cấu/nét mảnh.
-  - **Phân loại ngữ cảnh tự động:** Nhận diện thông minh Chân dung (Portrait), Phong cảnh (Landscape), Tài liệu/Văn bản (Document), Ban đêm/Thiếu sáng (Low-light) hoặc Ảnh mờ nặng (Heavy Blur).
-  - **Khử sương mù & Chói sáng:** Tự động nâng sáng vùng tối bị dìm (`shadowLift`) và thu hồi chi tiết vùng chói gắt (`highlightPull`).
-  - **Nổi chủ thể & Nét đúng đối tượng:** Tăng cường chi tiết thân cây, cành lá, vách đá, đường sá mà không bị bệt viền, không xuất hiện quầng sáng quầng tối giả tạo (Anti-Halo).
-  - **Ức chế bên (Lateral Inhibition):** Chống phình nét mảnh, giữ các đường kẻ/chữ viết thanh mảnh sắc lẹm.
-  - **Bảo toàn 100% WIC Metadata:** Giữ nguyên vẹn toàn bộ EXIF, GPS, camera model, lens info và đồng bộ ngày giờ tạo tệp tin gốc.
-
-#### B. Xử lý Video & Âm thanh (Tăng tốc phần cứng FFmpeg):
+#### Xử lý Video, Ảnh & Âm thanh (Tăng tốc phần cứng FFmpeg):
 - Tự động nhận diện và tận dụng bộ mã hóa phần cứng GPU (NVIDIA NVENC, Intel QuickSync, AMD AMF).
 - Nén tối ưu dung lượng Video MP4 và Ảnh (PNG/JPG) bảo toàn độ nét và Metadata.
 - Trích xuất âm thanh từ Video sang định dạng MP3 hàng loạt.
@@ -103,8 +103,6 @@ CMD_BOX/
 │   ├── ffmpeg.exe           # Bộ công cụ xử lý media hỗ trợ tăng tốc GPU
 │   └── main.exe             # Tệp thực thi chính của chương trình
 ├── include/                 # Danh mục tệp tiêu đề (Header files)
-│   ├── ImageEnhancer.h      # Khai báo thuật toán làm nét ảnh Base
-│   ├── ImageEnhancerPro.h   # Khai báo thuật toán làm nét ảnh Pro v2 & phân tích 7 góc độ
 │   ├── Internet.h           # Khai báo module mạng, bảo mật & tường lửa
 │   ├── MediaProcessor.h     # Khai báo bộ xử lý video, âm thanh & Steganography
 │   ├── SystemCore.h         # Khung điều khiển Win32 API, Job Object & Console I/O
@@ -112,17 +110,18 @@ CMD_BOX/
 │   └── UtilityTools.h       # Khai báo tiện ích tự động, clicker & chẩn đoán pin
 ├── src/                     # Danh mục mã nguồn (Source files)
 │   ├── apps.txt             # Tệp nguồn cấu hình danh mục phần mềm
-│   ├── ImageEnhancer.cpp    # Cài đặt Lanczos-3, 2-Scale Guided Filter & WIC
-│   ├── ImageEnhancerPro.cpp # Cài đặt bộ làm nét PRO v2, 7 góc độ phân tích & WIC Metadata
 │   ├── Internet.cpp         # Cài đặt xử lý socket, tường lửa & kiểm tra bảo mật
 │   ├── main.cpp             # Điểm khởi chạy (Entry point) & hệ thống menu
 │   ├── MediaProcessor.cpp   # Cài đặt giao tiếp FFmpeg & GPU acceleration
 │   ├── SystemCore.cpp       # Cài đặt quản lý tiến trình con & tương tác hệ thống
 │   ├── SystemOptimizer.cpp  # Cài đặt dọn dẹp rác đa tầng & tối ưu hệ thống
 │   └── UtilityTools.cpp     # Cài đặt tự động hóa chuột/bàn phím & đọc ACPI pin
+├── scripts/                 # Tác vụ quản trị Windows được gọi bởi chương trình
+│   ├── optimize_registry.bat       # Tinh chỉnh Registry, Taskbar và giao diện
+│   ├── repair_network.bat          # Reset DNS, Winsock, TCP/IP và DHCP
+│   └── reset_windows_update.bat    # Làm sạch cache Windows Update
 ├── build.bat                # Kịch bản biên dịch 1 file duy nhất với loading thời gian thực
-├── README.md                # Tài liệu hướng dẫn kỹ thuật của dự án
-└── README_IMAGE_ENHANCER.md # Tài liệu đặc tả toán học & kiến trúc làm nét ảnh
+└── README.md                # Tài liệu hướng dẫn kỹ thuật của dự án
 ```
 
 ---
@@ -131,24 +130,24 @@ CMD_BOX/
 
 ### 1. Yêu cầu Hệ thống
 - **Hệ điều hành:** Windows 10 hoặc Windows 11 (phiên bản 64-bit).
-- **Bộ biên dịch C++:** GCC/G++ từ bộ công cụ MinGW-w64 (MSYS2 UCRT64 hoặc MINGW64) hỗ trợ đầy đủ tiêu chuẩn **C++17**, OpenMP (`-fopenmp`) và tập lệnh vector **AVX2 + FMA**.
+- **Bộ biên dịch C++:** GCC/G++ từ MinGW-w64 (MSYS2 UCRT64 hoặc MINGW64), hỗ trợ C++17 và OpenMP.
 
 ### 2. Biên dịch Tự động
 Chỉ cần nhấp đúp chuột vào tệp script:
 ```cmd
 build.bat
 ```
-Script sẽ tự động dò tìm trình biên dịch `g++`, kích hoạt chế độ tối ưu hóa phần cứng cao nhất (`-O3 -fopenmp -mavx2 -mfma`), hiển thị hiệu ứng loading đếm giây thời gian thực và hỏi bạn có muốn mở `bin\main.exe` ngay sau khi hoàn tất hay không.
+Đóng CMD BOX trước khi build. Script dò g++, dùng `-O3 -fopenmp`, build `bin\main.next.exe` rồi thay `bin\main.exe` khi thành công và mở ứng dụng. Script không cưỡng ép kết thúc các tiến trình main.exe.
 
 ### 3. Biên dịch Thủ công qua Dòng lệnh
 Nếu muốn tự biên dịch thủ công qua Command Prompt hoặc PowerShell:
 ```cmd
-g++ -std=c++17 -O3 -fopenmp -mavx2 -mfma -Iinclude src\*.cpp -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -static-libgcc -static-libstdc++ -static -s
+g++ -std=c++17 -O3 -fopenmp -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\diskcleaner\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -lversion -static-libgcc -static-libstdc++ -static -s
 copy /y "src\apps.txt" "bin\apps.txt"
 ```
 
 *Giải thích các cờ liên kết (Linker Flags):*
-- `-mavx2 -mfma`: Tận dụng tập lệnh phần cứng AVX2 và FMA giúp tăng tốc độ xử lý điểm ảnh gấp 2-4 lần.
+- Bản mặc định không bật `-mavx2 -mfma` để chạy trên CPU không có các tập lệnh này.
 - `-fopenmp`: Kích hoạt xử lý đa luồng CPU song song cho tất cả các thuật toán đồ họa.
 - `-lws2_32 -liphlpapi`: Giao diện mạng Windows Sockets và IP Helper API.
 - `-lole32 -lwindowscodecs -loleaut32 -luuid`: Hỗ trợ giao tiếp COM và Windows Imaging Component (WIC) để giải mã ảnh và sao chép metadata.

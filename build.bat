@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
@@ -50,7 +51,7 @@ echo %C_CYAN%[📿] Đang thỉnh pháp bảo Compiler...%C_RESET%
 set "GXX="
 where g++ >nul 2>nul
 if %errorlevel% equ 0 (
-    set "GXX=g++"
+    for /f "delims=" %%g in ('where g++ 2^>nul') do if not defined GXX set "GXX=%%g"
 ) else if exist "C:\msys64\ucrt64\bin\g++.exe" (
     set "GXX=C:\msys64\ucrt64\bin\g++.exe"
 ) else if exist "C:\msys64\mingw64\bin\g++.exe" (
@@ -94,11 +95,15 @@ if not "!RC_FILE!"=="" (
     )
 )
 
-:: 3. Bien dich voi loading thoi gian thuc tai cho (1 file duy nhat, chu dung im so nhay)
+rem 3. Bien dich truc tiep de tranh loi bien moi truong cua PowerShell Start-Process.
 echo.
 if exist "%TEMP%\cmd_build_err.log" del /f /q "%TEMP%\cmd_build_err.log" 2>nul
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$e=[string][char]27; $sw=[System.Diagnostics.Stopwatch]::StartNew(); $res='!RES_PARAM!'; $args='-std=c++17 -O3 -fopenmp -mavx2 -mfma -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp ' + $res + ' -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -static-libgcc -static-libstdc++ -static -s'; $p=Start-Process -FilePath '!GXX!' -ArgumentList $args -NoNewWindow -PassThru -RedirectStandardError $env:TEMP\cmd_build_err.log; $frames=@('|','/','-','\'); $i=0; Write-Host -NoNewline ('  ' + $e + '[93m[🪷] Đang tụng kinh độ code:' + $e + '[0m ' + $e + '[s'); while(-not $p.HasExited){ $s=$sw.Elapsed.TotalSeconds.ToString('0.0'); $f=$frames[$i%%4]; $disp=$e+'[u'+$e+'[95m['+$f+']'+$e+'[0m '+$e+'[93m'+$s+'s'+$e+'[0m'+$e+'[K'; Write-Host -NoNewline $disp; Start-Sleep -Milliseconds 80; $i++ }; $p.WaitForExit(); $tot=$sw.Elapsed.TotalSeconds.ToString('0.0'); $ec=$p.ExitCode; if($null -eq $ec -or $ec -eq 0){ Write-Host ($e+'[u'+$e+'[42;30m [ĐẮC ĐẠO] '+$tot+'s! CODE THÀNH CHÍNH QUẢ, KHÔNG BUG '+$e+'[0m'+$e+'[K'); exit 0 } else { Write-Host ($e+'[u'+$e+'[41;97m [NGHIỆP QUẢ] ('+$tot+'s) CODE VƯỚNG BỤI TRẦN, CÒN BUG '+$e+'[0m'+$e+'[K'); exit $ec }"
+:: Giai phong tien trinh main.exe neu dang mo de tranh bi khoa file
+:: Không kết thúc các tiến trình main.exe không liên quan.
+
+echo   [BUILD] Dang bien dich CMD BOX...
+"!GXX!" -std=c++17 -O3 -fopenmp -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\diskcleaner\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp !RES_PARAM! -o bin\main.next.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -lversion -static-libgcc -static-libstdc++ -static -s 2>"%TEMP%\cmd_build_err.log"
 
 set BUILD_RET=%errorlevel%
 
@@ -114,23 +119,20 @@ if not "!BUILD_RET!"=="0" (
 )
 
 del /f /q "%TEMP%\cmd_build_err.log" 2>nul
+move /y "bin\main.next.exe" "bin\main.exe" >nul 2>nul
+if errorlevel 1 (
+    echo [!] Dong CMD BOX va chay lai build. Ban moi duoc giu tai bin\main.next.exe.
+    exit /b 1
+)
 if exist "src\apps.txt" copy /y "src\apps.txt" "bin\apps.txt" >nul
 
 echo %C_GREEN%  [☸] Đã độ thành công: %C_YELLOW%bin\main.exe %C_GREEN%[Viên mãn - Vạn bug tiêu tán]%C_RESET%
 echo.
 
-:: 4. Tuy chon mo app
-set "RUN_APP="
+:: 4. Tu dong khoi dong lai app
 echo %C_PINK%  ========================================================================%C_RESET%
-set /p "RUN_APP=%C_CYAN%[🧘] Xuất quan khởi động main.exe luôn không? [%C_YELLOW%y%C_CYAN% = Khởi động, %C_WHITE%Enter%C_CYAN% = Thôi]: %C_RESET%"
-
-if /i "!RUN_APP!"=="y" (
-    echo.
-    echo %C_GREEN%  [⚡] Vạn sự hanh thông! Đang phóng vào app... A Di Đà Phật!%C_RESET%
-    start "" "bin\main.exe"
-) else (
-    echo.
-    echo %C_YELLOW%  [🙏] Thiện tai thiện tai! Chúc thí chủ vạn dặm bình an!%C_RESET%
-)
-
+echo %C_GREEN%  [⚡] Vạn sự hanh thông! Đang tự động khởi động lại main.exe... A Di Đà Phật!%C_RESET%
 echo.
+timeout /t 1 >nul 2>nul
+start "" "bin\main.exe"
+exit /b 0

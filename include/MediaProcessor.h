@@ -17,9 +17,6 @@ struct GpuCodecInfo {
     std::string encoder;
     std::string compressParams;
     std::string speedParams;
-    std::string enhanceParamsLevel1;
-    std::string enhanceParamsLevel2;
-    std::string enhanceParamsLevel3;
     std::string displayName;
 };
 
@@ -27,8 +24,8 @@ class MediaProcessor {
 private:
     std::string getFFmpegPath();
     GpuCodecInfo getGpuEncoder();
-    void extractAudioCore(const std::string& inputPath, const std::string& outputPath);
-    void changeSpeedCore(const std::string& inputPath, const std::string& outputPath, float speedMultiplier);
+    bool extractAudioCore(const std::string& inputPath, const std::string& outputPath);
+    bool changeSpeedCore(const std::string& inputPath, const std::string& outputPath, float speedMultiplier);
 
     // Core chức năng Ẩn & Trích xuất file trong Media
     bool embedFileIntoContainerCore(const std::string& containerPath, const std::string& hiddenFilePath, const std::string& outputPath, uintmax_t maxContainerSize, std::string& errorMsg);
@@ -43,7 +40,6 @@ public:
     void processMediaAuto(); 
     void processExtractAudioBatch();
     void processChangeSpeedBatch();
-    void processMediaEnhancement();
     void processConvertFormatBatch();
     void normalizeMediaFilenames();
     

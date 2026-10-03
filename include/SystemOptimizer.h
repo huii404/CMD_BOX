@@ -9,29 +9,17 @@
  * @brief Module Tối Ưu Hệ Thống (System Optimizer)
  * Quản lý các tính năng tinh chỉnh Registry, quản lý Service, 
  * vô hiệu hóa ứng dụng khởi động và tối ưu giao diện Windows.
- * Các tác vụ dọn rác được ủy quyền sang lớp chuyên trách DiskCleaner.
+ * Các tác vụ dọn rác được ủy quyền sang hệ thống DiskCleaner mới (static API).
  */
 class SystemOptimizer {
 private:
     SystemCore &sc;
-    DiskCleaner cleaner;
 public:
     SystemOptimizer(SystemCore &s);
 
-    // --- ỦY QUYỀN SANG DISKCLEANER (BẢO TOÀN 100% TƯƠNG THÍCH NGƯỢC) ---
-    inline void runCleanChoice(int choice) { cleaner.runCleanChoice(choice); }
-    inline long long cleanSurfaceAndUserTemp() { return cleaner.cleanSurfaceAndUserTemp(); }
-    inline long long cleanBrowserAndAppCache() { return cleaner.cleanBrowserAndAppCache(); }
-    inline long long cleanDeepSystemAndUpdates() { return cleaner.cleanDeepSystemAndUpdates(); }
-    inline long long cleanDevArtifactsAndCaches() { return cleaner.cleanDevArtifactsAndCaches(); }
-    inline long long cleanDownloadsExesAndDuplicates() { return cleaner.cleanDownloadsExesAndDuplicates(); }
-    inline void cleanDevCaches(bool interactive = false) { cleaner.cleanDevCaches(interactive); }
-    inline void clearBrowserCache() { cleaner.clearBrowserCache(); }
-
-    inline long long runCleanTier1() { return cleanSurfaceAndUserTemp(); }
-    inline long long runCleanTier2() { return cleanBrowserAndAppCache(); }
-    inline long long runCleanTier3() { return cleanDeepSystemAndUpdates(); }
-    inline long long runCleanTier4() { return cleanDevArtifactsAndCaches(); }
+    // --- ỦY QUYỀN SANG DISKCLEANER (API MỚI - STATIC) ---
+    void runClean();
+    void runCleanChoice(int choice = 0);
 
     // --- CÁC HÀM TỐI ƯU HIỆU NĂNG THEO NHIỆM VỤ (TASK-BASED) ---
     // Tối ưu ứng dụng khởi động (Tắt app bên thứ ba làm chậm máy, bảo vệ 100% Bộ gõ & Driver)
@@ -58,4 +46,4 @@ public:
     void turnOffServicesMenu();
 };
 
-#endif 
+#endif 

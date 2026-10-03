@@ -1,3 +1,4 @@
+#include "EmbeddedScripts.h"
 #include "Internet.h"
 #include "LocalDrop.h"
 #include "NetworkScanner.h"
@@ -67,36 +68,11 @@ void Internet::repairNetwork() {
     cout << "Đặt lại mạng, DNS/ARP và IP.\n";
     if (!sc.confirm("Tiếp tục sửa lỗi mạng? (y/n): ")) return;
 
-    std::string batContent = 
-        "@echo off\n"
-        "set \"failed=0\"\n"
-        "chcp 65001 >nul\n"
-        "title SUA LOI MANG\n"
-        "echo [1/6] Xoa bo dem DNS\n"
-        "ipconfig /flushdns >nul 2>&1\n"
-        "echo [2/6] Dat lai Winsock Catalog\n"
-        "netsh winsock reset >nul 2>&1\n"
-        "if errorlevel 1 set \"failed=1\"\n"
-        "echo [3/6] Dat lai ngan xep TCP/IP\n"
-        "netsh int ip reset >nul 2>&1\n"
-        "if errorlevel 1 set \"failed=1\"\n"
-        "echo [4/6] Xoa bang ARP Cache\n"
-        "netsh interface ip delete arpcache >nul 2>&1\n"
-        "if errorlevel 1 set \"failed=1\"\n"
-        "echo [5/6] Lam moi dia chi IP (DHCP)\n"
-        "ipconfig /release >nul 2>&1\n"
-        "ipconfig /renew >nul 2>&1\n"
-        "echo [6/6] Khoi dong lai WinNAT va HNS\n"
-        "net stop winnat >nul 2>&1 & net start winnat >nul 2>&1\n"
-        "net stop hns >nul 2>&1 & net start hns >nul 2>&1\n"
-        "echo Hoan tat!\n"
-        "exit /b %failed%\n";
-
     cout << "\nĐang sửa mạng (Admin)...\n";
-    if (SystemCore::runBatchAsAdmin(batContent, "Sửa lỗi mạng")) {
+    if (SystemCore::runEmbeddedBatch(EmbeddedScripts::REPAIR_NETWORK_BAT, "", true)) {
         cout << "[✓] Đã sửa mạng.\n";
     } else {
-        cout << "[!] Thất bại; cần quyền Admin.\n";
+        cout << "[!] Thất bại; kiểm tra quyền Admin.\n";
     }
     sc.waitEnter();
 }
