@@ -16,19 +16,21 @@ Script dùng tag 13.59 của [repo tác giả](https://github.com/exiftool/exift
 
 ## Bảo tồn metadata khi xuất
 
-`MediaMetadata.h` điều phối backend ExifTool, snapshot timestamp, kiểm tra metadata và ghi JSON. Đã bỏ parser/chèn JPEG APP1/PNG chunk tự viết gây lặp block, tràn độ dài và ghi trực tiếp vào file đầu ra.
+`MediaMetadata.h` điều phối ExifTool, đọc timestamp và kiểm tra metadata nhúng. Không xuất `.metadata.json`, không lưu metadata trong file dự phòng.
 
 Các luồng nén, đổi định dạng, đổi tốc độ và trích MP3:
 
-1. Đọc timestamp **trước khi** đọc metadata và render.
-2. Snapshot metadata nguồn, kể cả raw EXIF, ICC/MakerNotes được ExifTool đọc và thông tin ffprobe khi có.
-3. Render trong thư mục tạm riêng, giữ nguồn.
-4. Với ảnh: `-noautorotate` giữ hướng pixel nguồn; ExifTool chép EXIF/XMP/ICC phù hợp, giữ Orientation và cập nhật kích thước EXIF theo ảnh đích. Thumbnail/preview nguồn không chép vào bản render.
-5. Đọc lại metadata đầu ra, đối chiếu các trường kỷ niệm và profile màu; mọi trường không chuyển được được ghi cảnh báo.
-6. Ghi `filename.ext.metadata.json` chứa metadata nguồn, metadata kết quả, timestamp nguồn và thông tin bị thiếu. Bản ghi metadata thuộc cặp bản xuất; nên sao lưu cả hai cùng nguồn gốc.
-7. Khóa và đổi tên file cùng metadata đi kèm bằng handle, không ghi đè. Nếu lưu cặp file hoặc đồng bộ timestamp thất bại, hủy các file do lần chạy đó tạo.
+1. Đọc timestamp và metadata nguồn vào RAM trước render.
+2. FFmpeg ghi metadata container/track trong lúc render hoặc remux. Với MP3, ngày quay, camera, GPS và mô tả được chuyển thành trường ID3 nếu biểu diễn được.
+3. Với ảnh, ExifTool ghi EXIF/XMP/ICC trực tiếp vào file vừa render; giữ Orientation tương ứng với `-noautorotate`, cập nhật kích thước EXIF và bỏ thumbnail/preview cũ.
+4. Với MP4/MOV, ExifTool bổ sung metadata native QuickTime/XMP; không lấy duration/codec cũ để ghi đè thông tin kỹ thuật mới.
+5. Đọc lại file và đối chiếu các trường kỷ niệm: EXIF/IFD0/GPS/IPTC/XMP, ngày quay, camera, tác giả, mô tả, ICC/MakerNotes và metadata container. Tag khác tên/kiểu biểu diễn được đối chiếu theo alias; timezone và phần thập phân bằng 0 không bị coi là khác ngày.
+6. Nếu không ghi hoặc không kiểm tra được trường cần giữ, **không công nhận bản xuất**; hiển thị tên trường và giữ nguồn. Không dùng JSON để bù thông tin thiếu.
+7. Chỉ công bố một file media, không ghi đè và khôi phục timestamp. Nếu công bố hoặc timestamp thất bại thì hủy bản xuất do lần chạy đó tạo.
 
-Không khẳng định mọi tag nhúng giữ nguyên khi chuyển giữa các định dạng. JSON lưu bản export mà backend đọc được; file nguồn giữ nguyên vẫn là bản lưu trữ đầy đủ nhất. Tag kỹ thuật như kích thước, thời lượng hoặc encoder phải phản ánh bản xuất.
+Thư mục làm việc và file chapter chỉ phục vụ chạy FFmpeg an toàn, được dọn sau thao tác; metadata của kết quả nằm trong chính file media và không phụ thuộc vào chúng. Nguồn không có metadata thì ứng dụng không tự bịa ngày chụp, GPS hay máy ảnh.
+
+Giữa các định dạng, không phải mọi metadata đều có trường tương đương. Tag kỹ thuật như kích thước, thời lượng, codec, encoder và thumbnail phải phù hợp bản xuất; không bắt giữ nguyên chúng. Các định dạng/tag chưa được kiểm chứng có thể bị từ chối. File nguồn luôn được giữ.
 
 ### Video và chất lượng
 
@@ -38,13 +40,13 @@ Không khẳng định mọi tag nhúng giữ nguyên khi chuyển giữa các �
 - Đổi tốc độ dùng độ chính xác cao cho video/audio và chia mốc chapter cho hệ số tốc độ.
 - PNG có thể giữ 16-bit khi chuyển TIFF 16-bit; JPEG/WebP 8-bit có thông báo trước render. Nén tự động nguồn ảnh trên 8-bit chọn PNG, không ép xuống JPEG. Ảnh float không bị tự giảm độ chính xác.
 - HDR hoặc video trên 8-bit chỉ remux. Nén/đổi tốc độ chưa render HDR/10-bit; từ chối để tránh giảm bit-depth/dải màu mà không có sự lựa chọn.
-- ICC không phải RGB (ví dụ CMYK/Gray) không gắn vào kết quả RGB; profile nguồn lưu trong JSON, có cảnh báo. Chưa triển khai chuyển đổi ICC CMYK bằng engine quản lý màu.
-- Trích MP3 lấy track audio đầu tiên; nguồn còn nguyên, thông tin các track khác nằm trong snapshot/ffprobe. Đây không phải tính năng gộp mọi track audio.
+- ICC không phải RGB (ví dụ CMYK/Gray): từ chối render ảnh vì chưa có engine chuyển màu giữ profile đúng; không gắn profile sai và không lưu thay bằng JSON.
+- Trích MP3 lấy track audio đầu tiên; nguồn còn nguyên; bản MP3 chỉ chứa track được trích. Đây không phải tính năng gộp mọi track audio.
 - Báo dung lượng tiết kiệm dùng kích thước file cuối sau ghi metadata, không dùng số đo trước ghi.
 
 ### File ẩn
 
-Footer mới `CBOXHID2` lưu kích thước cover/payload/JSON, tên và timestamp gốc của payload. Cover và payload được sao chép nguyên byte (payload XOR như trước), nên metadata nhúng vẫn còn. Trích xuất ghi JSON và khôi phục timestamp của payload. Footer `HIDE` cũ vẫn đọc được; không thể khôi phục tên/timestamp không được lưu trong định dạng cũ. XOR không phải mã hóa bảo mật.
+Footer mới `CBOXHID2` lưu kích thước cover/payload/JSON, tên và timestamp gốc của payload. Cover và payload được sao chép nguyên byte (payload XOR như trước), nên metadata nhúng vẫn còn. Trích xuất giữ nguyên byte payload và khôi phục timestamp, không xuất JSON đi kèm. JSON trong footer là cấu trúc nội bộ nằm ngay trong container, không phải file bên ngoài. Footer `HIDE` cũ vẫn đọc được; không thể khôi phục tên/timestamp không được lưu trong định dạng cũ. XOR không phải mã hóa bảo mật.
 
 ## Sắp album từ THƯ MỤC
 
@@ -52,15 +54,15 @@ Menu **Media → [7] Sắp album từ thư mục**:
 
 - Chọn thư mục, quét media trong các thư mục con; bỏ junction/symlink và `CMD_BOX_Output`/`CMD_BOX_Album` để không quét lặp.
 - Ưu tiên `SubSecDateTimeOriginal`, `DateTimeOriginal`, `DateCreated`, `CreationDate`, `CreateDate`, `MediaCreateDate`.
-- Nếu không có ngày chụp/quay hợp lệ, dùng ngày sửa file và ghi rõ trong preview/JSON; không coi đó là ngày chụp đã được xác minh.
+- Nếu không có ngày chụp/quay hợp lệ, dùng ngày sửa file và ghi rõ trong preview; không coi đó là ngày chụp đã được xác minh.
 - Xem trước rồi xác nhận; chỉ sao chép, không di chuyển hoặc đổi tên nguồn.
 - Đầu ra: `nguồn/CMD_BOX_Album/YYYY/MM/<đường dẫn tương đối gốc>`. Giữ các thư mục tương đối để hai nguồn cùng tên không đè nhau.
-- File cùng tên đã có được bỏ qua và thông báo. Giữ nguyên metadata nhúng bằng sao chép nguyên byte, cùng timestamp và JSON.
+- File cùng tên đã có được bỏ qua và thông báo. Sao chép nguyên byte để giữ metadata nhúng và khôi phục timestamp; không render, không tạo JSON đi kèm.
 - Giới hạn mỗi lần quét 10.000 file. Album hiện không tự nhóm theo sự kiện hoặc vị trí.
 
 ## Kiểm thử
 
-`tests/media_integrity.cpp` tạo fixture riêng trong thư mục tạm hệ thống và tự xóa sau khi kiểm thử thành công; không sửa ảnh cá nhân. Kiểm tra JPEG→PNG/WebP giữ EXIF/XMP/ICC/GPS/Orientation, tên tiếng Việt, timestamp/JSON, album theo ngày chụp và loại trừ đầu ra, không ghi đè, remux giữ hai audio/ngôn ngữ, TIFF→PNG 16-bit, chapter khi đổi tốc độ thật, trích MP3, footer file ẩn mới/cũ.
+`tests/media_integrity.cpp` tạo fixture riêng trong thư mục tạm hệ thống và tự xóa sau khi kiểm thử thành công; không sửa ảnh cá nhân. Kiểm tra JPEG→PNG/WebP giữ EXIF/XMP/ICC/GPS/Orientation, tên tiếng Việt, timestamp, không tạo JSON, MOV giữ camera/GPS/mô tả, MP3 giữ metadata ID3, từ chối bản xuất thiếu metadata, album theo ngày chụp và loại trừ đầu ra, không ghi đè, remux giữ hai audio/ngôn ngữ, TIFF→PNG 16-bit, chapter khi đổi tốc độ thật, trích MP3, footer file ẩn mới/cũ.
 
 ```powershell
 g++ -std=c++17 -O0 -Iinclude tests/media_integrity.cpp -o bin/media-test.exe -lole32 -lwindowscodecs -luuid -static-libgcc -static-libstdc++ -static

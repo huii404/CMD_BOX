@@ -1,4 +1,5 @@
 #include "LocalDrop.h"
+#include "MenuStyle.h"
 #include "FileSafety.h"
 #include "LocalDropProtocol.h"
 #include <iostream>
@@ -327,13 +328,12 @@ string LocalDrop::getDownloadsFolder() {
 void LocalDrop::menu() {
     while (true) {
         sc.cls();
-        cout << "\n\n\n"
-             << " [1] Public (Web QR)\n\n"
-             << " LAN P2P (ghép đôi bằng mã; HTTP không mã hóa)\n"
-             << "   ├── [2] Gửi file / thư mục\n"
-             << "   └── [3] Nhận file / thư mục\n\n"
-             << " [0] Return\n\n"
-             << " [Chọn]: ";
+        MenuStyle::header("LOCALDROP",MenuStyle::SKY);
+        MenuStyle::item(1,"Chia sẻ qua Web QR",MenuStyle::SKY);
+        MenuStyle::section("LAN P2P · Ghép đôi bằng mã · HTTP không mã hóa");
+        MenuStyle::item(2,"Gửi file / thư mục",MenuStyle::MINT);
+        MenuStyle::item(3,"Nhận file / thư mục",MenuStyle::ORCHID);
+        MenuStyle::footer("Quay lại",MenuStyle::SKY);
 
         int choice = sc.readInt("");
         if (choice == 0) break;

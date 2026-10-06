@@ -1,5 +1,6 @@
 // UpdateManager.cpp
 #include "UpdateManager.h"
+#include "MenuStyle.h"
 #include "SystemCore.h"
 #include <windows.h>
 #include <iostream>
@@ -16,7 +17,7 @@
 
 using namespace std;
 
-const string UpdateManager::CURRENT_VERSION = "2.0.0";
+const string UpdateManager::CURRENT_VERSION = "2.1.0";
 const string UpdateManager::API_RELEASES_URL = "https://api.github.com/repos/huii404/CMD_BOX/releases/latest";
 
 static const long long UPDATE_COOLDOWN_SECONDS = 2 * 24 * 3600; // 2 ngày (48 giờ)
@@ -294,12 +295,12 @@ string UpdateManager::getVersionStatusText() {
 void UpdateManager::showUpdateMenu() {
     while (true) {
         system("cls");
-        cout << "== CẬP NHẬT ==\n";
+        MenuStyle::header("CẬP NHẬT PHẦN MỀM",MenuStyle::ROSE);
 
         ReleaseInfo rel = fetchLatestRelease();
         if (!rel.valid) {
-            cout << "  Phiên bản hiện tại : \x1b[36mv" << CURRENT_VERSION << "\x1b[0m\n"
-                 << "  Trạng thái         : \x1b[31mKhông thể kết nối Internet\x1b[0m\n\n";
+            MenuStyle::info("Phiên bản hiện tại","v"+CURRENT_VERSION,MenuStyle::SKY);
+            MenuStyle::info("Trạng thái","Không thể kết nối Internet",MenuStyle::ROSE);
         } else {
             lock_guard<mutex> lock(g_versionMutex);
             g_remoteVersion = rel.version;
@@ -307,20 +308,19 @@ void UpdateManager::showUpdateMenu() {
 
             if (isNewer(CURRENT_VERSION, rel.version)) {
                 g_hasNewVersion = true;
-                cout << "  Phiên bản hiện tại : \x1b[36mv" << CURRENT_VERSION << "\x1b[0m\n"
-                     << "  Phiên bản mới nhất : \x1b[33mv" << rel.version << " (Có bản cập nhật mới!)\x1b[0m\n\n";
+                MenuStyle::info("Phiên bản hiện tại","v"+CURRENT_VERSION,MenuStyle::SKY);
+                MenuStyle::info("Phiên bản mới nhất","v"+rel.version+" (Có bản cập nhật mới!)",MenuStyle::AMBER);
             } else {
                 g_hasNewVersion = false;
-                cout << "  Phiên bản hiện tại : \x1b[32mv" << CURRENT_VERSION << " (Đang là mới nhất)\x1b[0m\n\n";
+                MenuStyle::info("Phiên bản hiện tại","v"+CURRENT_VERSION+" (Đang là mới nhất)",MenuStyle::MINT);
             }
             saveCache(static_cast<long long>(time(nullptr)), rel.version, g_releaseUrl);
         }
 
-        cout << " [1] Mở GitHub\n"
-             << " [2] Cập nhật bằng Git\n"
-             << " [3] Kiểm tra lại\n"
-             << " [0] Quay lại\n"
-             << " [Chọn]: ";
+        MenuStyle::item(1,"Mở GitHub",MenuStyle::ROSE);
+        MenuStyle::item(2,"Cập nhật bằng Git",MenuStyle::MINT);
+        MenuStyle::item(3,"Kiểm tra lại",MenuStyle::AMBER);
+        MenuStyle::footer("Quay lại",MenuStyle::ROSE);
 
         int choice = SystemCore::readInt("");
         if (choice == 0) return;

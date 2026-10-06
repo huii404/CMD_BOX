@@ -2,6 +2,7 @@
 #include "FileSafety.h"
 #include "third_party/json.hpp"
 #include <chrono>
+#include <map>
 #include <set>
 
 namespace MediaMetadata {
@@ -74,7 +75,7 @@ inline std::vector<std::string> exifTool() {
 }
 inline bool tags(const fs::path& path,Json& result,std::string& error) {
     auto args=exifTool();if(args.empty()){error="Thiếu ExifTool: đặt exiftool.exe và exiftool_files cạnh main.exe.";return false;}
-    args.insert(args.end(),{"-j","-G1","-struct","-b","-n","-all:all","-ICC_Profile","-EXIF","-MakerNotes","-charset","filename=UTF8","-api","QuickTimeUTC=1",fs::absolute(path).u8string()});std::string output;
+    args.insert(args.end(),{"-j","-G1","-struct","-b","-n","-all:all","-ICC_Profile","-MakerNotes","-charset","filename=UTF8","-api","QuickTimeUTC=1",fs::absolute(path).u8string()});std::string output;
     if(!capture(args,output)){error="Không đọc được metadata bằng ExifTool.";return false;}
     try{auto data=Json::parse(output);if(!data.is_array() || data.size()!=1 || !data[0].is_object())throw std::runtime_error("tags");result=data[0];
         for(auto it=result.begin();it!=result.end();++it)if(it.key()=="ExifTool:Error"){error=it.value().dump();return false;}
@@ -82,7 +83,8 @@ inline bool tags(const fs::path& path,Json& result,std::string& error) {
     }catch(...){error="ExifTool trả dữ liệu không hợp lệ.";return false;}
 }
 inline Json value(const Json& tags,const std::string& name) {
-    for(auto it=tags.begin();it!=tags.end();++it){auto p=it.key().find_last_of(':');if(it.key().substr(p==std::string::npos?0:p+1)==name)return it.value();}return nullptr;
+    auto fold=[](std::string s){std::transform(s.begin(),s.end(),s.begin(),[](unsigned char c){return char(std::tolower(c));});return s;};
+    for(auto it=tags.begin();it!=tags.end();++it){auto p=it.key().find_last_of(':');if(fold(it.key().substr(p==std::string::npos?0:p+1))==fold(name))return it.value();}return nullptr;
 }
 inline bool image(const fs::path& path) {
     auto ext=path.extension().u8string();std::transform(ext.begin(),ext.end(),ext.begin(),[](unsigned char c){return char(std::tolower(c));});
@@ -96,32 +98,150 @@ inline Snapshot snapshot(const fs::path& source,std::string& error) {
         try{s.probe=Json::parse(output);}catch(...){}
     }return s;
 }
-inline bool writeJson(const fs::path& path,const Json& data) {
-    auto text=data.dump(2);FileSafety::ExclusiveOutput out(path);return out && out.write(text.data(),text.size()) && out.commit();
+inline std::string tagName(const std::string& key) {
+    auto colon=key.find_last_of(':');return key.substr(colon==std::string::npos?0:colon+1);
 }
-// Copy descriptive tags; refresh dimensions from the rendered file.
-inline bool preserve(const Snapshot& source,const fs::path& target,std::vector<std::string>& warnings) {
-    auto args=exifTool();if(!source.valid || args.empty())return false;
-    if(image(target)) {
-        args.insert(args.end(),{"-charset","filename=UTF8","-overwrite_original","-TagsFromFile",source.source,"-all:all",
-            "--ThumbnailImage","--PreviewImage","--JpgFromRaw","--OtherImage","--Orientation","--ExifImageWidth","--ExifImageHeight","--ImageWidth","--ImageHeight"});
-        // Keep orientation paired with -noautorotate.
-        auto orientation=value(source.metadata,"Orientation");if(orientation.is_number_integer())args.push_back("-Orientation#="+orientation.dump());
-        auto profile=value(source.metadata,"ColorSpaceData");if(profile.is_string() && profile.get<std::string>().find("RGB")!=0){args.push_back("--ICC_Profile");args.push_back("-ICC_Profile=");warnings.push_back("ICC gốc không phải RGB: profile lưu trong JSON, không gắn sai lên ảnh RGB.");}
-        else args.push_back("-ICC_Profile");
-        args.insert(args.end(),{"-ExifImageWidth<ImageWidth","-ExifImageHeight<ImageHeight",fs::absolute(target).u8string()});std::string output;
-        if(!capture(args,output)){warnings.push_back("Không nhúng được đầy đủ metadata; thông tin nguồn được lưu trong file JSON đi kèm.");}
-    }
-    Json actual;std::string error;if(!tags(target,actual,error))return false;
-    for(const auto& key:{"DateTimeOriginal","CreateDate","OffsetTimeOriginal","GPSLatitude","GPSLongitude","Make","Model","LensModel","Artist","Copyright","Description","Title","UserComment","Keywords","Subject","Rating","ImageDescription","OffsetTimeDigitized","SubSecTimeOriginal","Orientation","ICC_Profile"}){
-        auto before=value(source.metadata,key);if(!before.is_null() && before!=value(actual,key))warnings.push_back(std::string(key)+": bản gốc được lưu trong JSON đi kèm.");
-    }
-    return true;
+inline bool technicalTag(const std::string& name) {
+    static const std::set<std::string> excluded={
+        "ThumbnailImage","PreviewImage","JpgFromRaw","OtherImage","ThumbnailOffset","ThumbnailLength",
+        "PreviewImageStart","PreviewImageLength","StripOffsets","StripByteCounts","TileOffsets","TileByteCounts",
+        "ImageWidth","ImageHeight","ExifImageWidth","ExifImageHeight","RelatedImageWidth","RelatedImageHeight",
+        "BitsPerSample","SamplesPerPixel","PhotometricInterpretation","Compression","PlanarConfiguration",
+        "RowsPerStrip","YCbCrSubSampling","YCbCrPositioning","Predictor","NewSubfileType","SubfileType",
+        "Software","ProcessingSoftware","CreatorTool","History","MetadataDate","ModifyDate","CurrentIPTCDigest",
+        "Encoder","EncodingTool","MajorBrand","MinorVersion","CompatibleBrands","HandlerType","XMPToolkit",
+        "Duration","MediaDuration","TrackDuration","VideoFrameRate","FrameRate","VideoCodec","AudioCodec",
+        "FileSize","ImageSize","Megapixels","EXIF","XMP","MakerNoteByteOrder","ExifByteOrder"
+    };
+    return excluded.count(name)!=0;
 }
-inline Json record(const Snapshot& source,const fs::path& output,const Json& actual,const std::vector<std::string>& warnings) {
-    auto ticks=[](FILETIME t){return (uint64_t(t.dwHighDateTime)<<32)|t.dwLowDateTime;};
-    return {{"schema","cmd-box-media/1"},{"source",source.source},{"output",output.u8string()},{"sourceMetadata",source.metadata},{"sourceProbe",source.probe},{"outputMetadata",actual},
-        {"sourceFileTimes",{{"created",ticks(source.times.created)},{"accessed",ticks(source.times.accessed)},{"written",ticks(source.times.written)}}},{"warnings",warnings}};
+inline bool memoryTag(const std::string& key) {
+    const auto colon=key.find(':');auto group=key.substr(0,colon);auto name=tagName(key);
+    if(technicalTag(name) || group=="IFD1")return false;
+    if(group.rfind("XMP-",0)==0 || group.rfind("ID3v",0)==0 || group=="Keys" || group=="ItemList" || group=="UserData" ||
+       group=="IPTC" || group=="IFD0" || group=="ExifIFD" ||
+       group=="GPS" || group=="InteropIFD")return true;
+    static const std::set<std::string> important={
+        "DateTimeOriginal","CreateDate","CreationDate","MediaCreateDate","TrackCreateDate",
+        "OffsetTimeOriginal","OffsetTimeDigitized","SubSecTimeOriginal","SubSecTimeDigitized",
+        "GPSLatitude","GPSLatitudeRef","GPSLongitude","GPSLongitudeRef","GPSAltitude","GPSAltitudeRef",
+        "GPSCoordinates","GPSDateStamp","GPSTimeStamp","Make","Model","LensModel","LensMake",
+        "SerialNumber","LensSerialNumber","Artist","Author","Copyright","Description","Title",
+        "UserComment","Keywords","Subject","Rating","ImageDescription","Orientation","ICC_Profile","MakerNotes",
+        "Album","AlbumArtist","Composer","Genre","Track","Year","Comment","LocationInformation"
+    };
+    return important.count(name)!=0;
+}
+inline bool emptyDate(const std::string& name,const Json& value) {
+    return name.find("Date")!=std::string::npos && value.is_string() && value.get<std::string>().rfind("0000:",0)==0;
+}
+inline bool probeFile(const fs::path& path,Json& result) {
+    auto tool=binary(L"ffprobe.exe");std::string output;
+    if(tool.empty() || !capture({tool.u8string(),"-v","error","-show_format","-show_streams","-show_chapters","-of","json",fs::absolute(path).u8string()},output))return false;
+    try{result=Json::parse(output);return result.is_object();}catch(...){return false;}
+}
+inline std::string lower(std::string value) {
+    std::transform(value.begin(),value.end(),value.begin(),[](unsigned char c){return char(std::tolower(c));});return value;
+}
+inline std::string normalizedDate(std::string value) {
+    if(value.size()<19)return value;
+    if(value[4]=='-')value[4]=':';
+    if(value[7]=='-')value[7]=':';
+    if(value[10]=='T')value[10]=' ';
+    if(value.back()=='Z'){value.pop_back();value+="+00:00";}
+    if(value.size()>19 && value[19]=='.'){
+        auto end=value.find_first_not_of("0123456789",20);if(end==std::string::npos)end=value.size();
+        auto last=end;while(last>20 && value[last-1]=='0')--last;
+        if(last==20)--last;
+        value.erase(last,end-last);
+    }
+    return value;
+}
+inline bool sameTag(const std::string& name,const Json& before,const Json& after) {
+    if(before==after)return true;
+    if(before.is_number() && after.is_string()){
+        try{auto number=Json::parse(after.get<std::string>());if(number.is_number() && number==before)return true;}catch(...){}
+    }
+    if((lower(name).find("date")!=std::string::npos || lower(name)=="creation_time") && before.is_string() && after.is_string())
+        return normalizedDate(before.get<std::string>())==normalizedDate(after.get<std::string>());
+    return false;
+}
+inline Json nativeFormatValue(const Json& metadata,const std::string& key) {
+    auto compact=[](std::string s){s=lower(s);s.erase(std::remove_if(s.begin(),s.end(),[](unsigned char c){return !std::isalnum(c);}),s.end());return s;};
+    for(auto it=metadata.begin();it!=metadata.end();++it)if(compact(tagName(it.key()))==compact(key))return it.value();
+    return nullptr;
+}
+inline bool verifyFormatTags(const Json& source,const Json& target,const Json& sourceTags,const Json& targetTags,std::vector<std::string>& errors) {
+    auto before=source.value("format",Json::object()).value("tags",Json::object());
+    auto after=target.value("format",Json::object()).value("tags",Json::object());
+    static const std::set<std::string> technical={"encoder","encoding_tool","major_brand","minor_version","compatible_brands","duration","bps","number_of_frames","number_of_bytes"};
+    for(auto it=before.begin();it!=before.end();++it){
+        auto key=lower(it.key());if(technical.count(key) || key.rfind("_statistics_",0)==0)continue;
+        auto expected=nativeFormatValue(sourceTags,key),embedded=nativeFormatValue(targetTags,key);
+        if(expected.is_null())expected=it.value();
+        if(!embedded.is_null()){
+            if(!sameTag(key,expected,embedded))errors.push_back("Container:"+it.key());
+            continue;
+        }
+        bool found=false;
+        for(auto actual=after.begin();actual!=after.end();++actual)if(lower(actual.key())==key && sameTag(key,expected,actual.value())){found=true;break;}
+        if(!found)errors.push_back("Container:"+it.key());
+    }
+    return errors.empty();
+}
+inline void verifyStreamTags(const Json& source,const Json& target,const Json& targetTags,bool audioOnly,std::vector<std::string>& errors) {
+    static const std::set<std::string> technical={"encoder","handler_name","vendor_id","duration","bps","number_of_frames","number_of_bytes"};
+    std::map<std::string,size_t> ordinals;
+    for(const auto& stream:source.value("streams",Json::array())){
+        auto type=stream.value("codec_type","");auto ordinal=ordinals[type]++;
+        if(audioOnly && (type!="audio" || ordinal>0))continue;
+        Json actualTags=Json::object();size_t index=0;bool found=false;
+        for(const auto& actual:target.value("streams",Json::array()))if(actual.value("codec_type","")==type && index++==ordinal){actualTags=actual.value("tags",Json::object());found=true;break;}
+        if(!found){errors.push_back("Stream:"+type+":"+std::to_string(ordinal));continue;}
+        auto tags=stream.value("tags",Json::object());
+        for(auto it=tags.begin();it!=tags.end();++it){
+            auto key=lower(it.key());if(technical.count(key) || key.rfind("_statistics_",0)==0)continue;
+            if(key=="language" && (it.value()=="und" || it.value()==""))continue;
+            auto embedded=audioOnly?nativeFormatValue(targetTags,"audio_track_"+key):nativeFormatValue(actualTags,key);
+            if(embedded.is_null() && !audioOnly){for(auto tag=actualTags.begin();tag!=actualTags.end();++tag)if(lower(tag.key())==key){embedded=tag.value();break;}}
+            if(!sameTag(key,it.value(),embedded))errors.push_back("Stream:"+type+":"+std::to_string(ordinal)+":"+it.key());
+        }
+    }
+}
+// Copy directly into the media, then refuse output if required tags did not survive.
+inline bool preserve(const Snapshot& source,const fs::path& target,std::vector<std::string>& errors) {
+    errors.clear();auto args=exifTool();if(!source.valid || args.empty())return false;
+    auto ext=lower(target.extension().u8string());bool photo=image(target);
+    if(photo || ext==".mp4" || ext==".mov" || ext==".m4a") {
+        args.insert(args.end(),{"-charset","filename=UTF8","-api","QuickTimeUTC=1","-overwrite_original","-TagsFromFile",source.source});
+        if(photo){
+            auto profile=value(source.metadata,"ColorSpaceData");
+            if(profile.is_string() && profile.get<std::string>().find("RGB")!=0){errors.push_back("ICC không phải RGB; chưa có chuyển đổi màu bảo toàn profile.");return false;}
+            args.insert(args.end(),{"-all:all","-ICC_Profile","--ThumbnailImage","--PreviewImage","--JpgFromRaw","--OtherImage",
+                "--Orientation","--ExifImageWidth","--ExifImageHeight","--ImageWidth","--ImageHeight"});
+            auto orientation=value(source.metadata,"Orientation");if(orientation.is_number_integer())args.push_back("-Orientation#="+orientation.dump());
+            args.insert(args.end(),{"-ExifImageWidth<ImageWidth","-ExifImageHeight<ImageHeight"});
+        }else{
+            args.insert(args.end(),{"-EXIF:all","-XMP:all","-IPTC:all","-Keys:all","-ItemList:all","-UserData:all",
+                "-QuickTime:CreateDate","-QuickTime:TrackCreateDate","-QuickTime:MediaCreateDate",
+                "-XMP-exif:DateTimeOriginal<DateTimeOriginal","-ItemList:Artist<Artist"});
+        }
+        args.push_back(fs::absolute(target).u8string());std::string output;
+        if(!capture(args,output)){errors.push_back("ExifTool không ghi được metadata vào file.");return false;}
+    }
+    Json actual;std::string error;if(!tags(target,actual,error)){errors.push_back(error);return false;}
+    for(auto it=source.metadata.begin();it!=source.metadata.end();++it){
+        if(!memoryTag(it.key()) || emptyDate(tagName(it.key()),it.value()))continue;
+        if(it.key()=="File:Comment" && it.value().is_string() && it.value().get<std::string>().rfind("Lavc",0)==0)continue;
+        auto match=actual.find(it.key());auto after=match!=actual.end()?match.value():value(actual,tagName(it.key()));
+        if(!sameTag(tagName(it.key()),it.value(),after))errors.push_back(it.key());
+    }
+    if(!photo && !source.probe.is_null()){
+        Json probe;if(!probeFile(target,probe)){errors.push_back("Không kiểm tra được metadata container bằng ffprobe.");return false;}
+        verifyFormatTags(source.probe,probe,source.metadata,actual,errors);
+        verifyStreamTags(source.probe,probe,actual,ext==".mp3",errors);
+    }
+    return errors.empty();
 }
 // Prefer capture dates; use last-write time as a marked fallback.
 inline std::string albumMonth(const Snapshot& snapshot,bool& fallback) {

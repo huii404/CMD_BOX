@@ -43,8 +43,6 @@ inline bool copy(const Item& item,const fs::path& root,std::string& error) {
     FileSafety::AncestorLocks parents;if(!parents.acquire(output))return false;
     std::ifstream in(item.source,std::ios::binary);FileSafety::ExclusiveOutput out(output);auto size=fs::file_size(item.source,ec);
     if(ec || !in || !out || !FileSafety::copyExact(in,out,size,false) || !out.commit()){error="Không sao chép được file.";return false;}
-    auto record=MediaMetadata::record(item.snapshot,output,item.snapshot.metadata,{});record["albumDateFallback"]=item.fallback;
-    if(!MediaMetadata::writeJson(fs::path(output.wstring()+L".metadata.json"),record)){error="File đã sao chép nhưng không lưu được metadata JSON.";return false;}
     if(!MediaMetadata::setTimes(item.snapshot.times,output)){error="File đã sao chép nhưng không đồng bộ được timestamp.";return false;}return true;
 }
 }

@@ -1,4 +1,5 @@
 #include "Internet.h"
+#include "MenuStyle.h"
 #include <windows.h>
 #include <iostream>
 #include <limits>
@@ -14,19 +15,6 @@
 
 using namespace std;
 namespace fs = std::filesystem;
-
-namespace UI {
-    inline const char* RESET   = "\x1b[0m";
-    inline const char* BOLD    = "\x1b[1m";
-    inline const char* DIM     = "\x1b[90m";
-    inline const char* RED     = "\x1b[91m";
-    inline const char* GREEN   = "\x1b[92m";
-    inline const char* YELLOW  = "\x1b[93m";
-    inline const char* BLUE    = "\x1b[94m";
-    inline const char* MAGENTA = "\x1b[95m";
-    inline const char* CYAN    = "\x1b[96m";
-    inline const char* WHITE   = "\x1b[97m";
-}
 
 class AppUI : public SystemCore {
 private:
@@ -85,29 +73,25 @@ public:
         std::string devInfo = SystemCore::getDeviceStatus();
         std::string verStatus = UpdateManager::getVersionStatusText();
 
+        using namespace MenuStyle;
         cout << "\n"
-             << UI::CYAN << "  ── THÔNG TIN HỆ THỐNG ────────────────────────────────\n"
-             << UI::DIM  << "   Phiên bản : " << UI::WHITE << verStatus << "\n"
-             << UI::DIM  << "   Quyền hạn : " << (admin ? (string(UI::GREEN) + "Administrator") : (string(UI::YELLOW) + "Standard User")) << "\n"
-             << UI::DIM  << "   Thiết bị  : " << UI::WHITE << devInfo << "\n"
-             << UI::CYAN << "  ──────────────────────────────────────────────────────\n"
-             << UI::RESET;
+             << MUTED << "  Phiên bản  " << TEXT << verStatus << RESET << "\n"
+             << MUTED << "  Quyền hạn  " << (admin ? MINT.text : AMBER.text)
+             << (admin ? "● Administrator" : "● Standard User") << RESET << "\n"
+             << MUTED << "  Thiết bị   " << TEXT << devInfo << RESET << "\n";
     }
 
     void mainMenu() {
+        using namespace MenuStyle;
         renderStatusBox();
-        cout << "\n"
-             << UI::CYAN << "  ┌── MENU CHÍNH ───────────────────────────────────────\n"
-             << "  │ " << UI::YELLOW << " [1] " << UI::WHITE << "Tối ưu & Dọn dẹp hệ thống\n"
-             << "  │ " << UI::YELLOW << " [2] " << UI::WHITE << "Quản trị mạng & Bảo mật\n"
-             << "  │ " << UI::YELLOW << " [3] " << UI::WHITE << "Công cụ tự động & Tiện ích\n"
-             << "  │ " << UI::YELLOW << " [4] " << UI::WHITE << "Xử lý Media (FFmpeg)\n"
-             << "  │ " << UI::YELLOW << " [5] " << UI::WHITE << "Kiểm tra cập nhật phần mềm\n"
-             << "  │ " << UI::YELLOW << " [6] " << UI::WHITE << "Biên dịch lại ứng dụng\n"
-             << "  │ " << UI::RED    << " [0] " << UI::DIM   << "Thoát chương trình\n"
-             << UI::CYAN << "  └─────────────────────────────────────────────────────\n"
-             << UI::RESET << "\n"
-             << UI::BOLD << UI::CYAN << "  [Chọn]: " << UI::RESET;
+        header("MENU CHÍNH");
+        item(1,"Tối ưu & Dọn dẹp hệ thống",MINT);
+        item(2,"Quản trị mạng & Bảo mật",SKY);
+        item(3,"Công cụ tự động & Tiện ích",AMBER);
+        item(4,"Media",ORCHID);
+        item(5,"Kiểm tra cập nhật phần mềm",ROSE);
+        item(6,"Biên dịch ứng dụng",MINT);
+        footer("Thoát chương trình");
     }
 
     void run() {
@@ -129,25 +113,18 @@ public:
             case 1:
                 while (true) {
                     cls();
-                    cout << "\n"
-                         << UI::CYAN << "  ┌── TỐI ƯU & DỌN DẸP HỆ THỐNG ────────────────────────\n"
-                         << "  │ " << UI::DIM    << "--- Dọn rác ---\n"
-                         << "  │ " << UI::YELLOW << " [1] " << UI::WHITE << "Dọn dẹp hệ thống toàn diện\n"
-                         << "  │\n"
-                         << "  │ " << UI::DIM    << "--- Hiệu năng ---\n"
-                         << "  │ " << UI::YELLOW << " [2] " << UI::WHITE << "Tối ưu ứng dụng khởi động\n"
-                         << "  │ " << UI::YELLOW << " [3] " << UI::WHITE << "Tắt dịch vụ nền vô ích\n"
-                         << "  │ " << UI::YELLOW << " [4] " << UI::WHITE << "Tối ưu giao diện & Taskbar\n"
-                         << "  │ " << UI::YELLOW << " [5] " << UI::GREEN << "Tối ưu toàn bộ (Khuyên dùng)\n"
-                         << "  │\n"
-                         << "  │ " << UI::DIM    << "--- Bảo trì ---\n"
-                         << "  │ " << UI::YELLOW << " [6] " << UI::WHITE << "Sửa lỗi kẹt Windows Update\n"
-                         << "  │ " << UI::YELLOW << " [7] " << UI::WHITE << "Quản lý dịch vụ hệ thống\n"
-                         << "  │\n"
-                         << "  │ " << UI::RED    << " [0] " << UI::DIM   << "Quay lại menu chính\n"
-                         << UI::CYAN << "  └─────────────────────────────────────────────────────\n"
-                         << UI::RESET << "\n"
-                         << UI::BOLD << UI::CYAN << "  [Chọn]: " << UI::RESET;
+                    MenuStyle::header("TỐI ƯU & DỌN DẸP",MenuStyle::MINT);
+                    MenuStyle::section("DỌN RÁC");
+                    MenuStyle::item(1,"Dọn dẹp hệ thống toàn diện",MenuStyle::MINT);
+                    MenuStyle::section("HIỆU NĂNG");
+                    MenuStyle::item(2,"Tối ưu ứng dụng khởi động",MenuStyle::MINT);
+                    MenuStyle::item(3,"Tắt dịch vụ nền vô ích",MenuStyle::MINT);
+                    MenuStyle::item(4,"Tối ưu giao diện & Taskbar",MenuStyle::MINT);
+                    MenuStyle::item(5,"Tối ưu toàn bộ",MenuStyle::AMBER,"  · Khuyên dùng");
+                    MenuStyle::section("BẢO TRÌ");
+                    MenuStyle::item(6,"Sửa lỗi kẹt Windows Update",MenuStyle::MINT);
+                    MenuStyle::item(7,"Quản lý dịch vụ hệ thống",MenuStyle::MINT);
+                    MenuStyle::footer("Quay lại menu chính",MenuStyle::MINT);
                     sub = readInt("");
                     if (sub == 0) break;
                     
@@ -168,19 +145,14 @@ public:
             case 2:
                 while (true) {
                     cls();
-                    cout << "\n"
-                         << UI::CYAN << "  ┌── QUẢN TRỊ MẠNG & BẢO MẬT ──────────────────────────\n"
-                         << "  │ " << UI::YELLOW << " [1] " << UI::WHITE << "Sửa lỗi mạng & Reset kết nối\n"
-                         << "  │ " << UI::YELLOW << " [2] " << UI::WHITE << "Kích hoạt tường lửa bảo vệ\n"
-                         << "  │ " << UI::YELLOW << " [3] " << UI::WHITE << "Kiểm tra an ninh mạng\n"
-                         << "  │ " << UI::YELLOW << " [4] " << UI::WHITE << "Xem mật khẩu Wi-Fi đã lưu\n"
-                         << "  │ " << UI::YELLOW << " [5] " << UI::WHITE << "Quét thiết bị trong mạng LAN\n"
-                         << "  │ " << UI::YELLOW << " [6] " << UI::WHITE << "Chia sẻ file cục bộ (LocalDrop)\n"
-                         << "  │\n"
-                         << "  │ " << UI::RED    << " [0] " << UI::DIM   << "Quay lại menu chính\n"
-                         << UI::CYAN << "  └─────────────────────────────────────────────────────\n"
-                         << UI::RESET << "\n"
-                         << UI::BOLD << UI::CYAN << "  [Chọn]: " << UI::RESET;
+                    MenuStyle::header("QUẢN TRỊ MẠNG & BẢO MẬT",MenuStyle::SKY);
+                    MenuStyle::item(1,"Sửa lỗi mạng & Reset kết nối",MenuStyle::SKY);
+                    MenuStyle::item(2,"Kích hoạt tường lửa bảo vệ",MenuStyle::SKY);
+                    MenuStyle::item(3,"Kiểm tra an ninh mạng",MenuStyle::SKY);
+                    MenuStyle::item(4,"Xem mật khẩu Wi-Fi đã lưu",MenuStyle::SKY);
+                    MenuStyle::item(5,"Quét thiết bị trong mạng LAN",MenuStyle::SKY);
+                    MenuStyle::item(6,"Chia sẻ file cục bộ (LocalDrop)",MenuStyle::SKY);
+                    MenuStyle::footer("Quay lại menu chính",MenuStyle::SKY);
                     sub = readInt("");
                     if (sub == 0) break;
                     
@@ -200,19 +172,14 @@ public:
             case 3:
                 while (true) {
                     cls();
-                    cout << "\n"
-                         << UI::CYAN << "  ┌── CÔNG CỤ TỰ ĐỘNG & TIỆN ÍCH ───────────────────────\n"
-                         << "  │ " << UI::YELLOW << " [1] " << UI::WHITE << "Auto Clicker\n"
-                         << "  │ " << UI::YELLOW << " [2] " << UI::WHITE << "Gửi văn bản tự động\n"
-                         << "  │ " << UI::YELLOW << " [3] " << UI::WHITE << "Dán dữ liệu nhiều dòng\n"
-                         << "  │ " << UI::YELLOW << " [4] " << UI::WHITE << "Tải phần mềm nhanh\n"
-                         << "  │ " << UI::YELLOW << " [5] " << UI::WHITE << "Gỡ ứng dụng rác (Bloatware)\n"
-                         << "  │ " << UI::YELLOW << " [6] " << UI::WHITE << "Kiểm tra pin laptop\n"
-                         << "  │\n"
-                         << "  │ " << UI::RED    << " [0] " << UI::DIM   << "Quay lại menu chính\n"
-                         << UI::CYAN << "  └─────────────────────────────────────────────────────\n"
-                         << UI::RESET << "\n"
-                         << UI::BOLD << UI::CYAN << "  [Chọn]: " << UI::RESET;
+                    MenuStyle::header("CÔNG CỤ TỰ ĐỘNG & TIỆN ÍCH",MenuStyle::AMBER);
+                    MenuStyle::item(1,"Auto Clicker",MenuStyle::AMBER);
+                    MenuStyle::item(2,"Gửi văn bản tự động",MenuStyle::AMBER);
+                    MenuStyle::item(3,"Dán dữ liệu nhiều dòng",MenuStyle::AMBER);
+                    MenuStyle::item(4,"Tải phần mềm nhanh",MenuStyle::AMBER);
+                    MenuStyle::item(5,"Gỡ ứng dụng rác (Bloatware)",MenuStyle::AMBER);
+                    MenuStyle::item(6,"Kiểm tra pin laptop",MenuStyle::AMBER);
+                    MenuStyle::footer("Quay lại menu chính",MenuStyle::AMBER);
                     sub = readInt("");
                     if (sub == 0) break;
 
@@ -232,20 +199,15 @@ public:
             case 4:
                 while (true) {
                     cls(); 
-                    cout << "\n"
-                         << UI::CYAN << "  ┌── XỬ LÝ MEDIA (FFMPEG) ─────────────────────────────\n"
-                         << "  │ " << UI::YELLOW << " [1] " << UI::WHITE << "Nén video / hình ảnh\n"
-                         << "  │ " << UI::YELLOW << " [2] " << UI::WHITE << "Tách âm thanh (MP3)\n"
-                         << "  │ " << UI::YELLOW << " [3] " << UI::WHITE << "Đổi tốc độ phát video\n"
-                         << "  │ " << UI::YELLOW << " [4] " << UI::WHITE << "Đổi định dạng tệp\n"
-                         << "  │ " << UI::YELLOW << " [5] " << UI::WHITE << "Chuẩn hóa tên file\n"
-                         << "  │ " << UI::YELLOW << " [6] " << UI::WHITE << "Ẩn file trong media\n"
-                         << "  │ " << UI::YELLOW << " [7] " << UI::WHITE << "Sắp album từ thư mục (năm / tháng)\n"
-                         << "  │\n"
-                         << "  │ " << UI::RED    << " [0] " << UI::DIM   << "Quay lại menu chính\n"
-                         << UI::CYAN << "  └─────────────────────────────────────────────────────\n"
-                         << UI::RESET << "\n"
-                         << UI::BOLD << UI::CYAN << "  [Chọn]: " << UI::RESET;
+                    MenuStyle::header("XỬ LÝ MEDIA",MenuStyle::ORCHID);
+                    MenuStyle::item(1,"Nén video / hình ảnh",MenuStyle::ORCHID);
+                    MenuStyle::item(2,"Tách âm thanh (MP3)",MenuStyle::ORCHID);
+                    MenuStyle::item(3,"Đổi tốc độ phát video",MenuStyle::ORCHID);
+                    MenuStyle::item(4,"Đổi định dạng tệp",MenuStyle::ORCHID);
+                    MenuStyle::item(5,"Chuẩn hóa tên file",MenuStyle::ORCHID);
+                    MenuStyle::item(6,"Ẩn file trong media",MenuStyle::ORCHID);
+                    MenuStyle::item(7,"Sắp album từ thư mục (năm / tháng)",MenuStyle::ORCHID);
+                    MenuStyle::footer("Quay lại menu chính",MenuStyle::ORCHID);
                     sub = readInt("");
                     if (sub == 0) break; 
 

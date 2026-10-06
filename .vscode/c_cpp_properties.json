@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "name": "CMD BOX GCC x64",
+            "compilerPath": "C:/msys64/ucrt64/bin/g++.exe",
+            "compilerArgs": ["-fopenmp"],
+            "intelliSenseMode": "windows-gcc-x64",
+            "cppStandard": "c++17",
+            "cStandard": "c17",
+            "includePath": ["${workspaceFolder}/include"]
+        }
+    ],
+    "version": 4
+}

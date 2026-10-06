@@ -32,7 +32,7 @@ Dự án dùng **C++ native**, Win32 API và OpenMP. Bản build mặc định k
 ### Đặc tính Kỹ thuật
 - **Quản lý tiến trình:** Runner trực tiếp dùng Job Object và timeout để dừng cây child. Lệnh UAC qua ShellExecute và một số đường gọi system/_popen không có cùng bảo đảm; xem giới hạn trong báo cáo sửa.
 - **Khởi tạo trễ (Lazy Loading):** Áp dụng mô hình con trỏ thông minh `std::unique_ptr` kết hợp cơ chế kiểm tra đa luồng (Double-Checked Locking / Thread-safe). Ứng dụng chỉ cấp phát bộ nhớ khi người dùng truy cập phân hệ tương ứng, duy trì mức chiếm dụng RAM cực thấp ở trạng thái chờ.
-- **Bảo tồn metadata có kiểm chứng:** Snapshot thông tin nguồn trước render; ExifTool chuyển các trường hỗ trợ và đọc lại đầu ra. Mỗi bản xuất có `.metadata.json` lưu thông tin nguồn/đích, timestamp và trường không chuyển được. Giữ file gốc; không khẳng định giữ 100% tag khi đổi định dạng. Xem [hướng dẫn](docs/MEDIA.md).
+- **Bảo tồn metadata có kiểm chứng:** FFmpeg/ExifTool ghi metadata trực tiếp trong file và đọc lại để kiểm tra; không xuất JSON đi kèm. Nếu không giữ được trường kỷ niệm cần thiết, từ chối bản xuất và giữ nguồn. Thông tin kỹ thuật được cập nhật theo bản render. Xem [hướng dẫn](docs/MEDIA.md).
 - **Tương thích toàn diện:** Hoạt động ổn định trên Windows 10 và Windows 11 (64-bit).
 
 ---

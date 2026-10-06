@@ -112,31 +112,30 @@ static bool safeVideoEncoder(const MediaMetadata::Json& info,const string& norma
 static bool finalizeMedia(const fs::path& temporary,const MediaMetadata::Snapshot& source,const fs::path& requested,fs::path& actual,string& error) {
     error.clear();error_code ec;
     if(!source.valid || !fs::is_regular_file(temporary,ec) || ec || fs::file_size(temporary,ec)==0 || ec){error="File render rỗng hoặc snapshot metadata không hợp lệ.";return false;}
-    vector<string> warnings;if(!MediaMetadata::preserve(source,temporary,warnings)){error="Không kiểm tra được metadata đầu ra.";return false;}
-    MediaMetadata::Json outputTags;string metadataError;if(!MediaMetadata::tags(temporary,outputTags,metadataError)){error=metadataError;return false;}
+    vector<string> missing;
+    if(!MediaMetadata::preserve(source,temporary,missing)){
+        error="Không xuất: định dạng đích chưa giữ được metadata nhúng.";
+        for(const auto& tag:missing)error+="\n  "+tag;
+        return false;
+    }
     actual=makeUniqueOutputPath(requested,fs::u8path(source.source));
-    while(fs::exists(fs::path(actual.wstring()+L".metadata.json"),ec)){actual=makeUniqueOutputPath(actual.parent_path()/(actual.stem().u8string()+"_export"+actual.extension().u8string()));}
-    auto sidecar=fs::path(temporary.wstring()+L".metadata.json");
-    if(!MediaMetadata::writeJson(sidecar,MediaMetadata::record(source,actual,outputTags,warnings))){error="Không lưu được metadata JSON; chưa công nhận bản xuất.";return false;}
     FileSafety::AncestorLocks parents;if(!parents.acquire(actual)){error="Thư mục xuất không an toàn.";return false;}
     struct Publication {
-        HANDLE media=INVALID_HANDLE_VALUE,metadata=INVALID_HANDLE_VALUE;bool committed=false;
+        HANDLE media=INVALID_HANDLE_VALUE;bool committed=false;
         ~Publication(){
-            if(!committed){FILE_DISPOSITION_INFO remove{TRUE};if(media!=INVALID_HANDLE_VALUE)SetFileInformationByHandle(media,FileDispositionInfo,&remove,sizeof(remove));if(metadata!=INVALID_HANDLE_VALUE)SetFileInformationByHandle(metadata,FileDispositionInfo,&remove,sizeof(remove));}
-            if(media!=INVALID_HANDLE_VALUE)CloseHandle(media);
-            if(metadata!=INVALID_HANDLE_VALUE)CloseHandle(metadata);
+            if(media==INVALID_HANDLE_VALUE)return;
+            if(!committed){FILE_DISPOSITION_INFO remove{TRUE};SetFileInformationByHandle(media,FileDispositionInfo,&remove,sizeof(remove));}
+            CloseHandle(media);
         }
-    } files;
-    files.media=CreateFileW(temporary.c_str(),FILE_WRITE_ATTRIBUTES|DELETE,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
-    files.metadata=CreateFileW(sidecar.c_str(),DELETE,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
-    auto finalSidecar=fs::path(actual.wstring()+L".metadata.json");
-    if(files.media==INVALID_HANDLE_VALUE || files.metadata==INVALID_HANDLE_VALUE || !MediaMetadata::publishHandle(files.media,actual) || !MediaMetadata::publishHandle(files.metadata,finalSidecar)){
-        error="Không lưu được file và metadata cùng nhau; đã hủy bản xuất, nguồn giữ nguyên.";return false;
+    } file;
+    file.media=CreateFileW(temporary.c_str(),FILE_WRITE_ATTRIBUTES|DELETE,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
+    if(file.media==INVALID_HANDLE_VALUE || !MediaMetadata::publishHandle(file.media,actual)){
+        error="Không lưu được file; nguồn giữ nguyên.";return false;
     }
-    if(!SetFileTime(files.media,&source.times.created,&source.times.accessed,&source.times.written)){error="Không đồng bộ được timestamp Windows; đã hủy bản xuất.";return false;}
-    files.committed=true;
-    for(const auto& warning:warnings){if(!error.empty())error+='\n';error+=warning;}return true;
+    if(!SetFileTime(file.media,&source.times.created,&source.times.accessed,&source.times.written)){error="Không đồng bộ được timestamp Windows; đã hủy bản xuất.";return false;}
+    file.committed=true;return true;
 }
+
 static string escapeChapterText(const string& value) {
     string result;for(char c:value){if(c=='\r' || c=='\n'){result+=' ';continue;}if(c=='\\' || c=='=' || c==';' || c=='#')result+='\\';result+=c;}return result;
 }
@@ -150,8 +149,38 @@ static bool writeScaledChapters(const MediaMetadata::Json& info,double speed,con
     FileSafety::ExclusiveOutput file(output);return file && file.write(text.data(),text.size()) && file.commit();
 }
 
+static string audioMemoryFlags(const fs::path& source) {
+    MediaMetadata::Json tags;string error;
+    if(!MediaMetadata::tags(source,tags,error))return {};
+    string flags;
+    for(const auto& key:{"DateTimeOriginal","CreateDate","CreationDate","CreationTime","TrackCreateDate","MediaCreateDate",
+                        "Make","Model","LensModel","LensMake","SerialNumber","LensSerialNumber","GPSCoordinates",
+                        "GPSLatitude","GPSLatitudeRef","GPSLongitude","GPSLongitudeRef","GPSAltitude","GPSAltitudeRef",
+                        "GPSDateStamp","GPSTimeStamp","OffsetTimeOriginal","OffsetTimeDigitized","SubSecTimeOriginal","SubSecTimeDigitized",
+                        "Artist","Author","Copyright","Description","Title","ImageDescription","UserComment","Keywords","Subject","Rating"}){
+        auto value=MediaMetadata::value(tags,key);if(value.is_null() || (!value.is_string() && !value.is_number()))continue;
+        if(MediaMetadata::emptyDate(key,value))continue;
+        flags+=" -metadata "+MediaMetadata::quote(string(key)+"="+(value.is_string()?value.get<string>():value.dump()));
+    }
+    auto created=MediaMetadata::value(tags,"CreationTime");
+    if(created.is_string())flags+=" -metadata "+MediaMetadata::quote("creation_time="+created.get<string>());
+    MediaMetadata::Json probe;
+    if(MediaMetadata::probeFile(source,probe))for(const auto& stream:probe.value("streams",MediaMetadata::Json::array())){
+        if(stream.value("codec_type","")!="audio")continue;
+        auto metadata=stream.value("tags",MediaMetadata::Json::object());
+        for(auto it=metadata.begin();it!=metadata.end();++it){
+            auto key=MediaMetadata::lower(it.key());
+            if(key=="encoder" || key=="handler_name" || key=="vendor_id" || key=="duration" || key=="bps" ||
+               key=="number_of_frames" || key=="number_of_bytes" || key.rfind("_statistics_",0)==0 || !it.value().is_string())continue;
+            flags+=" -metadata "+MediaMetadata::quote("audio_track_"+key+"="+it.value().get<string>());
+        }
+        break;
+    }
+    return flags;
+}
+
 bool MediaProcessor::extractAudioCore(const string& inputPath,const string& outputPath) {
-    auto cmd=getFFmpegPath()+" -n -hide_banner -loglevel error -i "+MediaMetadata::quote(inputPath)+" -map 0:a:0 -map_metadata 0 -vn -q:a 2 "+MediaMetadata::quote(outputPath);
+    auto cmd=getFFmpegPath()+" -n -hide_banner -loglevel error -i "+MediaMetadata::quote(inputPath)+" -map 0:a:0 -map_metadata 0 -vn -id3v2_version 4 -q:a 2 "+audioMemoryFlags(fs::u8path(inputPath))+" "+MediaMetadata::quote(outputPath);
     return SystemCore::runRawCommand(cmd);
 }
 bool MediaProcessor::changeSpeedCore(const string& inputPath,const string& outputPath,float speed) {
@@ -564,7 +593,7 @@ void MediaProcessor::processConvertFormatBatch() {
                 bool high=false;for(const auto& stream:info["streams"]){auto fmt=stream.value("pix_fmt","");high|=fmt.find("16")!=string::npos || fmt.find("48")!=string::npos || fmt.find("64")!=string::npos || fmt.find("10")!=string::npos || fmt.find("12")!=string::npos;}
                 if(extension==".png")pixel=high ? " -pix_fmt rgba64be " : " -pix_fmt rgba ";
                 else if(extension==".jpg")pixel=" -pix_fmt yuvj444p -q:v 2 ";else pixel=" -quality 90 ";
-                if(high && extension!=".png")cout<<"Chú ý: định dạng đích là bản 8-bit; giữ nguồn và bản ghi metadata.\n";
+                if(high && extension!=".png")cout<<"Chú ý: định dạng đích là bản 8-bit; giữ file nguồn.\n";
                 string command=prefix+"-noautorotate -i "+MediaMetadata::quote(input)+" -map 0:v:0 -frames:v 1 -map_metadata 0 "+pixel+MediaMetadata::quote(temporary.u8string());
                 rendered=SystemCore::runRawCommand(command);
             }else{
@@ -581,7 +610,7 @@ void MediaProcessor::processConvertFormatBatch() {
                 }else cout<<"Đổi container bằng stream copy, không render lại.\n";
             }
             fs::path actual;
-            if(rendered && finalizeMedia(temporary,snapshot,requested,actual,error)){cout<<"OK: "<<actual.u8string()<<" + metadata.json\n";if(!error.empty())cout<<"Metadata: "<<error<<'\n';}
+            if(rendered && finalizeMedia(temporary,snapshot,requested,actual,error)){cout<<"OK: "<<actual.u8string()<<"\n";if(!error.empty())cout<<"Metadata: "<<error<<'\n';}
             else cout<<"Thất bại: "<<error<<"; nguồn giữ nguyên.\n";
         }
     }
@@ -745,10 +774,8 @@ bool MediaProcessor::extractHiddenFromMediaCore(const string& containerPath,cons
             payloadSize=(uint32_t(legacy[0])<<24)|(uint32_t(legacy[1])<<16)|(uint32_t(legacy[2])<<8)|legacy[3];if(!payloadSize || payloadSize>size-8){errorMsg="Footer cũ bị hỏng.";return false;}coverSize=size-8-payloadSize;
             info={{"schema","cmd-box-hidden/1"},{"note","Footer cũ không lưu timestamp hoặc tên nguồn."}};
         }
-        auto sidecar=fs::path(output.wstring()+L".metadata.json");if(fs::exists(sidecar)){errorMsg="Đã có metadata đi kèm; chọn tên đầu ra mới.";return false;}
         in.seekg(streamoff(coverSize));FileSafety::ExclusiveOutput out(output);
         if(!out || !FileSafety::copyExact(in,out,payloadSize,true) || !out.commit()){errorMsg="Không trích được file; không ghi đè đầu ra.";return false;}
-        if(!MediaMetadata::writeJson(sidecar,info)){errorMsg="Đã trích nhưng không lưu được metadata đi kèm.";return false;}
         if(modern && !restoreHiddenTimes(info,output)){errorMsg="Đã trích nhưng không khôi phục được timestamp.";return false;}return true;
     }catch(...){errorMsg="Không thể trích xuất file ẩn.";return false;}
 }
