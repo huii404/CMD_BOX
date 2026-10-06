@@ -1,17 +1,8 @@
 #ifndef MEDIA_PROCESSOR_H
 #define MEDIA_PROCESSOR_H
 
-#include "SystemCore.h"
+#include <cstdint>
 #include <string>
-#include <windows.h>
-#include <vector>
-#include <sstream>
-#include <iomanip>
-#include <limits>
-#include <filesystem>
-#include <cstdio>
-#include <mutex>
-#include <iostream> 
 
 struct GpuCodecInfo {
     std::string encoder;
@@ -26,8 +17,6 @@ private:
     GpuCodecInfo getGpuEncoder();
     bool extractAudioCore(const std::string& inputPath, const std::string& outputPath);
     bool changeSpeedCore(const std::string& inputPath, const std::string& outputPath, float speedMultiplier);
-
-    // Core chức năng Ẩn & Trích xuất file trong Media
     bool embedFileIntoContainerCore(const std::string& containerPath, const std::string& hiddenFilePath, const std::string& outputPath, uintmax_t maxContainerSize, std::string& errorMsg);
     bool hideFileInImageCore(const std::string& imagePath, const std::string& hiddenFilePath, const std::string& outputPath, std::string& errorMsg);
     bool hideFileInVideoCore(const std::string& videoPath, const std::string& hiddenFilePath, const std::string& outputPath, std::string& errorMsg);
@@ -37,16 +26,13 @@ public:
     MediaProcessor();
     ~MediaProcessor();
 
-    void processMediaAuto(); 
+    void processMediaAuto();
     void processExtractAudioBatch();
     void processChangeSpeedBatch();
     void processConvertFormatBatch();
     void normalizeMediaFilenames();
-    
-    // Hàm mẹ: Ẩn file trong file (Menu lồng)
+    void organizeAlbumFolder();
     void processAnFileTrongFile();
-
-    // Các chức năng Ẩn & Trích xuất file trong Media
     void hideFileInImage();
     void hideFileInVideo();
     void extractHiddenFromMedia();

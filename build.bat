@@ -103,9 +103,10 @@ if exist "%TEMP%\cmd_build_err.log" del /f /q "%TEMP%\cmd_build_err.log" 2>nul
 :: Không kết thúc các tiến trình main.exe không liên quan.
 
 echo   [BUILD] Dang bien dich CMD BOX...
-"!GXX!" -std=c++17 -O3 -fopenmp -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\diskcleaner\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp !RES_PARAM! -o bin\main.next.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -lversion -static-libgcc -static-libstdc++ -static -s 2>"%TEMP%\cmd_build_err.log"
+"!GXX!" -std=c++17 -O3 -fopenmp -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\diskcleaner\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp !RES_PARAM! -o bin\main.next.exe -lbcrypt -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -lversion -static-libgcc -static-libstdc++ -static -s 2>"%TEMP%\cmd_build_err.log"
 
 set BUILD_RET=%errorlevel%
+if exist "bin\resource.o" del /f /q "bin\resource.o"
 
 if not "!BUILD_RET!"=="0" (
     echo.

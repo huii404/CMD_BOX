@@ -240,6 +240,7 @@ public:
                          << "  │ " << UI::YELLOW << " [4] " << UI::WHITE << "Đổi định dạng tệp\n"
                          << "  │ " << UI::YELLOW << " [5] " << UI::WHITE << "Chuẩn hóa tên file\n"
                          << "  │ " << UI::YELLOW << " [6] " << UI::WHITE << "Ẩn file trong media\n"
+                         << "  │ " << UI::YELLOW << " [7] " << UI::WHITE << "Sắp album từ thư mục (năm / tháng)\n"
                          << "  │\n"
                          << "  │ " << UI::RED    << " [0] " << UI::DIM   << "Quay lại menu chính\n"
                          << UI::CYAN << "  └─────────────────────────────────────────────────────\n"
@@ -255,6 +256,7 @@ public:
                     case 4:  getMedia().processConvertFormatBatch(); break;
                     case 5:  getMedia().normalizeMediaFilenames(); break;
                     case 6:  getMedia().processAnFileTrongFile(); break;
+                    case 7:  getMedia().organizeAlbumFolder(); break;
                     default: Sleep(300); break;
                     }
                 }

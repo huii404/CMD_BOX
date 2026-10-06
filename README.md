@@ -27,12 +27,12 @@ main.exe media
 
 **CMD BOX** là bộ công cụ dòng lệnh (CLI) hiệu năng cao dành cho quản trị, bảo trì, tối ưu hóa hệ điều hành, bảo mật mạng và xử lý đa phương tiện trên nền tảng Windows.
 
-Dự án dùng **C++ native**, Win32 API và OpenMP. Bản build mặc định không yêu cầu AVX2/FMA. Media cần FFmpeg; tải ứng dụng và kiểm tra release cần Internet. Web Drop dùng API QR bên thứ ba để tạo mã QR, còn nội dung file được truyền trực tiếp trong LAN.
+Dự án dùng **C++ native**, Win32 API và OpenMP. Bản build mặc định không yêu cầu AVX2/FMA. Media cần FFmpeg, ffprobe và ExifTool (xem [metadata và album](docs/MEDIA.md)); tải ứng dụng và kiểm tra release cần Internet. Web Drop dùng API QR bên thứ ba để tạo mã QR, còn nội dung file được truyền trực tiếp trong LAN. LocalDrop v2 hỗ trợ nhiều file/thư mục, mã ghép đôi, tải tiếp và kiểm tra SHA-256; xem [hướng dẫn LocalDrop](README_LOCAL_DROP.md).
 
 ### Đặc tính Kỹ thuật
 - **Quản lý tiến trình:** Runner trực tiếp dùng Job Object và timeout để dừng cây child. Lệnh UAC qua ShellExecute và một số đường gọi system/_popen không có cùng bảo đảm; xem giới hạn trong báo cáo sửa.
 - **Khởi tạo trễ (Lazy Loading):** Áp dụng mô hình con trỏ thông minh `std::unique_ptr` kết hợp cơ chế kiểm tra đa luồng (Double-Checked Locking / Thread-safe). Ứng dụng chỉ cấp phát bộ nhớ khi người dùng truy cập phân hệ tương ứng, duy trì mức chiếm dụng RAM cực thấp ở trạng thái chờ.
-- **Bảo toàn 100% Siêu dữ liệu (Metadata Preservation):** Sao chép nguyên vẹn khối siêu dữ liệu cấp thấp (EXIF, GPS tọa độ, Model máy ảnh, Ống kính, Giờ chụp) và đồng bộ ngày giờ tạo/sửa đổi tệp tin (`last_write_time`) trên hệ điều hành trùng khớp ảnh gốc.
+- **Bảo tồn metadata có kiểm chứng:** Snapshot thông tin nguồn trước render; ExifTool chuyển các trường hỗ trợ và đọc lại đầu ra. Mỗi bản xuất có `.metadata.json` lưu thông tin nguồn/đích, timestamp và trường không chuyển được. Giữ file gốc; không khẳng định giữ 100% tag khi đổi định dạng. Xem [hướng dẫn](docs/MEDIA.md).
 - **Tương thích toàn diện:** Hoạt động ổn định trên Windows 10 và Windows 11 (64-bit).
 
 ---
@@ -71,7 +71,7 @@ Chương trình được phân tách thành 4 phân hệ chính theo từng lĩn
 - **Lá chắn bảo mật toàn diện (Full Security Shield):** Kích hoạt Windows Defender, cập nhật mẫu mã độc, bật tường lửa toàn diện, kích hoạt bảo vệ chống Ransomware (Controlled Folder Access), đóng các cổng dịch vụ mạng nguy hiểm (445, 139, 135, 137, 138) và cấu hình Cloudflare DoH `1.1.1.1`.
 - **Kiểm tra trạng thái bảo mật:** Rà soát đánh giá trạng thái Defender, Firewall, dịch vụ RDP và tính hợp lệ của DNS.
 - **Trích xuất mật khẩu Wi-Fi:** Liệt kê toàn bộ hồ sơ Wi-Fi đã lưu trên máy, hiển thị tên mạng (SSID), chuẩn bảo mật và mật khẩu rõ ràng.
-- **Trạm truyền file P2P nội bộ (Local Web Drop):** Truyền file trực tiếp giữa PC và điện thoại/máy tính khác qua mạng cục bộ (LAN / Wi-Fi) bằng TCP Stream và UDP Broadcast Beacon. Không phụ thuộc đám mây trung gian (Zero-Cloud), không sinh file tạm (Zero-Temp-File). *(Yêu cầu kỹ thuật bắt buộc: Cả hai thiết bị phải kết nối chung một mạng nội bộ; nếu một trong hai máy mất mạng thì gói tin bị ngắt và không thể truyền dữ liệu).*
+- **Trạm truyền file P2P nội bộ (LocalDrop v2):** Gửi nhiều file/thư mục qua LAN, ghép đôi bằng mã 6 số, trang tải bằng QR API. Máy nhận CMD BOX tự tiếp tục khi mất kết nối và kiểm tra SHA-256 trước khi công nhận hoàn tất; file tải dở lưu trong thư mục nhận. HTTP chưa mã hóa. Xem [hướng dẫn và giới hạn](README_LOCAL_DROP.md).
 
 ### 3. Công cụ Tự động & Tiện ích (`UtilityTools`)
 - **Tự động nhấp chuột (Auto Click):** Mô phỏng thao tác nhấp chuột theo tọa độ cố định hoặc vị trí con trỏ hiện tại với tần suất mili-giây tùy chỉnh, phím ngắt khẩn cấp (`ESC` / `F6`).
@@ -90,6 +90,7 @@ Chương trình được phân tách thành 4 phân hệ chính theo từng lĩn
 - Thay đổi tốc độ Video (0.5x đến 2.0x) kèm bộ lọc âm thanh thích ứng chống méo cao độ.
 - Đổi định dạng tệp đa phương tiện linh hoạt.
 - Chuẩn hóa tên tập tin theo quy chuẩn đồng nhất trong thư mục.
+- Sắp album từ thư mục theo năm/tháng chụp/quay, có preview; sao chép và giữ file gốc.
 - Ẩn file vào file (Steganography).
 
 ---
