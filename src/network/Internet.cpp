@@ -3,8 +3,10 @@
 #include "LocalDrop.h"
 #include "NetworkScanner.h"
 #include <iphlpapi.h>
+#ifdef _MSC_VER
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
+#endif
 #include "SystemCore.h"
 #include <filesystem>
 #include <ws2tcpip.h>
@@ -52,11 +54,6 @@ Internet::~Internet() {
     WSACleanup();
 }
 
-string Internet::getField(const string &line) {
-    size_t pos = line.find(':');
-    if (pos != string::npos) return SystemCore::trim(line.substr(pos + 1));
-    return "";
-}
 
 // ----------------------------------------------------------------------------------
 // BƯỚC 1: SỬA LỖI & KHÔI PHỤC MẠNG TOÀN DIỆN
@@ -85,12 +82,19 @@ void Internet::wifiAudit() {
     sc.cls();
     HMODULE dll = LoadLibraryW(L"wlanapi.dll");
     if (!dll) { cout << "[!] Không mở được WLAN API.\n"; sc.waitEnter(); return; }
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-function-type"
+#endif
     auto openHandle = reinterpret_cast<decltype(&WlanOpenHandle)>(GetProcAddress(dll, "WlanOpenHandle"));
     auto closeHandle = reinterpret_cast<decltype(&WlanCloseHandle)>(GetProcAddress(dll, "WlanCloseHandle"));
     auto enumInterfaces = reinterpret_cast<decltype(&WlanEnumInterfaces)>(GetProcAddress(dll, "WlanEnumInterfaces"));
     auto getProfiles = reinterpret_cast<decltype(&WlanGetProfileList)>(GetProcAddress(dll, "WlanGetProfileList"));
     auto getProfile = reinterpret_cast<decltype(&WlanGetProfile)>(GetProcAddress(dll, "WlanGetProfile"));
     auto freeMemory = reinterpret_cast<decltype(&WlanFreeMemory)>(GetProcAddress(dll, "WlanFreeMemory"));
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
     if (!openHandle || !closeHandle || !enumInterfaces || !getProfiles || !getProfile || !freeMemory) {
         FreeLibrary(dll); cout << "[!] WLAN API không đầy đủ.\n"; sc.waitEnter(); return;
     }

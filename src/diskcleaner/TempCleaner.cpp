@@ -1,5 +1,6 @@
 #include "FileSafety.h"
 #include "TempCleaner.h"
+#include "SystemCore.h"
 #include <iostream>
 #include <vector>
 
@@ -19,7 +20,7 @@ CleanStats TempCleaner::clean(bool dryRun) {
     }
 
     // 2. Thư mục Temp hệ thống & Prefetch (Nếu có quyền Admin)
-    if (CleanerCore::isElevated()) {
+    if (SystemCore::isElevated()) {
         CleanerCore::wipeFolderContents(sysRoot + "\\Temp", dryRun, stats);
         CleanerCore::wipeFolderContents(sysRoot + "\\Prefetch", dryRun, stats);
     }
@@ -56,14 +57,11 @@ CleanStats TempCleaner::clean(bool dryRun) {
     }
 
     // 5. ProgramData WER Temp
-    if (CleanerCore::isElevated() && !progData.empty()) {
+    if (SystemCore::isElevated() && !progData.empty()) {
         CleanerCore::wipeFolderContents(progData + "\\Microsoft\\Windows\\WER\\Temp", dryRun, stats);
     }
 
-    // 6. Làm rỗng Thùng rác cho phạm vi dọn nhanh và dọn toàn bộ.
-    // Thùng rác chỉ được làm rỗng bằng thao tác riêng có xác nhận.
-
-    // 7. Xóa sạch cache phân giải tên miền DNS
+    // 6. Xóa cache phân giải tên miền DNS
     if (!dryRun) {
         CleanerCore::flushDns();
     }

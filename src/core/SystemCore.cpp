@@ -9,7 +9,9 @@
 #include <ctime>
 #include <limits>
 
+#ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib")
+#endif
 namespace fs = std::filesystem;
 
 std::string SystemCore::trim(const std::string& str) {
@@ -22,7 +24,7 @@ std::string SystemCore::trim(const std::string& str) {
 // Constructor / Destructor
 SystemCore::SystemCore() {
     hJob = CreateJobObjectA(NULL, NULL);
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION jeli = {0};
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION jeli{};
     jeli.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     SetInformationJobObject(hJob, JobObjectExtendedLimitInformation, &jeli, sizeof(jeli));
 }
@@ -180,41 +182,6 @@ bool SystemCore::runEmbeddedBatch(const std::string& batContent,
     return requireAdmin ? runAdmin(invocation, true) : runRawCommand("cmd.exe /d /c " + invocation);
 }
 
-bool SystemCore::runBundledBatch(const std::string& fileName,
-                                 const std::string& arguments,
-                                 bool requireAdmin) {
-    if (fileName.empty() || fileName.find_first_of("\\/:") != std::string::npos) {
-        std::cout << "[!] Tên script không hợp lệ: " << fileName << "\n";
-        return false;
-    }
-
-    char modulePath[MAX_PATH] = {};
-    DWORD pathLength = GetModuleFileNameA(NULL, modulePath, MAX_PATH);
-    if (pathLength == 0 || pathLength >= MAX_PATH) {
-        std::cout << "[!] Không xác định được thư mục chương trình.\n";
-        return false;
-    }
-
-    std::filesystem::path executableDir = std::filesystem::path(modulePath).parent_path();
-    std::filesystem::path scriptPath = executableDir / "scripts" / fileName;
-
-    // Hỗ trợ chạy bản build từ thư mục dự án trong lúc phát triển.
-    if (!std::filesystem::exists(scriptPath)) {
-        std::filesystem::path developmentPath = std::filesystem::current_path() / "scripts" / fileName;
-        if (std::filesystem::exists(developmentPath)) scriptPath = developmentPath;
-    }
-
-    if (!std::filesystem::exists(scriptPath)) {
-        std::cout << "[!] Thiếu script: " << scriptPath.string() << "\n";
-        return false;
-    }
-
-    std::string invocation = "\"" + scriptPath.string() + "\"";
-    if (!arguments.empty()) invocation += " " + arguments;
-
-    if (requireAdmin) return runAdmin(invocation, true);
-    return runRawCommand("cmd.exe /d /c call " + invocation);
-}
 
 void SystemCore::waitEnter() {
     std::cout << "\nEnter để tiếp tục";
@@ -331,7 +298,8 @@ bool SystemCore::runAdmin(const std::string &cmd, bool silent) {
     MultiByteToWideChar(CP_UTF8, 0, cmd.c_str(), -1, &wCmd[0], wlen);
     std::wstring params = L"/d /c " + wCmd;
 
-    SHELLEXECUTEINFOW sei = {sizeof(sei)};
+    SHELLEXECUTEINFOW sei{};
+    sei.cbSize    = sizeof(sei);
     sei.lpVerb    = L"runas";
     sei.lpFile    = L"cmd.exe";
     sei.lpParameters = params.c_str();

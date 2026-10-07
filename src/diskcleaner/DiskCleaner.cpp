@@ -1,3 +1,4 @@
+#include "SystemCore.h"
 #include "DiskCleaner.h"
 #include <iostream>
 #include <functional>
@@ -60,7 +61,7 @@ static void printStageRow(const char* icon, const char* iconColor,
 // currentIdx: stage đang chạy (-1 = chưa bắt đầu, >= size = tất cả xong)
 static void renderAutoDashboard(const std::vector<AutoStageResult>& stages,
                                 int currentIdx, bool finished) {
-    CleanerCore::cls();
+    SystemCore::cls();
     DiskCleaner::printBanner();
 
     CleanStats total;
@@ -85,7 +86,7 @@ static void renderAutoDashboard(const std::vector<AutoStageResult>& stages,
         } else if (st.done) {
             icon = "✓";  iconColor = CleanerCore::C_GREEN;
             long long freed = st.stats.bytesFreed + st.stats.bytesRecycled;
-            result = CleanerCore::formatSize(freed);
+            result = SystemCore::formatSize(freed);
             resultColor = CleanerCore::C_GREEN;
         } else if (i == currentIdx) {
             icon = "»";  iconColor = CleanerCore::C_CYAN;
@@ -101,7 +102,7 @@ static void renderAutoDashboard(const std::vector<AutoStageResult>& stages,
     long long totalBytes = total.bytesFreed + total.bytesRecycled;
     std::cout << SEP << "\n"
               << "  " << CleanerCore::C_BOLD << "TỔNG ĐÃ GIẢI PHÓNG: "
-              << CleanerCore::C_GREEN  << CleanerCore::formatSize(totalBytes)
+              << CleanerCore::C_GREEN  << SystemCore::formatSize(totalBytes)
               << CleanerCore::C_RESET
               << "  (" << total.filesDeleted << " files, "
               << total.dirsDeleted   << " dirs)\n"
@@ -142,10 +143,10 @@ void DiskCleaner::printBanner() {
 
     std::string drive     = CleanerCore::getSystemDriveRoot();
     long long   freeBytes = CleanerCore::getAvailableDiskSpace(drive);
-    bool        admin     = CleanerCore::isElevated();
+    bool        admin     = SystemCore::isElevated();
 
     std::cout << " Ổ đĩa: " << CleanerCore::C_YELLOW << drive << CleanerCore::C_RESET
-              << " | Trống: " << CleanerCore::C_GREEN << CleanerCore::formatSize(freeBytes) << CleanerCore::C_RESET
+              << " | Trống: " << CleanerCore::C_GREEN << SystemCore::formatSize(freeBytes) << CleanerCore::C_RESET
               << " | Quyền: "
               << (admin
                     ? std::string(CleanerCore::C_GREEN) + "Administrator"
@@ -161,7 +162,7 @@ CleanStats DiskCleaner::runScope(CleanScope scope, bool dryRun) {
         CleanStats s = TempCleaner::clean(dryRun);
         total.add(s);
         std::cout << "     └── Giải phóng: " << CleanerCore::C_GREEN
-                  << CleanerCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
+                  << SystemCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
                   << " (" << s.filesDeleted << " files)\n\n";
     }
 
@@ -170,7 +171,7 @@ CleanStats DiskCleaner::runScope(CleanScope scope, bool dryRun) {
         CleanStats s = BrowserCleaner::clean(dryRun);
         total.add(s);
         std::cout << "     └── Giải phóng: " << CleanerCore::C_GREEN
-                  << CleanerCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
+                  << SystemCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
                   << " (" << s.filesDeleted << " files, " << s.dirsDeleted << " dirs)\n\n";
     }
 
@@ -179,7 +180,7 @@ CleanStats DiskCleaner::runScope(CleanScope scope, bool dryRun) {
         CleanStats s = SystemDeepCleaner::clean(dryRun, false);
         total.add(s);
         std::cout << "     └── Giải phóng: " << CleanerCore::C_GREEN
-                  << CleanerCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
+                  << SystemCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
                   << " (" << s.filesDeleted << " files, " << s.dirsDeleted << " dirs)\n\n";
     }
 
@@ -188,7 +189,7 @@ CleanStats DiskCleaner::runScope(CleanScope scope, bool dryRun) {
         CleanStats s = DevCleaner::clean(dryRun);
         total.add(s);
         std::cout << "     └── Giải phóng: " << CleanerCore::C_GREEN
-                  << CleanerCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
+                  << SystemCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
                   << " (" << s.filesDeleted << " files, " << s.dirsDeleted << " dirs)\n\n";
     }
 
@@ -199,11 +200,11 @@ CleanStats DiskCleaner::runScope(CleanScope scope, bool dryRun) {
         total.add(s);
         if (s.filesDeleted > 0) {
             std::cout << "     ├── [XÓA CỨNG] File tải dở/lỗi: "
-                      << CleanerCore::C_GREEN << CleanerCore::formatSize(s.bytesFreed)
+                      << CleanerCore::C_GREEN << SystemCore::formatSize(s.bytesFreed)
                       << CleanerCore::C_RESET << " (" << s.filesDeleted << " files)\n";
         }
         std::cout << "     └── [RECYCLE]  File trùng & bộ cài đã cài: "
-                  << CleanerCore::C_YELLOW << CleanerCore::formatSize(s.bytesRecycled)
+                  << CleanerCore::C_YELLOW << SystemCore::formatSize(s.bytesRecycled)
                   << CleanerCore::C_RESET
                   << " (" << s.filesRecycled << " files)\n\n";
     }
@@ -243,7 +244,7 @@ void DiskCleaner::runAutomaticCleanup(bool waitAtEnd) {
     executeStage(0, [] { return TempCleaner::clean(false); });
     executeStage(1, [] { return BrowserCleaner::clean(false); });
 
-    if (CleanerCore::isElevated()) {
+    if (SystemCore::isElevated()) {
         executeStage(2, [] { return SystemDeepCleaner::clean(false, true); });
     } else {
         stages[2].skipped = true;
@@ -256,6 +257,6 @@ void DiskCleaner::runAutomaticCleanup(bool waitAtEnd) {
     executeStage(4, [] { return DownloadsCleaner::clean(false); });
 
     renderAutoDashboard(stages, static_cast<int>(stages.size()), true);
-    if (waitAtEnd) CleanerCore::waitEnter();
+    if (waitAtEnd) SystemCore::waitEnter();
 }
 

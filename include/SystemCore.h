@@ -36,9 +36,6 @@ public:
     static bool runEmbeddedBatch(const std::string& batContent,
                                  const std::string& arguments = "",
                                  bool requireAdmin = false);
-    static bool runBundledBatch(const std::string& fileName,
-                                const std::string& arguments = "",
-                                bool requireAdmin = false);
 
     void runCMD(const std::string &cmd); // system-user
     static bool runAdmin(const std::string &cmd, bool silent = false); // system-admin

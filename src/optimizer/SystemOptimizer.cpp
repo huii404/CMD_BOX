@@ -17,26 +17,10 @@
 using namespace std;
 namespace fs = std::filesystem;
 
-// =========================================================================================
-// MODULE: SYSTEM OPTIMIZER (Tối ưu hóa và dọn dẹp hệ thống)
-// =========================================================================================
-
 SystemOptimizer::SystemOptimizer(SystemCore &s) : sc(s) {}
 
-/**
- * =========================================================================================
- * 2. HÀM QUẢN LÝ & TẮT ỨNG DỤNG KHỞI ĐỘNG THÔNG MINH (disableAllStartupApps)
- * =========================================================================================
- * NÂNG CẤP THÔNG MINH:
- * - Quét toàn diện: Registry Run (HKCU, HKLM, WOW64) và Thư mục Startup người dùng.
- * - Nhận diện thông minh (Smart Categorization):
- *   + TUYỆT ĐỐI BẢO VỆ: Bộ gõ tiếng Việt (Unikey, EVKey, OpenKey), Defender, Driver âm thanh,
- *     Driver GPU (NVIDIA, AMD, Intel), Chuột/Phím gaming gear, Touchpad/Hotkeys Laptop, Cloud (OneDrive).
- *   + NHẬN DIỆN APP KHUYÊN TẮT: Spotify, Discord, Steam, Epic Games, uTorrent, IDM, Skype...
- * - Cơ chế an toàn (Non-destructive):
- *   + Tự động sao lưu sang `Run_Disabled` thay vì xóa vĩnh viễn, cho phép KHÔI PHỤC 1-CLICK bất kỳ lúc nào.
- *   + File trong thư mục Startup được đổi tên thành `.disabled` để dễ dàng bật lại.
- */
+// Quản lý ứng dụng khởi động: bảo vệ bộ gõ, driver, antivirus;
+// sao lưu sang Run_Disabled hoặc đổi đuôi .disabled trước khi tắt.
 
 struct StartupAppInfo {
     string name;
@@ -453,19 +437,7 @@ void SystemOptimizer::multiTierPerformanceOptimize() {
 
 
 
-/**
- * =========================================================================================
- * 7. HÀM ĐIỀU KHIỂN DỊCH VỤ WINDOWS QUA WIN32 SCM API (ServiceControlAPI)
- * =========================================================================================
- * TÍNH NĂNG:
- * - Sử dụng trực tiếp API Service Control Manager của Windows (OpenSCManager, OpenService, ChangeServiceConfig)
- *   thay vì gọi lệnh `sc config` bên ngoài, giúp tốc độ thực thi nhanh vượt trội và kiểm soát lỗi chính xác.
- * 
- * @param serviceName Tên định danh của dịch vụ (ví dụ: "wuauserv", "DiagTrack", "SysMain")
- * @param startupType Kiểu khởi động (SERVICE_AUTO_START, SERVICE_DEMAND_START/Manual, SERVICE_DISABLED)
- * @param stopService Có dừng ngay lập tức nếu dịch vụ đang chạy hay không
- * @return bool true nếu cấu hình thành công, false nếu thất bại (thiếu quyền Admin hoặc service không tồn tại)
- */
+// Điều khiển dịch vụ Windows qua Win32 Service Control Manager (SCM API)
 bool SystemOptimizer::ServiceControlAPI(std::string serviceName, DWORD startupType, bool stopService) {
     if (serviceName.empty() || serviceName.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != string::npos ||
         (startupType != SERVICE_DISABLED && startupType != SERVICE_DEMAND_START && startupType != SERVICE_AUTO_START)) return false;

@@ -42,8 +42,7 @@ CleanStats BrowserCleaner::clean(bool dryRun) {
         std::error_code ec;
         if (!fs::exists(baseDir, ec)) continue;
 
-        // Opera dùng chính "Opera Stable/GX Stable" làm profile root thay vì
-        // đặt cache dưới Default/Profile N như Chrome và Edge.
+        // Opera dùng trực tiếp profile root thay vì thư mục Default/Profile N
         std::string baseName = baseDir.filename().string();
         bool isOpera = (baseName == "Opera Stable" || baseName == "Opera GX Stable");
         if (isOpera) {
@@ -52,8 +51,7 @@ CleanStats BrowserCleaner::clean(bool dryRun) {
             }
         }
 
-        // Với Opera đã xử lý xong ở trên — bỏ qua vòng lặp profile để
-        // tránh double-wipe các thư mục ShaderCache, GrShaderCache, DawnCache.
+        // Với trình duyệt khác: quét từng profile con (Default, Profile N...)
         if (!isOpera) {
         try {
             for (const auto& entry : fs::directory_iterator(baseDir, fs::directory_options::skip_permission_denied, ec)) {
@@ -112,17 +110,9 @@ CleanStats BrowserCleaner::clean(bool dryRun) {
         }
     }
 
-    // 3. Dọn rác chuyên sâu cho Zalo PC (Được tối ưu chính xác theo cấu trúc ổ cứng thực tế)
-    // Loại bỏ hoàn toàn quét các app chat không dùng khác để tiết kiệm tài nguyên tối đa.
-    // LƯU Ý BẢO VỆ: Giữ nguyên tuyệt đối Database chat (*.db), lịch sử tin nhắn và phiên đăng nhập.
-
+    // 3. Dọn rác Zalo PC (Bảo vệ database chat *.db, tin nhắn và phiên đăng nhập)
     if (!baseLocal.empty()) {
-        // Giữ nguyên các bản cài Zalo và gói updater: mtime không xác định bản đang dùng.
-
-        // C. Bộ đệm file tải tạm xem trước của Zalo (TempDownloads)
         CleanerCore::wipeFolderContents(baseLocal + "\\Temp\\Zalo Temp", dryRun, stats);
-
-        // D. Thư mục temp và crash dumps phụ
         CleanerCore::wipeFolderContents(baseLocal + "\\ZaloPC\\temp", dryRun, stats);
         CleanerCore::wipeFolderContents(baseLocal + "\\ZaloPC\\CrashDumps", dryRun, stats);
     }
@@ -132,17 +122,13 @@ CleanStats BrowserCleaner::clean(bool dryRun) {
         std::error_code ec;
 
         if (fs::exists(zaloDataDir, ec)) {
-            // E. Gói zip cập nhật phiên bản Zalo còn sót lại trong media\update (chiếm ~260MB)
+            // Media tạm, gói update và log
             CleanerCore::wipeFolderContents(zaloDataDir / "media" / "update", dryRun, stats);
-
-            // F. File media tạm xem trước trong media\temp (chiếm ~120MB)
             CleanerCore::wipeFolderContents(zaloDataDir / "media" / "temp", dryRun, stats);
-
-            // G. Log hành vi và telemetry trong media\action và media\qos
             CleanerCore::wipeFolderContents(zaloDataDir / "media" / "action", dryRun, stats);
             CleanerCore::wipeFolderContents(zaloDataDir / "media" / "qos", dryRun, stats);
 
-            // H. Web/Electron & V8 Shader Cache của Zalo (ZaloData root)
+            // Web/Electron Cache
             CleanerCore::wipeFolderContents(zaloDataDir / "Cache", dryRun, stats);
             CleanerCore::wipeFolderContents(zaloDataDir / "Code Cache", dryRun, stats);
             CleanerCore::wipeFolderContents(zaloDataDir / "DawnCache", dryRun, stats);
@@ -150,7 +136,7 @@ CleanStats BrowserCleaner::clean(bool dryRun) {
             CleanerCore::wipeFolderContents(zaloDataDir / "resp_cache", dryRun, stats);
             CleanerCore::wipeFolderContents(zaloDataDir / "blob_storage", dryRun, stats);
 
-            // I. Cache trong profile partition của Zalo (Partitions\zalo)
+            // Partition Cache
             fs::path partZalo = zaloDataDir / "Partitions" / "zalo";
             CleanerCore::wipeFolderContents(partZalo / "Cache", dryRun, stats);
             CleanerCore::wipeFolderContents(partZalo / "Code Cache", dryRun, stats);
@@ -160,7 +146,7 @@ CleanStats BrowserCleaner::clean(bool dryRun) {
             CleanerCore::wipeFolderContents(partZalo / "Service Worker" / "CacheStorage", dryRun, stats);
             CleanerCore::wipeFolderContents(partZalo / "Service Worker" / "ScriptCache", dryRun, stats);
 
-            // J. File log văn bản tích tụ qua thời gian
+            // File log văn bản
             static const std::vector<std::string> zaloLogFiles = {
                 "call.log", "log.log", "startup.log", "update.log"
             };
@@ -170,7 +156,7 @@ CleanStats BrowserCleaner::clean(bool dryRun) {
             CleanerCore::safeDeleteFile(zaloDataDir / "media" / "timeonapp.txt", dryRun, stats);
         }
 
-        // K. Bộ đệm nếu có dưới %APPDATA%\Zalo
+        // Cache %APPDATA%\Zalo
         CleanerCore::wipeFolderContents(baseApp + "\\Zalo\\Cache", dryRun, stats);
         CleanerCore::wipeFolderContents(baseApp + "\\Zalo\\Code Cache", dryRun, stats);
         CleanerCore::wipeFolderContents(baseApp + "\\Zalo\\GPUCache", dryRun, stats);

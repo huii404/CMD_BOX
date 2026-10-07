@@ -13,8 +13,10 @@
 #include <ctime>
 #include <omp.h>
 
+#ifdef _MSC_VER
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
+#endif
 
 using namespace std;
 static unsigned short readNetworkWord(const char* data) {

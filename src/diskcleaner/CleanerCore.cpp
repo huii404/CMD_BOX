@@ -1,5 +1,6 @@
 #include "ProcessRunner.h"
 #include "FileSafety.h"
+#include "SystemCore.h"
 #include <climits>
 #include "CleanerCore.h"
 #include <iostream>
@@ -49,47 +50,12 @@ void CleanerCore::initConsole() {
     }
 }
 
-void CleanerCore::cls() {
-    std::cout << "\033[2J\033[1;1H" << std::flush;
-}
-
-void CleanerCore::waitEnter() {
-    std::cout << C_YELLOW << "\nNhấn [Enter] để tiếp tục..." << C_RESET;
-    std::string dummy;
-    std::getline(std::cin, dummy);
-}
-
-std::string CleanerCore::trim(const std::string& str) {
-    size_t first = str.find_first_not_of(" \t\r\n");
-    if (first == std::string::npos) return "";
-    size_t last = str.find_last_not_of(" \t\r\n");
-    return str.substr(first, (last - first + 1));
-}
-
 std::string CleanerCore::toLower(const std::string& str) {
     std::string res = str;
     std::transform(res.begin(), res.end(), res.begin(), [](unsigned char c) {
         return static_cast<char>(std::tolower(c));
     });
     return res;
-}
-
-std::string CleanerCore::formatSize(long long bytes) {
-    if (bytes <= 0) return "0 B";
-    static const char* units[] = {"B", "KB", "MB", "GB", "TB", "PB"};
-    double sz = static_cast<double>(bytes);
-    int unitIdx = 0;
-    while (sz >= 1024.0 && unitIdx < 5) {
-        sz /= 1024.0;
-        unitIdx++;
-    }
-    std::ostringstream ss;
-    if (unitIdx == 0) {
-        ss << static_cast<long long>(sz) << " " << units[unitIdx];
-    } else {
-        ss << std::fixed << std::setprecision(2) << sz << " " << units[unitIdx];
-    }
-    return ss.str();
 }
 
 std::string CleanerCore::getSystemDriveRoot() {
@@ -163,19 +129,7 @@ bool CleanerCore::isCriticalPath(const fs::path& p) {
     return false;
 }
 
-bool CleanerCore::isElevated() {
-    bool elevated = false;
-    HANDLE hToken = NULL;
-    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
-        TOKEN_ELEVATION elevation;
-        DWORD cbSize = sizeof(TOKEN_ELEVATION);
-        if (GetTokenInformation(hToken, TokenElevation, &elevation, sizeof(elevation), &cbSize)) {
-            elevated = (elevation.TokenIsElevated != 0);
-        }
-        CloseHandle(hToken);
-    }
-    return elevated;
-}
+
 
 bool CleanerCore::restartAsAdmin(const std::string& args) {
     char exePath[MAX_PATH] = {0};

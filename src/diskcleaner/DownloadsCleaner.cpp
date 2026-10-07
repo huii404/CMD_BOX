@@ -1,3 +1,4 @@
+#include "SystemCore.h"
 #include "DownloadsCleaner.h"
 #include <cstdio>
 #include <vector>
@@ -68,7 +69,7 @@ std::string DownloadsCleaner::cleanAppName(const std::string& raw) {
             pos += 1;
         }
     }
-    return CleanerCore::trim(s);
+    return SystemCore::trim(s);
 }
 
 std::unordered_set<std::string> DownloadsCleaner::getInstalledAppNames() {
@@ -90,7 +91,7 @@ std::unordered_set<std::string> DownloadsCleaner::getInstalledAppNames() {
                     if (RegQueryValueExA(hSubKey, "DisplayName", NULL, &type, (LPBYTE)displayName, &dataSize) == ERROR_SUCCESS &&
                         (type == REG_SZ || type == REG_EXPAND_SZ) && dataSize > 0 && dataSize <= sizeof(displayName) &&
                         std::find(displayName, displayName + dataSize, char(0)) != displayName + dataSize) {
-                        std::string name = CleanerCore::trim(CleanerCore::toLower(displayName));
+                        std::string name = SystemCore::trim(CleanerCore::toLower(displayName));
                         if (!name.empty()) {
                             installed.insert(name);
                             std::string cleaned = cleanAppName(name);
@@ -173,10 +174,10 @@ std::string DownloadsCleaner::getExeProductName(const std::string& exePath) {
     };
 
     if (!productName.empty() && !isGenericEngine(productName)) {
-        return CleanerCore::trim(productName);
+        return SystemCore::trim(productName);
     }
     if (!fileDescription.empty() && !isGenericEngine(fileDescription)) {
-        return CleanerCore::trim(fileDescription);
+        return SystemCore::trim(fileDescription);
     }
 
     return "";

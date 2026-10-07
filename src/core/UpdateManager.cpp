@@ -294,7 +294,7 @@ string UpdateManager::getVersionStatusText() {
 
 void UpdateManager::showUpdateMenu() {
     while (true) {
-        system("cls");
+        SystemCore::cls();
         MenuStyle::header("CẬP NHẬT PHẦN MỀM",MenuStyle::ROSE);
 
         ReleaseInfo rel = fetchLatestRelease();

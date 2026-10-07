@@ -41,16 +41,11 @@ public:
     static const char* C_DIM;     // Xám mờ — dùng cho stage chưa chạy
 
     static void initConsole();
-    static void cls();
-    static void waitEnter();
-    static std::string trim(const std::string& str);
     static std::string toLower(const std::string& str);
-    static std::string formatSize(long long bytes);
     static std::string getSystemDriveRoot();
     static long long getAvailableDiskSpace(const std::string& drivePath = "");
 
     // Quyền hạn Windows
-    static bool isElevated();
     static bool restartAsAdmin(const std::string& args = "");
 
     // Tác vụ thực thi dòng lệnh an toàn

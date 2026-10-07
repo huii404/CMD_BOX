@@ -1,5 +1,6 @@
 #include "FileSafety.h"
 #include "SystemDeepCleaner.h"
+#include "SystemCore.h"
 #include <iostream>
 #include <vector>
 
@@ -32,7 +33,7 @@ bool queryServiceRunning(const wchar_t* serviceName, bool& running) {
 CleanStats SystemDeepCleaner::clean(bool dryRun, bool runDismCleanup) {
     CleanStats stats;
 
-    if (!dryRun && !CleanerCore::isElevated()) {
+    if (!dryRun && !SystemCore::isElevated()) {
         std::cout << CleanerCore::C_RED << " [!] LƯU Ý: Module dọn dẹp hệ thống chuyên sâu yêu cầu quyền Administrator!\n" << CleanerCore::C_RESET;
         return stats;
     }
