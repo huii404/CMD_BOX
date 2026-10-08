@@ -291,24 +291,44 @@ void UtilityTools::downloadManager() {
     wchar_t buffer[MAX_PATH];
     if (GetModuleFileNameW(NULL, buffer, MAX_PATH) > 0) {
         fs::path exeDir = fs::path(buffer).parent_path();
-        if (fs::exists(exeDir / "scripts" / "download-apps.bat")) {
-            scriptPath = exeDir / "scripts" / "download-apps.bat";
-        } else if (fs::exists(exeDir.parent_path() / "scripts" / "download-apps.bat")) {
-            scriptPath = exeDir.parent_path() / "scripts" / "download-apps.bat";
+        std::vector<fs::path> candidates = {
+            exeDir / "scripts" / "download-apps.bat",
+            exeDir / "script" / "download-apps.bat",
+            exeDir / "download-apps.bat",
+            exeDir.parent_path() / "scripts" / "download-apps.bat",
+            exeDir.parent_path() / "script" / "download-apps.bat",
+            exeDir.parent_path() / "download-apps.bat"
+        };
+        for (const auto &p : candidates) {
+            if (fs::exists(p)) {
+                scriptPath = p;
+                break;
+            }
         }
     }
     if (scriptPath.empty()) {
-        if (fs::exists("scripts/download-apps.bat")) scriptPath = "scripts/download-apps.bat";
-        else if (fs::exists("../scripts/download-apps.bat")) scriptPath = "../scripts/download-apps.bat";
+        std::vector<fs::path> relCandidates = {
+            "scripts/download-apps.bat",
+            "script/download-apps.bat",
+            "download-apps.bat",
+            "../scripts/download-apps.bat",
+            "../script/download-apps.bat"
+        };
+        for (const auto &p : relCandidates) {
+            if (fs::exists(p)) {
+                scriptPath = p;
+                break;
+            }
+        }
     }
 
     if (scriptPath.empty() || !fs::exists(scriptPath)) {
-        cout << "\n  [!] Không tìm thấy kịch bản: scripts/download-apps.bat\n";
+        cout << "\n  [!] Không tìm thấy kịch bản: scripts/download-apps.bat (hoặc script/)\n";
         sc.waitEnter();
         return;
     }
 
-    string cmd = "\"" + scriptPath.string() + "\"";
+    string cmd = "call \"" + scriptPath.string() + "\"";
     sc.runCMD(cmd);
 }
 
