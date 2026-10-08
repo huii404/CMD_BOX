@@ -134,12 +134,8 @@ static void renderAutoDashboard(const std::vector<AutoStageResult>& stages,
 // ═══════════════════════════════════════════════════════════════════════════
 
 void DiskCleaner::printBanner() {
-    std::cout << CleanerCore::C_CYAN << CleanerCore::C_BOLD
-              << "╔══════════════════════════════════════════════════════════════╗\n"
-              << "║       CHƯƠNG TRÌNH DỌN DẸP RÁC CHUYÊN SÂU WINDOWS (C++)     ║\n"
-              << "║          Tối ưu bộ nhớ đệm, ổ đĩa và rác hệ thống           ║\n"
-              << "╚══════════════════════════════════════════════════════════════╝\n"
-              << CleanerCore::C_RESET;
+    std::cout << "\n \x1b[38;2;195;165;255m╭── DỌN DẸP HỆ THỐNG & TỐI ƯU Ổ ĐĨA ─────────────────────────╮\x1b[0m\n"
+              << " \x1b[38;2;195;165;255m╰────────────────────────────────────────────────────────────╯\x1b[0m\n";
 
     std::string drive     = CleanerCore::getSystemDriveRoot();
     long long   freeBytes = CleanerCore::getAvailableDiskSpace(drive);

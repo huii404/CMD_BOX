@@ -1,2 +1,7 @@
 .vscode/tasks.json
 bin/*
+README_RULES.md
+README_WINDOWS_COMMANDS.md
+docs/*
+assets/resource.rc
+README_FIX_RESEARCH.md

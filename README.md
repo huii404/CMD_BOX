@@ -2,7 +2,7 @@
 
 > **Nền tảng:** Windows (x64) | **Ngôn ngữ:** C++17 | **Biên dịch:** MinGW-w64 (GCC / UCRT64)
 >
-> **Phiên bản:** 2.1.0
+> **Phiên bản:** 2.1.1
 
 Các tác vụ media giữ nguyên file nguồn và ghi kết quả vào thư mục `CMD_BOX_Output` nằm cạnh file nguồn. Dọn tự động yêu cầu xác nhận, giữ Thùng rác và thư mục rollback Windows.
 
@@ -19,7 +19,9 @@ main.exe security-status
 main.exe media
 ```
 
-**Tra cứu:** [Sổ tay lệnh Windows CMD](README_WINDOWS_COMMANDS.md) — lệnh hữu ích, tác dụng, ví dụ và mức quyền cần thiết.
+**Tra cứu & Quy chuẩn:** [Sổ tay lệnh Windows CMD](README_WINDOWS_COMMANDS.md) — lệnh hữu ích, tác dụng, ví dụ | [Quy chuẩn Phát triển & Kiến trúc](README_RULES.md) — 7 nguyên tắc thiết kế theo quy tắc.txt.
+
+**Nghiên cứu tính năng sửa lỗi:** [Tên lỗi, 24 kịch bản, logic fix và lựa chọn C++/batch](README_FIX_RESEARCH.md) — nguồn Microsoft, ưu tiên triển khai và nhật ký nghiên cứu.
 
 ---
 
@@ -27,9 +29,10 @@ main.exe media
 
 **CMD BOX** là bộ công cụ dòng lệnh (CLI) hiệu năng cao dành cho quản trị, bảo trì, tối ưu hóa hệ điều hành, bảo mật mạng và xử lý đa phương tiện trên nền tảng Windows.
 
-Dự án dùng **C++ native**, Win32 API và OpenMP. Bản build mặc định không yêu cầu AVX2/FMA. Media cần FFmpeg, ffprobe và ExifTool (xem [metadata và album](docs/MEDIA.md)); tải ứng dụng và kiểm tra release cần Internet. Web Drop dùng API QR bên thứ ba để tạo mã QR, còn nội dung file được truyền trực tiếp trong LAN. LocalDrop v2 hỗ trợ nhiều file/thư mục, mã ghép đôi, tải tiếp và kiểm tra SHA-256; xem [hướng dẫn LocalDrop](README_LOCAL_DROP.md).
+Dự án dùng **C++ native**, Win32 API và OpenMP. Bản build mặc định không yêu cầu AVX2/FMA. Media cần FFmpeg, ffprobe và ExifTool (xem [metadata và album](docs/MEDIA.md)); tải ứng dụng và kiểm tra release cần Internet. Web Drop dùng API QR bên thứ ba để tạo mã QR, còn nội dung file được truyền trực tiếp trong LAN. LocalDrop v2 hỗ trợ nhiều file/thư mục, mã ghép đôi, tải tiếp và kiểm tra SHA-256 (xem chi tiết tại phân hệ Mạng & An toàn Hệ thống).
 
 ### Đặc tính Kỹ thuật
+
 - **Quản lý tiến trình:** Runner trực tiếp dùng Job Object và timeout để dừng cây child. Lệnh UAC qua ShellExecute và một số đường gọi system/_popen không có cùng bảo đảm; xem giới hạn trong báo cáo sửa.
 - **Khởi tạo trễ (Lazy Loading):** Áp dụng mô hình con trỏ thông minh `std::unique_ptr` kết hợp cơ chế kiểm tra đa luồng (Double-Checked Locking / Thread-safe). Ứng dụng chỉ cấp phát bộ nhớ khi người dùng truy cập phân hệ tương ứng, duy trì mức chiếm dụng RAM cực thấp ở trạng thái chờ.
 - **Bảo tồn metadata có kiểm chứng:** FFmpeg/ExifTool ghi metadata trực tiếp trong file và đọc lại để kiểm tra; không xuất JSON đi kèm. Nếu không giữ được trường kỷ niệm cần thiết, từ chối bản xuất và giữ nguồn. Thông tin kỹ thuật được cập nhật theo bản render. Xem [hướng dẫn](docs/MEDIA.md).
@@ -42,7 +45,9 @@ Dự án dùng **C++ native**, Win32 API và OpenMP. Bản build mặc định k
 Chương trình được phân tách thành 4 phân hệ chính theo từng lĩnh vực chuyên biệt:
 
 ### 1. Bảo trì & Tối ưu Hệ thống (`SystemOptimizer` & `DiskCleaner`)
-> *Xem tài liệu kỹ thuật chi tiết tại:* [README_WINDOWS_CLEANER.md](file:///g:/Code/C++/project/CMD/README_WINDOWS_CLEANER.md)
+
+> *Xem mã nguồn chi tiết tại:* [`include/DiskCleaner.h`](include/DiskCleaner.h) và thư mục [`src/diskcleaner/`](src/diskcleaner/)
+
 - **Dọn rác Đa Tầng Chuyên Trách (`DiskCleaner`):**
   - *Tầng 1 (Rác bề mặt & User Cache):* Dọn Temp, `Windows\Temp`, `CrashDumps`, WER, D3DSCache, INetCache và Flush DNS. Giữ Thùng rác.
   - *Tầng 2 (Trình duyệt & Ứng dụng):* Quét đa profile tất cả trình duyệt Chromium (Chrome, Edge, Cốc Cốc, Brave, Vivaldi, Opera, Opera GX) và Firefox; dọn cache Discord, Telegram, NVIDIA Shader Cache.
@@ -58,6 +63,7 @@ Chương trình được phân tách thành 4 phân hệ chính theo từng lĩn
 - **Sửa lỗi Windows Update:** Tạm dừng các dịch vụ điều phối cập nhật (`wuauserv`, `bits`, `cryptsvc`), giải phóng các gói dữ liệu cập nhật bị hỏng trong `SoftwareDistribution` và `catroot2`, tái kích hoạt dịch vụ về trạng thái chuẩn.
 
 ### 2. Mạng & An toàn Hệ thống (`Internet`)
+
 - **Thông tin mạng chi tiết:** Truy xuất và hiển thị trạng thái card mạng vật lý/ảo, địa chỉ IPv4 nội bộ, Public IP WAN, Subnet Mask, Default Gateway và hệ thống DNS Server đang phân giải.
 - **Khôi phục mạng toàn diện (Network Repair PRO):** Quy trình tự động 8 bước chuẩn hóa:
   1. Xóa sạch bộ nhớ đệm DNS (`ipconfig /flushdns`).
@@ -71,19 +77,21 @@ Chương trình được phân tách thành 4 phân hệ chính theo từng lĩn
 - **Lá chắn bảo mật toàn diện (Full Security Shield):** Kích hoạt Windows Defender, cập nhật mẫu mã độc, bật tường lửa toàn diện, kích hoạt bảo vệ chống Ransomware (Controlled Folder Access), đóng các cổng dịch vụ mạng nguy hiểm (445, 139, 135, 137, 138) và cấu hình Cloudflare DoH `1.1.1.1`.
 - **Kiểm tra trạng thái bảo mật:** Rà soát đánh giá trạng thái Defender, Firewall, dịch vụ RDP và tính hợp lệ của DNS.
 - **Trích xuất mật khẩu Wi-Fi:** Liệt kê toàn bộ hồ sơ Wi-Fi đã lưu trên máy, hiển thị tên mạng (SSID), chuẩn bảo mật và mật khẩu rõ ràng.
-- **Trạm truyền file P2P nội bộ (LocalDrop v2):** Gửi nhiều file/thư mục qua LAN, ghép đôi bằng mã 6 số, trang tải bằng QR API. Máy nhận CMD BOX tự tiếp tục khi mất kết nối và kiểm tra SHA-256 trước khi công nhận hoàn tất; file tải dở lưu trong thư mục nhận. HTTP chưa mã hóa. Xem [hướng dẫn và giới hạn](README_LOCAL_DROP.md).
+- **Trạm truyền file P2P nội bộ (LocalDrop v2):** Gửi nhiều file/thư mục qua LAN, ghép đôi bằng mã 6 số, trang tải bằng QR API. Máy nhận CMD BOX tự tiếp tục khi mất kết nối và kiểm tra SHA-256 trước khi công nhận hoàn tất; file tải dở lưu trong thư mục nhận (HTTP truyền trực tiếp trong LAN, xem giao thức tại [`include/LocalDropProtocol.h`](include/LocalDropProtocol.h)).
 
 ### 3. Công cụ Tự động & Tiện ích (`UtilityTools`)
+
 - **Tự động nhấp chuột (Auto Click):** Mô phỏng thao tác nhấp chuột theo tọa độ cố định hoặc vị trí con trỏ hiện tại với tần suất mili-giây tùy chỉnh, phím ngắt khẩn cấp (`ESC` / `F6`).
 - **Gửi văn bản tự động (Spam Text):** Phát chuỗi ký tự liên tục với định dạng Unicode tiếng Việt (`CF_UNICODETEXT`), tối ưu độ trễ giữa các lần gửi.
 - **Tự động dán dữ liệu nhiều dòng (Auto Paste):** Đọc tuần tự từng dòng văn bản từ bộ đệm và tự động điền vào các trường nhập liệu tương ứng.
-- **Cài đặt phần mềm tự động:** Đọc danh mục phần mềm từ `apps.txt`, tự động tải về và cài đặt các ứng dụng thông dụng (Chrome, Brave, Cốc Cốc, Zalo, Telegram, Discord, VS Code, Git, 7-Zip, EVKey, OpenKey...) theo nhóm hoặc tải lẻ.
+- **Cài đặt phần mềm tự động:** Tự động tải về và cài đặt các ứng dụng thông dụng (Chrome, Brave, Cốc Cốc, Zalo, Telegram, Discord, VS Code, Git, 7-Zip, EVKey, OpenKey...) theo nhóm hoặc tải lẻ thông qua kịch bản [`scripts/download-apps.bat`](scripts/download-apps.bat).
 - **Gỡ bỏ ứng dụng rác (Bloatware Removal):** Quét và gỡ bỏ tận gốc các gói ứng dụng UWP dư thừa được cài sẵn trên Windows.
 - **Kiểm tra Pin Laptop chuyên sâu (Battery Diagnostic):** Đọc trực tiếp từ ACPI và báo cáo pin Windows (`powercfg`), trích xuất công suất thiết kế, công suất sạc đầy hiện tại, chu kỳ sạc, tỷ lệ hao mòn chai pin thực tế và tình trạng sạc.
 
 ### 4. Xử lý Đa phương tiện (`MediaProcessor`)
 
 #### Xử lý Video, Ảnh & Âm thanh (Tăng tốc phần cứng FFmpeg):
+
 - Tự động nhận diện và tận dụng bộ mã hóa phần cứng GPU (NVIDIA NVENC, Intel QuickSync, AMD AMF).
 - Nén tối ưu dung lượng Video MP4 và Ảnh (PNG/JPG) bảo toàn độ nét và Metadata.
 - Trích xuất âm thanh từ Video sang định dạng MP3 hàng loạt.
@@ -93,34 +101,54 @@ Chương trình được phân tách thành 4 phân hệ chính theo từng lĩn
 - Sắp album từ thư mục theo năm/tháng chụp/quay, có preview; sao chép và giữ file gốc.
 - Ẩn file vào file (Steganography).
 
----
-
 ## III. Cấu trúc Mã nguồn
 
 ```text
 CMD_BOX/
-├── bin/                     # Thư mục chứa tệp nhị phân sau biên dịch
-│   ├── apps.txt             # Cấu hình danh mục tải phần mềm tự động
-│   ├── ffmpeg.exe           # Bộ công cụ xử lý media hỗ trợ tăng tốc GPU
+├── bin/                     # Thư mục chứa tệp nhị phân sau biên dịch (được gitignore)
+│   ├── ffmpeg.exe           # Bộ công cụ media tăng tốc GPU (tải qua setup-media.ps1)
 │   └── main.exe             # Tệp thực thi chính của chương trình
+├── docs/                    # Tài liệu kỹ thuật chuyên sâu & bản quyền bên thứ ba
+│   ├── ExifTool_LICENSE     # Bản quyền công cụ ExifTool
+│   ├── MEDIA.md             # Đặc tả xử lý Media, Metadata & Album
+│   └── THIRD_PARTY.md       # Danh mục thành phần thư viện bên thứ ba
 ├── include/                 # Danh mục tệp tiêu đề (Header files)
-│   ├── Internet.h           # Khai báo module mạng, bảo mật & tường lửa
-│   ├── MediaProcessor.h     # Khai báo bộ xử lý video, âm thanh & Steganography
-│   ├── SystemCore.h         # Khung điều khiển Win32 API, Job Object & Console I/O
-│   ├── SystemOptimizer.h    # Khai báo module bảo trì, dọn dẹp & chỉnh sửa Registry
-│   └── UtilityTools.h       # Khai báo tiện ích tự động, clicker & chẩn đoán pin
-├── src/                     # Danh mục mã nguồn (Source files)
-│   ├── apps.txt             # Tệp nguồn cấu hình danh mục phần mềm
-│   ├── Internet.cpp         # Cài đặt xử lý socket, tường lửa & kiểm tra bảo mật
-│   ├── main.cpp             # Điểm khởi chạy (Entry point) & hệ thống menu
-│   ├── MediaProcessor.cpp   # Cài đặt giao tiếp FFmpeg & GPU acceleration
-│   ├── SystemCore.cpp       # Cài đặt quản lý tiến trình con & tương tác hệ thống
-│   ├── SystemOptimizer.cpp  # Cài đặt dọn dẹp rác đa tầng & tối ưu hệ thống
-│   └── UtilityTools.cpp     # Cài đặt tự động hóa chuột/bàn phím & đọc ACPI pin
-├── scripts/                 # Kịch bản hỗ trợ cài đặt môi trường
-│   └── setup-media.ps1      # Cài đặt ExifTool backend cho phân hệ Media
-├── build.bat                # Kịch bản biên dịch 1 file duy nhất với loading thời gian thực
-└── README.md                # Tài liệu hướng dẫn kỹ thuật của dự án
+│   ├── SystemCore.h         # Khung điều khiển Win32 API, Job Object, Console I/O dùng chung
+│   ├── MenuStyle.h          # Chuẩn viền liền khối & màu ANSI Neon đồng nhất cho UI
+│   ├── FileSafety.h         # Cơ chế chốt chặn an toàn, bảo vệ thư mục & file hệ thống
+│   ├── CleanerCore.h        # Cốt lõi engine dọn dẹp hệ thống an toàn
+│   ├── DiskCleaner.h        # Module dọn dẹp ổ đĩa đa tầng
+│   ├── BrowserCleaner.h     # Dọn dẹp cache trình duyệt (Chromium, Firefox)
+│   ├── DevCleaner.h         # Dọn dẹp môi trường dev (chặn xóa .git và project)
+│   ├── DownloadsCleaner.h   # Phân loại và dọn dẹp thư mục Downloads
+│   ├── SystemDeepCleaner.h  # Dọn dẹp chuyên sâu hệ thống (DISM, Windows Update cache)
+│   ├── TempCleaner.h        # Dọn dẹp thư mục Temp, Prefetch an toàn
+│   ├── SystemOptimizer.h    # Module tinh chỉnh dịch vụ Windows, Taskbar & Registry
+│   ├── Internet.h           # Module mạng, bảo mật, tường lửa & sửa lỗi kết nối
+│   ├── LocalDrop.h          # Truyền tệp P2P qua mạng nội bộ LAN (LocalDrop v2)
+│   ├── LocalDropProtocol.h  # Giao thức truyền nhận dữ liệu LocalDrop v2
+│   ├── NetworkScanner.h     # Quét thiết bị và phân tích mạng LAN
+│   ├── OuiDatabase.h        # Tra cứu thông tin nhà sản xuất card mạng (MAC OUI)
+│   ├── MediaProcessor.h     # Xử lý video, audio, nén đa phương tiện & Steganography
+│   ├── MediaMetadata.h      # Trích xuất và bảo toàn metadata ảnh/video
+│   ├── UtilityTools.h       # Tiện ích tự động hóa chuột, bàn phím, kiểm tra pin
+│   ├── ProcessRunner.h      # Quản lý tiến trình qua Job Object & timeout
+│   └── UpdateManager.h      # Kiểm tra và quản lý cập nhật phiên bản
+├── src/                     # Danh mục mã nguồn phân tách theo module logic
+│   ├── core/                # Module hệ thống cốt lõi (SystemCore, UpdateManager)
+│   ├── diskcleaner/         # Module dọn rác chuyên trách (Browser, Dev, Downloads, Deep...)
+│   ├── media/               # Module xử lý media & album (MediaProcessor, MediaAlbum)
+│   ├── network/             # Module mạng & P2P (Internet, LocalDrop, NetworkScanner, OuiDatabase)
+│   ├── optimizer/           # Module tối ưu hệ thống & Registry (SystemOptimizer)
+│   ├── tools/               # Module tiện ích tự động hóa & chẩn đoán (UtilityTools)
+│   └── main.cpp             # Điểm khởi chạy (Entry point) & hệ thống Menu điều khiển
+├── scripts/                 # Kịch bản hỗ trợ tải công cụ & cài đặt môi trường
+│   ├── download-apps.bat    # Bộ danh mục & trình tải ứng dụng tự động (hybrid 1 file duy nhất)
+│   └── setup-media.ps1      # Kịch bản PowerShell tải tự động FFmpeg & ExifTool
+├── build.bat                # Kịch bản biên dịch tối ưu -O3, OpenMP, giao diện ANSI Neon
+├── quy tắc.txt              # Bộ quy ước kiến trúc & tiêu chuẩn thiết kế dự án
+├── README_WINDOWS_COMMANDS.md # Sổ tay tra cứu lệnh Windows CMD
+└── README.md                # Tài liệu hướng dẫn kỹ thuật trung tâm của dự án
 ```
 
 ---
@@ -128,24 +156,30 @@ CMD_BOX/
 ## IV. Hướng dẫn Biên dịch & Vận hành
 
 ### 1. Yêu cầu Hệ thống
+
 - **Hệ điều hành:** Windows 10 hoặc Windows 11 (phiên bản 64-bit).
 - **Bộ biên dịch C++:** GCC/G++ từ MinGW-w64 (MSYS2 UCRT64 hoặc MINGW64), hỗ trợ C++17 và OpenMP.
 
 ### 2. Biên dịch Tự động
+
 Chỉ cần nhấp đúp chuột vào tệp script:
+
 ```cmd
 build.bat
 ```
+
 Đóng CMD BOX trước khi build. Script dò g++, dùng `-O3 -fopenmp`, build `bin\main.next.exe` rồi thay `bin\main.exe` khi thành công và mở ứng dụng. Script không cưỡng ép kết thúc các tiến trình main.exe.
 
 ### 3. Biên dịch Thủ công qua Dòng lệnh
+
 Nếu muốn tự biên dịch thủ công qua Command Prompt hoặc PowerShell:
+
 ```cmd
-g++ -std=c++17 -O3 -fopenmp -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\diskcleaner\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp -o bin\main.exe -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -lversion -static-libgcc -static-libstdc++ -static -s
-copy /y "src\apps.txt" "bin\apps.txt"
+g++ -std=c++17 -O3 -fopenmp -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\diskcleaner\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp -o bin\main.exe -lbcrypt -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -lversion -static-libgcc -static-libstdc++ -static -s
 ```
 
 *Giải thích các cờ liên kết (Linker Flags):*
+
 - Bản mặc định không bật `-mavx2 -mfma` để chạy trên CPU không có các tập lệnh này.
 - `-fopenmp`: Kích hoạt xử lý đa luồng CPU song song cho tất cả các thuật toán đồ họa.
 - `-lws2_32 -liphlpapi`: Giao diện mạng Windows Sockets và IP Helper API.
@@ -153,9 +187,19 @@ copy /y "src\apps.txt" "bin\apps.txt"
 - `-static-libgcc -static-libstdc++ -static -s`: Đóng gói tĩnh toàn bộ thư viện C++ runtime, giúp file `.exe` chạy độc lập mà không yêu cầu cài thêm bất kỳ DLL nào bên ngoài.
 
 ### 4. Tích hợp FFmpeg (Tùy chọn cho Phân hệ Media)
+
 Để sử dụng các tính năng nén video, trích xuất âm thanh và thay đổi tốc độ:
-1. Tải bản build Portable của FFmpeg từ trang chính thức: [gyan.dev/ffmpeg/builds](https://www.gyan.dev/ffmpeg/builds/).
-2. Đặt tệp thực thi `ffmpeg.exe` vào thư mục `bin\` (cùng cấp với `main.exe`).
+
+Chạy từ thư mục dự án:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-media.ps1
+```
+
+Script tải bản **release essentials ZIP** mới nhất từ [Gyan](https://www.gyan.dev/ffmpeg/builds/), kiểm tra SHA-256 trước giải nén và kiểm tra chạy `ffmpeg.exe` trước khi chép vào `bin\`. Chỉ cài `ffmpeg.exe` từ gói, không cài `ffprobe.exe`. Giấy phép và README của gói nằm trong `bin\ffmpeg-docs`. Nếu FFmpeg đã chạy được, script bỏ qua tải; dùng `-ForceFFmpeg` để tải lại/cập nhật. Không cần quyền Administrator và không thay đổi PATH.
+
+Script cũng chuẩn bị ExifTool; xem [hướng dẫn media](docs/MEDIA.md). Code media hiện vẫn dùng ffprobe để kiểm tra stream/chapter và metadata video; các tác vụ đó cần ffprobe có sẵn cạnh `main.exe` hoặc trong PATH.
 
 ### 5. Khởi chạy Ứng dụng
+
 - Để tất cả các tính năng can thiệp Registry, Win32 Service Manager, Tường lửa hệ thống và xóa tập tin hệ thống hoạt động chính xác, hãy nhấp chuột phải vào `bin\main.exe` và chọn **Run as Administrator** (hoặc mở Command Prompt với quyền Administrator).

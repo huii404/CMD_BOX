@@ -452,8 +452,9 @@ void MediaProcessor::processExtractAudioBatch() {
 }
 
 void MediaProcessor::processChangeSpeedBatch() {
-    cout << "\n== ĐỔI TỐC ĐỘ VIDEO ==\n"
-         << " Kéo thả video [kèm tốc độ nếu muốn, vd: video.mp4, 1.5]:\n"
+    cout << "\n \x1b[38;2;195;165;255m╭── ĐỔI TỐC ĐỘ VIDEO ──────────────────────────────╮\x1b[0m\n"
+         << "   Kéo thả video [kèm tốc độ nếu muốn, vd: video.mp4, 1.5]\n"
+         << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"
          << " [>] ";
     string rawInput;
     getline(cin, rawInput);
@@ -618,8 +619,10 @@ void MediaProcessor::processConvertFormatBatch() {
 
 void MediaProcessor::normalizeMediaFilenames() {
     SystemCore::cls();
-    std::cout << "\n== CHUẨN HÓA TÊN MEDIA ==\n"
-              << "Nhập đường dẫn thư mục (0 để quay lại): ";
+    std::cout << "\n \x1b[38;2;195;165;255m╭── CHUẨN HÓA TÊN MEDIA THEO NGÀY ─────────────────╮\x1b[0m\n"
+              << "   Nhập đường dẫn thư mục (0 để quay lại)\n"
+              << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"
+              << " [>] ";
     std::string dirPath;
     std::getline(std::cin, dirPath);
     dirPath = SystemCore::trim(dirPath);
@@ -782,7 +785,8 @@ bool MediaProcessor::extractHiddenFromMediaCore(const string& containerPath,cons
 
 void MediaProcessor::hideFileInImage() {
     SystemCore::cls();
-    std::cout << "\n== ẨN FILE TRONG ẢNH (≤10 MB) ==\n"
+    std::cout << "\n \x1b[38;2;195;165;255m╭── GIẤU FILE TRONG ẢNH (STEGANOGRAPHY ≤10 MB) ───╮\x1b[0m\n"
+              << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"
               << "Nhập đường dẫn Ảnh nền (jpg/png): ";
     std::string imagePath;
     std::getline(std::cin, imagePath);
@@ -826,7 +830,8 @@ void MediaProcessor::hideFileInImage() {
 
 void MediaProcessor::hideFileInVideo() {
     SystemCore::cls();
-    std::cout << "\n== ẨN FILE TRONG VIDEO (≤100 MB) ==\n"
+    std::cout << "\n \x1b[38;2;195;165;255m╭── GIẤU FILE TRONG VIDEO (≤100 MB) ───────────────╮\x1b[0m\n"
+              << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"
               << "Nhập đường dẫn Video nền (mp4/mkv): ";
     std::string videoPath;
     std::getline(std::cin, videoPath);
@@ -907,10 +912,11 @@ void MediaProcessor::extractHiddenFromMedia() {
 
 void MediaProcessor::processAnFileTrongFile() {
     SystemCore::cls();
-    std::cout << "\n== ẨN & TRÍCH FILE MEDIA ==\n"
-              << " * Giấu file  : Kéo thả [File nền], [File cần ẩn] (vd: anh.jpg, data.zip)\n"
-              << " * Trích xuất : Kéo thả [File đã giấu] để tự động lấy lại file ẩn\n"
-              << " (0 để quay lại)\n\n"
+    std::cout << "\n \x1b[38;2;195;165;255m╭── ẨN & TRÍCH XUẤT TẬP TIN TRONG MEDIA ────────────╮\x1b[0m\n"
+              << "   * Giấu file  : Kéo thả [File nền], [File cần ẩn] (vd: anh.jpg, data.zip)\n"
+              << "   * Trích xuất : Kéo thả [File đã giấu] để tự động lấy lại file ẩn\n"
+              << "   * 0 để quay lại\n"
+              << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"
               << " [>] ";
 
     std::string rawInput;

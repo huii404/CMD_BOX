@@ -595,10 +595,9 @@ void NetworkScanner::scanConnectedDevices() {
 
         // Hiển thị bảng danh sách thiết bị căn chỉnh chuẩn UTF-8
         sc.cls();
-        cout << "\n\n";
-        cout << "+-----+-----------------+-------------------+-------------------------------+-----------------------------------+\n"
-             << "| STT |   Địa chỉ IP    |    Địa chỉ MAC    |   Loại thiết bị / Phân loại   |      Tên thiết bị (Hostname)      |\n"
-             << "+-----+-----------------+-------------------+-------------------------------+-----------------------------------+\n";
+        cout << "\n \x1b[38;2;195;165;255m╭─────┬─────────────────┬───────────────────┬───────────────────────────────┬───────────────────────────────────╮\x1b[0m\n"
+             << " \x1b[38;2;195;165;255m│\x1b[1m\x1b[38;2;232;235;247m STT \x1b[38;2;195;165;255m│\x1b[1m\x1b[38;2;232;235;247m   Địa chỉ IP    \x1b[38;2;195;165;255m│\x1b[1m\x1b[38;2;232;235;247m    Địa chỉ MAC    \x1b[38;2;195;165;255m│\x1b[1m\x1b[38;2;232;235;247m   Loại thiết bị / Phân loại   \x1b[38;2;195;165;255m│\x1b[1m\x1b[38;2;232;235;247m      Tên thiết bị (Hostname)      \x1b[38;2;195;165;255m│\x1b[0m\n"
+             << " \x1b[38;2;195;165;255m├─────┼─────────────────┼───────────────────┼───────────────────────────────┼───────────────────────────────────┤\x1b[0m\n";
 
         for (size_t i = 0; i < deviceList.size(); ++i) {
             const auto& d = deviceList[i];
@@ -613,13 +612,13 @@ void NetworkScanner::scanConnectedDevices() {
             if (d.isGateway) colorCode = "\x1b[32m";
             else if (d.isSelf) colorCode = "\x1b[36m";
 
-            cout << "| " << setw(3) << left << (i + 1) << " | "
-                 << colorCode << ipDisplay << resetCode << " | "
-                 << macDisplay << " | "
-                 << typeDisplay << " | "
-                 << hostDisplay << " |\n";
+            cout << " \x1b[38;2;195;165;255m│\x1b[0m " << setw(3) << left << (i + 1) << " \x1b[38;2;195;165;255m│\x1b[0m "
+                 << colorCode << ipDisplay << resetCode << " \x1b[38;2;195;165;255m│\x1b[0m "
+                 << macDisplay << " \x1b[38;2;195;165;255m│\x1b[0m "
+                 << typeDisplay << " \x1b[38;2;195;165;255m│\x1b[0m "
+                 << hostDisplay << " \x1b[38;2;195;165;255m│\x1b[0m\n";
         }
-        cout << "+-----+-----------------+-------------------+-------------------------------+-----------------------------------+\n";
+        cout << " \x1b[38;2;195;165;255m╰─────┴─────────────────┴───────────────────┴───────────────────────────────┴───────────────────────────────────╯\x1b[0m\n\n";
         cout << " [*] Thời gian quét: \x1b[93m" << fixed << setprecision(2) << elapsedSec << "s\x1b[0m | "
              << "Tìm thấy \x1b[32m" << deviceList.size() << "\x1b[0m thiết bị đang kết nối mạng.\n\n";
 

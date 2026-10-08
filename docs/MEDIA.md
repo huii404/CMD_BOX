@@ -12,7 +12,11 @@ Checkout này cũng hỗ trợ source ExifTool 13.59 với Perl đã có trong P
 ./scripts/setup-media.ps1
 ```
 
-Script dùng tag 13.59 của [repo tác giả](https://github.com/exiftool/exiftool), kiểm tra SHA-256 archive trước giải nén. SHA-256 của archive đã kiểm chứng trong phiên này: `542315bbb4b302b5334b6defd608d9ce2c97299c5608ab83a9e6c232abd56f18`.
+Một script duy nhất `scripts/setup-media.ps1` chuẩn bị FFmpeg trước, kể cả khi đã có `exiftool.exe`, rồi chuẩn bị ExifTool. Script tải bản release essentials ZIP mới nhất từ [Gyan](https://www.gyan.dev/ffmpeg/builds/), lấy version rồi dùng URL có version cho archive và SHA-256, kiểm tra checksum và chạy thử FFmpeg trước khi cài vào `bin`. Chỉ chép `ffmpeg.exe`, không cài `ffprobe.exe`. Giữ `LICENSE`/`README.txt` tại `bin/ffmpeg-docs`. Bỏ qua tải khi FFmpeg sẵn có chạy được; dùng `setup-media.ps1 -ForceFFmpeg` để tải lại/cập nhật. Gyan cung cấp binary Windows x64; script không cài vào hệ thống hoặc sửa PATH.
+
+Code media vẫn dùng ffprobe để đọc stream/chapter và kiểm tra metadata container video. Những tác vụ này cần ffprobe có sẵn cạnh `main.exe` hoặc trong PATH; script không chuẩn bị phụ thuộc này.
+
+Phần ExifTool dùng tag 13.59 của [repo tác giả](https://github.com/exiftool/exiftool), kiểm tra SHA-256 archive trước giải nén: `542315bbb4b302b5334b6defd608d9ce2c97299c5608ab83a9e6c232abd56f18`.
 
 ## Bảo tồn metadata khi xuất
 

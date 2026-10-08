@@ -62,7 +62,9 @@ Internet::~Internet() {
 // ----------------------------------------------------------------------------------
 void Internet::repairNetwork() {
     sc.cls();
-    cout << "Đặt lại mạng, DNS/ARP và IP.\n";
+    cout << "\n \x1b[38;2;195;165;255m╭── SỬA LỖI MẠNG TOÀN DIỆN ────────────────────────╮\x1b[0m\n"
+         << "   Đặt lại socket Winsock, TCP/IP, xóa DNS/ARP & cấp lại IP\n"
+         << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n";
     if (!sc.confirm("Tiếp tục sửa lỗi mạng? (y/n): ")) return;
 
     cout << "\nĐang sửa mạng (Admin)...\n";
@@ -80,6 +82,8 @@ void Internet::repairNetwork() {
 // ----------------------------------------------------------------------------------
 void Internet::wifiAudit() {
     sc.cls();
+    cout << "\n \x1b[38;2;195;165;255m╭── TRA CỨU MẬT KHẨU WI-FI ĐÃ LƯU ──────────────────╮\x1b[0m\n"
+         << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n";
     HMODULE dll = LoadLibraryW(L"wlanapi.dll");
     if (!dll) { cout << "[!] Không mở được WLAN API.\n"; sc.waitEnter(); return; }
 #if defined(__GNUC__)
@@ -196,11 +200,12 @@ bool Internet::isServiceRunningNative(const std::string &serviceName) {
 void Internet::fullSecurityShield() {
     while (true) {
         sc.cls();
-        cout << "== BẢO MẬT HỆ THỐNG ==\n"
-             << " [1] Bật lá chắn (Defender, Firewall, Chặn Port Telnet/RPC)\n"
-             << "     * Thông suốt 100% truyền file Media, Smart View, LAN\n"
-             << " [2] Gỡ rule CMD Box\n"
-             << " [0] Quay lại\n\n"
+        cout << "\n \x1b[38;2;195;165;255m╭── LÁ CHẮN BẢO MẬT HỆ THỐNG ───────────────────────╮\x1b[0m\n"
+             << "   [1] Bật lá chắn (Defender, Firewall, chặn port rủi ro)\n"
+             << "       * Giữ mở hoàn toàn cổng chia sẻ Media & LAN\n"
+             << "   [2] Gỡ rule phòng vệ CMD Box\n"
+             << "   [0] Quay lại\n"
+             << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"
              << " [Chọn]: ";
 
         int choice = sc.readInt("");
@@ -282,7 +287,8 @@ void Internet::fullSecurityShield() {
 // ----------------------------------------------------------------------------------
 void Internet::checkSecurityStatus() {
     sc.cls();
-    cout << "== TRẠNG THÁI BẢO MẬT ==\n";
+    cout << "\n \x1b[38;2;195;165;255m╭── TRẠNG THÁI BẢO MẬT HỆ THỐNG ────────────────────╮\x1b[0m\n"
+         << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n";
 
     // 1. Windows Defender Real-time
     cout << " 1. Windows Defender:\n";

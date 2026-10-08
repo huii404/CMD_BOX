@@ -48,7 +48,10 @@ inline bool copy(const Item& item,const fs::path& root,std::string& error) {
 }
 
 void MediaProcessor::organizeAlbumFolder() {
-    std::cout<<"\n== SẮP ALBUM THEO NĂM / THÁNG ==\nChọn THƯ MỤC nguồn (quét cả thư mục con; 0: Hủy): ";
+    std::cout << "\n \x1b[38;2;195;165;255m╭── SẮP XẾP ALBUM THEO NĂM / THÁNG ────────────────╮\x1b[0m\n"
+              << "   Chọn thư mục nguồn (quét cả thư mục con; 0: Hủy)\n"
+              << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"
+              << " [>] ";
     std::string raw;std::getline(std::cin,raw);raw=SystemCore::trim(raw);if(raw.empty() || raw=="0")return;
     if(raw.size()>1 && raw.front()=='\"' && raw.back()=='\"')raw=raw.substr(1,raw.size()-2);
     auto source=fs::absolute(fs::u8path(raw)).lexically_normal();std::vector<MediaAlbum::Item> items;std::string error;

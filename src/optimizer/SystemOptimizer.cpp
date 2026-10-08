@@ -382,8 +382,9 @@ void SystemOptimizer::runOptimizeChoice(int choice) {
         "Tinh chỉnh Taskbar, hiệu ứng và có thể khởi động lại Explorer",
         "Thực hiện cả ba nhóm tối ưu trên"
     };
-    cout << "== XEM TRƯỚC TỐI ƯU ==\n"
-         << " Phạm vi: " << scopes[choice] << "\n\n";
+    cout << "\n \x1b[38;2;195;165;255m╭── XEM TRƯỚC TỐI ƯU ──────────────────────────────╮\x1b[0m\n"
+         << "   Phạm vi: " << scopes[choice] << "\n"
+         << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n";
     if (!sc.confirm(" Tiếp tục thực hiện? (y/N): ")) {
         cout << "\nĐã hủy, chưa có thay đổi nào được thực hiện.\n";
         Sleep(600);
@@ -537,6 +538,8 @@ void SystemOptimizer::turnOffServicesMenu() {
 
     while (true) {
         sc.cls();
+        std::cout << "\n \x1b[38;2;195;165;255m╭── QUẢN LÝ DỊCH VỤ WINDOWS ────────────────────────╮\x1b[0m\n"
+                  << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n";
         
         for (size_t i = 0; i < targetSvcs.size(); ++i) {
             std::cout << " [" << std::setw(2) << i + 1 << "] " 
@@ -573,7 +576,9 @@ void SystemOptimizer::turnOffServicesMenu() {
                 int idx = selected - 1;
                 if (idx >= 0 && idx < (int)targetSvcs.size()) {
                     sc.cls();
-                    std::cout << "Dịch vụ: " << targetSvcs[idx].desc << " [" << targetSvcs[idx].name << "]\n\n"
+                    std::cout << "\n \x1b[38;2;195;165;255m╭── DỊCH VỤ: " << targetSvcs[idx].name << " ───────────────────────╮\x1b[0m\n"
+                              << "   " << targetSvcs[idx].desc << "\n"
+                              << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"
                               << " [1] Manual   (Chỉ khi cần)\n"
                               << " [2] Disabled (Tắt hẳn)\n"
                               << " [0] Hủy\n\n";

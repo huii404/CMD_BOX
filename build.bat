@@ -125,7 +125,6 @@ if errorlevel 1 (
     echo [!] Dong CMD BOX va chay lai build. Ban moi duoc giu tai bin\main.next.exe.
     exit /b 1
 )
-if exist "src\apps.txt" copy /y "src\apps.txt" "bin\apps.txt" >nul
 
 echo %C_GREEN%  [☸] Đã độ thành công: %C_YELLOW%bin\main.exe %C_GREEN%[Viên mãn - Vạn bug tiêu tán]%C_RESET%
 echo.
