@@ -31,6 +31,7 @@ static bool sleepWithEmergencyCheck(int totalMs) {
 
 // Auto click chuột theo vị trí
 void UtilityTools::autoClickPoint() {
+    if (!SystemCore::requireFeature(Feature::AutoClick)) { SystemCore::waitEnter(); return; }
     sc.cls();
     cout << "\n \x1b[38;2;195;165;255m╭── TỰ ĐỘNG CLICK CHUỘT ────────────────────────────╮\x1b[0m\n"
          << "   Nhập: Số lần, Delay ms, Kiểu (1: Trái, 2: Phải, 3: Đúp)\n"
@@ -123,6 +124,7 @@ void UtilityTools::autoClickPoint() {
 
 // Spam văn bản tự động
 void UtilityTools::spamText() {
+    if (!SystemCore::requireFeature(Feature::SpamText)) { SystemCore::waitEnter(); return; }
     sc.cls();
     
     cout << "\n \x1b[38;2;195;165;255m╭── GỬI VĂN BẢN TỰ ĐỘNG ────────────────────────────╮\x1b[0m\n"
@@ -210,6 +212,7 @@ void UtilityTools::spamText() {
 
 // Tự động paste danh sách dữ liệu
 void UtilityTools::autoPasteData() {
+    if (!SystemCore::requireFeature(Feature::AutoPaste)) { SystemCore::waitEnter(); return; }
     sc.cls();
     cout << "\n \x1b[38;2;195;165;255m╭── DÁN DỮ LIỆU TỰ ĐỘNG ────────────────────────────╮\x1b[0m\n"
          << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n";
@@ -287,6 +290,7 @@ void UtilityTools::autoPasteData() {
 
 // Trình tải & Cài đặt phần mềm tự động (ủy quyền qua scripts/download-apps.bat)
 void UtilityTools::downloadManager() {
+    if (!SystemCore::requireFeature(Feature::DownloadApps)) { SystemCore::waitEnter(); return; }
     fs::path scriptPath;
     wchar_t buffer[MAX_PATH];
     if (GetModuleFileNameW(NULL, buffer, MAX_PATH) > 0) {
@@ -532,6 +536,7 @@ static void cleanAdvancedBloat(SystemCore &sc, const AdvancedBloatStatus &adv) {
 
 // Gỡ bỏ ứng dụng rác Bloatware (Dọn dẹp toàn diện cả 2 luồng: Thứ cấp & Nâng cao)
 void UtilityTools::uninstallBloatware() {
+    if (!SystemCore::requireFeature(Feature::Bloatware)) { SystemCore::waitEnter(); return; }
     sc.cls();
     cout << "\n\n";
 
@@ -621,6 +626,7 @@ static string formatNumber(long long n) {
 
 // Soi thông tin & Độ chai Pin Laptop chuyên sâu
 void UtilityTools::batteryHealthDiagnostic() {
+    if (!SystemCore::requireFeature(Feature::Battery)) { SystemCore::waitEnter(); return; }
     while (true) {
         sc.cls();
         cout << "\n \x1b[38;2;195;165;255m╭── THÔNG TIN PIN LAPTOP & SỨC KHỎE ────────────────╮\x1b[0m\n"

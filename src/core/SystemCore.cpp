@@ -1,6 +1,7 @@
 #include "SystemCore.h"
 #include "ProcessRunner.h"
 #include "FileSafety.h"
+#include "MenuStyle.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -13,6 +14,153 @@
 #pragma comment(lib, "ws2_32.lib")
 #endif
 namespace fs = std::filesystem;
+
+SecurityProfiles& SystemCore::profiles() {
+    static SecurityProfiles config([] {
+        wchar_t module[32768]{};
+        DWORD length = GetModuleFileNameW(nullptr, module, 32768);
+        if (!length || length >= 32768) throw std::runtime_error("Không lấy được đường dẫn executable");
+        return fs::path(module).parent_path() / L"cmd_box.json";
+    }());
+    return config;
+}
+bool SystemCore::requireFeature(Feature feature) {
+    if (profiles().allowed(feature)) return true;
+    std::cout << "[!] Hồ sơ " << SecurityProfiles::tierName(profiles().currentTier())
+              << " không cho phép: " << SecurityProfiles::featureName(feature)
+              << ". Vào Setup (main.exe setup) để chọn hồ sơ.\n";
+    return false;
+}
+namespace {
+void setupLine(const std::string& text, MenuStyle::Accent accent = MenuStyle::SKY) {
+    MenuStyle::left();
+    std::cout << accent.text << "  " << text << MenuStyle::RESET;
+    MenuStyle::right(MenuStyle::columns(text) + 2);
+}
+void setupClose() {
+    MenuStyle::blank();
+    std::cout << MenuStyle::ORCHID.text << "  ╰";
+    MenuStyle::edge(MenuStyle::WIDTH);
+    std::cout << MenuStyle::ROSE.text << "╯" << MenuStyle::RESET << "\n\n";
+}
+void setupResult(const char* title, const std::string& text, MenuStyle::Accent accent) {
+    MenuStyle::header(title, accent);
+    setupLine(text, accent);
+    setupClose();
+    SystemCore::waitEnter();
+}
+void setupMatrix(int currentTier) {
+    using namespace MenuStyle;
+    SystemCore::cls();
+    header("MA TRẬN TÍNH NĂNG", SKY);
+    info("Hồ sơ", SecurityProfiles::tierName(currentTier), MINT);
+    setupLine("✓ Cho phép    - Giới hạn    Cột sáng: hồ sơ hiện tại", MINT);
+    blank();
+    const char* titles[] = {"BEGIN", "STD", "DEV", "TECH"};
+    auto label = [](const std::string& value, size_t width) {
+        std::cout << value;
+        size_t used = columns(value);
+        if (used < width) std::cout << std::string(width - used, ' ');
+    };
+    left(); std::cout << MUTED; label("  TÍNH NĂNG", 38);
+    for (int t = 1; t <= 4; ++t) {
+        std::cout << (t == currentTier ? MINT.text : MUTED);
+        label(titles[t-1], 7);
+    }
+    std::cout << RESET; right(66);
+    for (int i = 0; i < static_cast<int>(Feature::Count); ++i) {
+        auto feature = static_cast<Feature>(i);
+        left(); std::cout << TEXT;
+        label("  " + std::string(i < 9 ? "0" : "") + std::to_string(i+1) + "  " + SecurityProfiles::featureName(feature), 38);
+        for (int t = 1; t <= 4; ++t) {
+            bool allowed = t >= SecurityProfiles::minimumTier(feature);
+            std::cout << (t == currentTier ? (allowed ? MINT.text : ROSE.text) : MUTED);
+            label(allowed ? "  ✓" : "  -", 7);
+        }
+        std::cout << RESET; right(66);
+    }
+    setupClose();
+    SystemCore::waitEnter();
+}
+}
+void SystemCore::setupMenu() {
+    using namespace MenuStyle;
+    auto& config = profiles();
+    const Accent accents[] = {MINT, SKY, ORCHID, ROSE};
+    const char* descriptions[] = {
+        "Tiện ích, media, dọn cache và Downloads",
+        "Thêm dọn sâu, sửa mạng và tinh chỉnh giao diện",
+        "Thêm dịch vụ nền, sửa Update và gỡ ứng dụng",
+        "Toàn bộ tính năng, gồm dịch vụ sâu và Firewall"
+    };
+    while (true) {
+        cls();
+        header("SETUP · HỒ SƠ SỬ DỤNG", SKY);
+        info("Hồ sơ hiện tại", SecurityProfiles::tierName(config.currentTier()), config.currentTier() ? MINT : AMBER);
+        info("File cấu hình", config.currentTier() ? (config.hideConfig() ? "cmd_box.json · Ẩn" : "cmd_box.json · Hiện") : "Chưa thiết lập", SKY);
+        section("CHỌN HỒ SƠ");
+        for (int tier = 1; tier <= 4; ++tier) {
+            item(tier, SecurityProfiles::tierName(tier), accents[tier-1], tier == config.currentTier() ? "  · Đang dùng" : "");
+            setupLine(std::string("     ") + descriptions[tier-1], {MUTED});
+        }
+        section("CẤU HÌNH & TRA CỨU");
+        item(5, "Xem ma trận 27 tính năng", SKY);
+        item(6, !config.currentTier() ? "Hiện/ẩn file cấu hình (cần Setup)" : config.hideConfig() ? "Hiện file cấu hình trong Explorer" : "Ẩn file cấu hình trong Explorer", AMBER);
+        item(7, "Xóa cấu hình và thiết lập lại", ROSE);
+        blank();
+        setupLine("Quyền Admin vẫn tuân theo hồ sơ đã chọn.", {MUTED});
+        footer("Quay lại", SKY);
+        int choice = readInt("");
+        if (!choice) return;
+        std::string message;
+        bool ok = false;
+        if (choice >= 1 && choice <= 4) {
+            if (choice == config.currentTier()) {
+                setupResult("HỒ SƠ HIỆN TẠI", "Bạn đang sử dụng hồ sơ này.", SKY);
+                continue;
+            }
+            if (choice > config.currentTier()) {
+                cls();
+                header("XÁC NHẬN CHỌN HỒ SƠ", AMBER);
+                info("Hiện tại", SecurityProfiles::tierName(config.currentTier()), SKY);
+                info("Chuyển sang", SecurityProfiles::tierName(choice), accents[choice-1]);
+                blank();
+                setupLine("Hồ sơ mới mở thêm thao tác thay đổi hệ thống.", AMBER);
+                setupLine("Hãy đọc xác nhận của từng tác vụ trước khi chạy.", {MUTED});
+                setupLine("Bạn tự chọn hồ sơ và chịu trách nhiệm với thao tác.", {MUTED});
+                setupClose();
+                if (!confirm("  Tiếp tục? (y/N): ")) continue;
+            }
+            ok = config.save(choice, config.hideConfig(), message);
+        } else if (choice == 5) {
+            setupMatrix(config.currentTier()); continue;
+        } else if (choice == 6) {
+            if (!config.currentTier()) {
+                setupResult("CHƯA THIẾT LẬP", "Chọn một hồ sơ trước khi hiện/ẩn cấu hình.", AMBER);
+                continue;
+            }
+            ok = config.save(config.currentTier(), !config.hideConfig(), message);
+        } else if (choice == 7) {
+            cls();
+            header("THIẾT LẬP LẠI", ROSE);
+            setupLine("Xóa cấu hình và trở về Chưa thiết lập.", ROSE);
+            setupLine("Các tác vụ thay đổi dữ liệu sẽ yêu cầu Setup lại.", {MUTED});
+            setupClose();
+            if (!confirm("  Xóa cấu hình? (y/N): ")) continue;
+            ok = config.reset(message);
+        } else {
+            setupResult("LỰA CHỌN KHÔNG HỢP LỆ", "Chọn một mục từ 0 đến 7.", AMBER);
+            continue;
+        }
+        cls();
+        header(ok ? "ĐÃ ÁP DỤNG" : "KHÔNG ÁP DỤNG ĐƯỢC", ok ? MINT : ROSE);
+        info("Hồ sơ", SecurityProfiles::tierName(config.currentTier()), ok ? MINT : AMBER);
+        if (ok && config.currentTier()) info("Cấu hình", config.hideConfig() ? "Ẩn trong Explorer" : "Hiện trong Explorer", SKY);
+        if (!message.empty()) setupLine(message, AMBER);
+        setupClose();
+        waitEnter();
+    }
+}
 
 std::string SystemCore::trim(const std::string& str) {
     size_t first = str.find_first_not_of(" \t\r\n");

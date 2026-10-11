@@ -1,6 +1,6 @@
 .vscode/tasks.json
 bin/*
+tests/sandbox/
 README_RULES.md
 README_WINDOWS_COMMANDS.md
 docs/*
-assets/resource.rc

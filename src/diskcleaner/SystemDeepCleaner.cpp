@@ -31,6 +31,7 @@ bool queryServiceRunning(const wchar_t* serviceName, bool& running) {
 }
 
 CleanStats SystemDeepCleaner::clean(bool dryRun, bool runDismCleanup) {
+    if (!SystemCore::requireFeature(Feature::DeepClean)) return {};
     CleanStats stats;
 
     if (!dryRun && !SystemCore::isElevated()) {

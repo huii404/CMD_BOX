@@ -12,6 +12,7 @@
 #include <vector>
 #include <mutex>
 #include <limits>
+#include "SecurityProfiles.h"
 
 
 class SystemCore {
@@ -19,6 +20,9 @@ private:
     HANDLE hJob;
 
 public:
+    static SecurityProfiles& profiles();
+    static bool requireFeature(Feature feature);
+    static void setupMenu();
     SystemCore();
     ~SystemCore();
 

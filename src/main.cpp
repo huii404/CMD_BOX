@@ -61,13 +61,14 @@ private:
 
 public:
     AppUI() {
-        UpdateManager::checkUpdateAsync();
+        SystemCore::profiles();
     }
     ~AppUI() {
         UpdateManager::shutdown();
     }
 
     void renderStatusBox() {
+        cout << "\n  Hồ sơ      " << SecurityProfiles::tierName(profiles().currentTier()) << "\n";
         bool admin = SystemCore::isElevated();
         std::string devInfo = SystemCore::getDeviceStatus();
         std::string verStatus = UpdateManager::getVersionStatusText();
@@ -90,10 +91,12 @@ public:
         item(4,"Media",ORCHID);
         item(5,"Kiểm tra cập nhật phần mềm",ROSE);
         item(6,"Biên dịch ứng dụng",MINT);
+        item(7,"Setup — Hồ sơ sử dụng",SKY);
         footer("Thoát chương trình");
     }
 
     void run() {
+        UpdateManager::checkUpdateAsync();
         SetConsoleTitleA("CMD BOX");
         Sleep(50);
 
@@ -103,7 +106,7 @@ public:
             int mainChoice = readInt("");
             
             if (mainChoice == 0) break;      
-            if (mainChoice < 1 || mainChoice > 6) continue;
+            if (mainChoice < 1 || mainChoice > 7) continue;
 
             int sub;
             switch (mainChoice) {
@@ -223,6 +226,8 @@ public:
                 }
                 break;
 
+            case 7: SystemCore::setupMenu(); break;
+
             // Kiểm tra cập nhật
             case 5:
                 UpdateManager::showUpdateMenu();
@@ -230,6 +235,7 @@ public:
 
             // Biên dịch lại & khởi động lại qua build.bat
             case 6: {
+                if (!requireFeature(Feature::DownloadApps)) { waitEnter(); break; }
                 cls();
                 cout << "\n [*] Đang khởi chạy build.bat để biên dịch lại...\n";
                 fs::path batPath;
@@ -256,6 +262,7 @@ public:
 
     int runCommandLine(int argc, char* argv[]) {
         const string command = argc > 1 ? argv[1] : "";
+        if (command == "setup" && argc == 2) { setupMenu(); return 0; }
         if (command == "--version" || command == "-v") {
             cout << "CMD BOX v" << UpdateManager::CURRENT_VERSION << "\n";
             return 0;
@@ -264,6 +271,7 @@ public:
             cout << "CMD BOX v" << UpdateManager::CURRENT_VERSION << "\n\n"
                  << "Cách dùng:\n"
                  << "  main.exe                         Mở menu tương tác\n"
+                 << "  main.exe setup                   Chọn hồ sơ sử dụng\n"
                  << "  main.exe clean                   Dọn cache/Downloads (có xác nhận)\n"
                  << "  main.exe optimize <1-4>          Tối ưu, có xem trước và xác nhận\n"
                  << "  main.exe scan-network            Quét thiết bị trong LAN\n"
@@ -274,6 +282,7 @@ public:
         }
         if (command == "clean") {
             if (argc != 2) { cerr << "Dùng main.exe clean; không có mức 1/2.\n"; return 2; }
+            if (!requireFeature(Feature::BasicClean)) return 3;
             getOptimizer().runClean();
             return 0;
         }
@@ -281,12 +290,14 @@ public:
             int tier = 0;
             try { size_t used = 0; string value = argv[2]; tier = stoi(value, &used); if (used != value.size()) tier = 0; } catch (...) {}
             if (tier < 1 || tier > 4) { cerr << "Mức tối ưu phải từ 1 đến 4.\n"; return 2; }
+            const Feature features[] = {Feature::Startup, Feature::BackgroundServices, Feature::Visuals, Feature::OptimizeAll};
+            if (!requireFeature(features[tier-1])) return 3;
             getOptimizer().runOptimizeChoice(tier);
             return 0;
         }
-        if (command == "scan-network") { getInternet().scanConnectedDevices(); return 0; }
-        if (command == "security-status") { getInternet().checkSecurityStatus(); return 0; }
-        if (command == "media") { getMedia().processMediaAuto(); return 0; }
+        if (command == "scan-network") { if (!requireFeature(Feature::LanScan)) return 3; getInternet().scanConnectedDevices(); return 0; }
+        if (command == "security-status") { if (!requireFeature(Feature::SecurityStatus)) return 3; getInternet().checkSecurityStatus(); return 0; }
+        if (command == "media") { if (!requireFeature(Feature::Compress)) return 3; getMedia().processMediaAuto(); return 0; }
         cerr << "Lệnh không hợp lệ. Dùng --help để xem hướng dẫn.\n";
         return 2;
     }

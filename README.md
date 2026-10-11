@@ -6,6 +6,8 @@
 
 Các tác vụ media giữ nguyên file nguồn và ghi kết quả vào thư mục `CMD_BOX_Output` nằm cạnh file nguồn. Dọn tự động yêu cầu xác nhận, giữ Thùng rác và thư mục rollback Windows.
 
+Lần đầu dùng, chọn hồ sơ trong **Setup** hoặc `main.exe setup`. Menu và CLI kiểm tra cùng bảng quyền; chạy Admin vẫn tuân theo hồ sơ. Cấu hình `cmd_box.json` đặt cạnh executable. Xem [hồ sơ sử dụng và sandbox test](README_SECURITY_PROFILES.md).
+
 Có thể mở menu như cũ hoặc gọi nhanh từ terminal:
 
 Trong menu tương tác, dùng **↑/↓** để chọn và **Enter** để mở. Có thể gõ số rồi nhấn **Enter** để chọn nhanh; **Esc** hoặc **0 + Enter** để quay lại. Menu giữ nguyên khung khi di chuyển lựa chọn. Các màn hình tác vụ vẫn nhận đường dẫn và nội dung văn bản như trước.
@@ -19,7 +21,7 @@ main.exe security-status
 main.exe media
 ```
 
-**Tra cứu & Quy chuẩn:** [Sổ tay lệnh Windows CMD](README_WINDOWS_COMMANDS.md) — lệnh hữu ích, tác dụng, ví dụ | [Quy chuẩn Phát triển & Kiến trúc](README_RULES.md) — 7 nguyên tắc thiết kế theo quy tắc.txt.
+**Tra cứu & Quy chuẩn:** [Sổ tay lệnh Windows CMD](README_WINDOWS_COMMANDS.md) — lệnh hữu ích, tác dụng, ví dụ | [Quy chuẩn Phát triển &amp; Kiến trúc](README_RULES.md) — 7 nguyên tắc thiết kế theo quy tắc.txt.
 
 **Nghiên cứu tính năng sửa lỗi:** [Tên lỗi, 24 kịch bản, logic fix và lựa chọn C++/batch](README_FIX_RESEARCH.md) — nguồn Microsoft, ưu tiên triển khai và nhật ký nghiên cứu.
 
@@ -168,7 +170,19 @@ Chỉ cần nhấp đúp chuột vào tệp script:
 build.bat
 ```
 
-Đóng CMD BOX trước khi build. Script dò g++, dùng `-O3 -fopenmp`, build `bin\main.next.exe` rồi thay `bin\main.exe` khi thành công và mở ứng dụng. Script không cưỡng ép kết thúc các tiến trình main.exe.
+Đóng CMD BOX trước khi build. `build.bat` gọi `scripts/build.ps1`, giữ `-O3 -fopenmp` và liên kết tĩnh. Cache object và dependency header nằm trong `bin/.build`; chỉ biên dịch file C++ hoặc header phụ thuộc đã đổi, mặc định tối đa 2 compiler chạy song song để hạn chế RAM. Khi không có thay đổi, bỏ qua cả compile và link.
+
+Icon dùng `assets/resource.rc` và `assets/app.ico` có sẵn, không render lại ảnh. Nếu thiếu `.rc` nhưng có `app.ico`, script tạo `.rc` một lần. Object resource được giữ trong cache; thay resource/icon mới cần chạy windres. Thiếu windres hoặc resource lỗi sẽ báo lỗi thay vì âm thầm bỏ logo.
+
+```cmd
+build.bat -NoRun             REM Build nhưng không mở ứng dụng
+build.bat -Rebuild -NoRun    REM Bắt buộc build lại toàn bộ
+build.bat -Jobs 4 -NoRun     REM Tối đa 4 compiler nếu máy đủ RAM
+```
+
+Đo trong phiên kiểm thử trên máy hiện tại: build cũ toàn bộ 19 file khoảng **101 giây**; luồng mới biên dịch lại toàn bộ C++ với 2 compiler khoảng **64 giây**; gọi `build.bat -NoRun` khi không có thay đổi khoảng **1,7 giây** (bao gồm khởi động PowerShell và banner). Lần build đầu vẫn cần biên dịch đầy đủ, kết quả thay đổi theo máy và file sửa.
+
+Compiler/flags thay đổi sẽ vô hiệu cache. Source được thêm/xóa sẽ cập nhật bước link. Build ghi `bin/main.next.exe` rồi thay `bin/main.exe` khi thành công; nếu EXE đang được dùng, giữ bản mới và báo đóng CMD BOX để thử lại. Không cưỡng ép kết thúc các tiến trình main.exe. Kiểm thử cache, header, icon và build thất bại: `powershell -NoProfile -ExecutionPolicy Bypass -File tests/test-build.ps1`.
 
 ### 3. Biên dịch Thủ công qua Dòng lệnh
 

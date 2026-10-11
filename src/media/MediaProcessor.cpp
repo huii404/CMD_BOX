@@ -197,6 +197,7 @@ bool MediaProcessor::changeSpeedCore(const string& inputPath,const string& outpu
 }
 
 void MediaProcessor::processMediaAuto() {
+    if (!SystemCore::requireFeature(Feature::Compress)) { SystemCore::waitEnter(); return; }
     bool hasPreviousRun = false;
     long long totalBytesSaved = 0;
 
@@ -398,6 +399,7 @@ void MediaProcessor::processMediaAuto() {
 }
 
 void MediaProcessor::processExtractAudioBatch() {
+    if (!SystemCore::requireFeature(Feature::ExtractAudio)) { SystemCore::waitEnter(); return; }
     cout << "Trích track audio đầu tiên. Kéo thả các video: ";
     string rawInput;
     getline(cin, rawInput);
@@ -452,6 +454,7 @@ void MediaProcessor::processExtractAudioBatch() {
 }
 
 void MediaProcessor::processChangeSpeedBatch() {
+    if (!SystemCore::requireFeature(Feature::Speed)) { SystemCore::waitEnter(); return; }
     cout << "\n \x1b[38;2;195;165;255m╭── ĐỔI TỐC ĐỘ VIDEO ──────────────────────────────╮\x1b[0m\n"
          << "   Kéo thả video [kèm tốc độ nếu muốn, vd: video.mp4, 1.5]\n"
          << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"
@@ -571,6 +574,7 @@ void MediaProcessor::processChangeSpeedBatch() {
 }
 
 void MediaProcessor::processConvertFormatBatch() {
+    if (!SystemCore::requireFeature(Feature::Convert)) { SystemCore::waitEnter(); return; }
     while(true){
         SystemCore::cls();cout<<"Kéo thả ảnh/video (0: Hủy): ";string raw;getline(cin,raw);if(raw.empty() || raw=="0")return;
         auto inputs=SystemCore::parsePaths(raw);if(inputs.empty())continue;
@@ -618,6 +622,7 @@ void MediaProcessor::processConvertFormatBatch() {
 }
 
 void MediaProcessor::normalizeMediaFilenames() {
+    if (!SystemCore::requireFeature(Feature::Rename)) { SystemCore::waitEnter(); return; }
     SystemCore::cls();
     std::cout << "\n \x1b[38;2;195;165;255m╭── CHUẨN HÓA TÊN MEDIA THEO NGÀY ─────────────────╮\x1b[0m\n"
               << "   Nhập đường dẫn thư mục (0 để quay lại)\n"
@@ -784,6 +789,7 @@ bool MediaProcessor::extractHiddenFromMediaCore(const string& containerPath,cons
 }
 
 void MediaProcessor::hideFileInImage() {
+    if (!SystemCore::requireFeature(Feature::Steganography)) { SystemCore::waitEnter(); return; }
     SystemCore::cls();
     std::cout << "\n \x1b[38;2;195;165;255m╭── GIẤU FILE TRONG ẢNH (STEGANOGRAPHY ≤10 MB) ───╮\x1b[0m\n"
               << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"
@@ -829,6 +835,7 @@ void MediaProcessor::hideFileInImage() {
 }
 
 void MediaProcessor::hideFileInVideo() {
+    if (!SystemCore::requireFeature(Feature::Steganography)) { SystemCore::waitEnter(); return; }
     SystemCore::cls();
     std::cout << "\n \x1b[38;2;195;165;255m╭── GIẤU FILE TRONG VIDEO (≤100 MB) ───────────────╮\x1b[0m\n"
               << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"
@@ -874,6 +881,7 @@ void MediaProcessor::hideFileInVideo() {
 }
 
 void MediaProcessor::extractHiddenFromMedia() {
+    if (!SystemCore::requireFeature(Feature::Steganography)) { SystemCore::waitEnter(); return; }
     SystemCore::cls();
     std::cout << "\n   DÒ TÌM & TRÍCH XUẤT FILE ẨN TỪ MEDIA\n\n"
               << "Nhập đường dẫn File chứa (ảnh/video): ";
@@ -911,6 +919,7 @@ void MediaProcessor::extractHiddenFromMedia() {
 }
 
 void MediaProcessor::processAnFileTrongFile() {
+    if (!SystemCore::requireFeature(Feature::Steganography)) { SystemCore::waitEnter(); return; }
     SystemCore::cls();
     std::cout << "\n \x1b[38;2;195;165;255m╭── ẨN & TRÍCH XUẤT TẬP TIN TRONG MEDIA ────────────╮\x1b[0m\n"
               << "   * Giấu file  : Kéo thả [File nền], [File cần ẩn] (vd: anh.jpg, data.zip)\n"

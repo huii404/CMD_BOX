@@ -48,6 +48,7 @@ inline bool copy(const Item& item,const fs::path& root,std::string& error) {
 }
 
 void MediaProcessor::organizeAlbumFolder() {
+    if (!SystemCore::requireFeature(Feature::Album)) { SystemCore::waitEnter(); return; }
     std::cout << "\n \x1b[38;2;195;165;255m╭── SẮP XẾP ALBUM THEO NĂM / THÁNG ────────────────╮\x1b[0m\n"
               << "   Chọn thư mục nguồn (quét cả thư mục con; 0: Hủy)\n"
               << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"

@@ -61,6 +61,7 @@ Internet::~Internet() {
 // sau đó ép Router cấp mới địa chỉ IP (release/renew) và khởi động lại WinNAT.
 // ----------------------------------------------------------------------------------
 void Internet::repairNetwork() {
+    if (!SystemCore::requireFeature(Feature::NetworkRepair)) { SystemCore::waitEnter(); return; }
     sc.cls();
     cout << "\n \x1b[38;2;195;165;255m╭── SỬA LỖI MẠNG TOÀN DIỆN ────────────────────────╮\x1b[0m\n"
          << "   Đặt lại socket Winsock, TCP/IP, xóa DNS/ARP & cấp lại IP\n"
@@ -81,6 +82,7 @@ void Internet::repairNetwork() {
 // Cơ chế: Sử dụng netsh wlan truy xuất trực tiếp profile XML được Windows lưu trong máy.
 // ----------------------------------------------------------------------------------
 void Internet::wifiAudit() {
+    if (!SystemCore::requireFeature(Feature::Wifi)) { SystemCore::waitEnter(); return; }
     sc.cls();
     cout << "\n \x1b[38;2;195;165;255m╭── TRA CỨU MẬT KHẨU WI-FI ĐÃ LƯU ──────────────────╮\x1b[0m\n"
          << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n";
@@ -198,6 +200,7 @@ bool Internet::isServiceRunningNative(const std::string &serviceName) {
 // TUYỆT ĐỐI KHÔNG CHẶN 445, 137, 138, 139 để bảo toàn ứng dụng truyền file Media.
 // ----------------------------------------------------------------------------------
 void Internet::fullSecurityShield() {
+    if (!SystemCore::requireFeature(Feature::Firewall)) { SystemCore::waitEnter(); return; }
     while (true) {
         sc.cls();
         cout << "\n \x1b[38;2;195;165;255m╭── LÁ CHẮN BẢO MẬT HỆ THỐNG ───────────────────────╮\x1b[0m\n"
@@ -286,6 +289,7 @@ void Internet::fullSecurityShield() {
 // Cơ chế: Kiểm tra 4 yếu tố cốt lõi (Defender Realtime, Firewall, Spyware Proxy, Port hiểm)
 // ----------------------------------------------------------------------------------
 void Internet::checkSecurityStatus() {
+    if (!SystemCore::requireFeature(Feature::SecurityStatus)) { SystemCore::waitEnter(); return; }
     sc.cls();
     cout << "\n \x1b[38;2;195;165;255m╭── TRẠNG THÁI BẢO MẬT HỆ THỐNG ────────────────────╮\x1b[0m\n"
          << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n";
@@ -359,6 +363,7 @@ void Internet::checkSecurityStatus() {
 // Chuyển tiếp (delegate) sang module NetworkScanner chuyên biệt
 // ----------------------------------------------------------------------------------
 void Internet::scanConnectedDevices() {
+    if (!SystemCore::requireFeature(Feature::LanScan)) { SystemCore::waitEnter(); return; }
     NetworkScanner scanner(sc);
     scanner.scanConnectedDevices();
 }
@@ -368,6 +373,7 @@ void Internet::scanConnectedDevices() {
 // Chuyển tiếp (delegate) sang module LocalDrop chuyên biệt
 // ----------------------------------------------------------------------------------
 void Internet::localDropMenu() {
+    if (!SystemCore::requireFeature(Feature::LocalDrop)) { SystemCore::waitEnter(); return; }
     LocalDrop ld(sc);
     ld.menu();
 }

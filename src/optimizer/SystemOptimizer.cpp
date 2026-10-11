@@ -267,6 +267,7 @@ static bool disableSingleStartupApp(const StartupAppInfo &item) {
  * - Bước 3: Khởi động lại toàn bộ dịch vụ để Windows tải lại bản update mới nguyên bản.
  */
 void SystemOptimizer::fixWindowsUpdate() {
+    if (!SystemCore::requireFeature(Feature::WindowsUpdate)) { SystemCore::waitEnter(); return; }
     if (!SystemCore::confirm("Reset Windows Update: dừng dịch vụ tạm thời, giữ cache cũ làm bản dự phòng?")) return;
     const string script = R"PS($ErrorActionPreference='Stop'
 $running = @(); $moved = @(); $failed = $false
@@ -306,6 +307,7 @@ if ($failed) { exit 1 }; exit 0
 
 // --- ỦY QUYỀN DỌN RÁC SANG DISKCLEANER (ENGINE BIN v2 - STATIC API) ---
 void SystemOptimizer::runClean() {
+    if (!SystemCore::requireFeature(Feature::BasicClean)) { SystemCore::waitEnter(); return; }
     DiskCleaner::runAutomaticCleanup(true);
 }
 
@@ -317,6 +319,7 @@ void SystemOptimizer::runCleanChoice(int /*choice*/) {
 
 // Nhiệm vụ 1: Tối ưu Khởi động (Tắt app bên thứ ba làm chậm máy, bảo vệ 100% Bộ gõ & Driver)
 int SystemOptimizer::optimizeStartupApps() {
+    if (!SystemCore::requireFeature(Feature::Startup)) return 0;
     vector<StartupAppInfo> appList = scanAllStartupApps();
     int disabledCount = 0;
     int safeCount = 0;
@@ -338,6 +341,7 @@ int SystemOptimizer::optimizeStartupApps() {
 
 // Nhiệm vụ 2: Tối ưu Dịch vụ ngầm (Maps, Wallet, Telemetry, Demo, ErrorReporting...)
 int SystemOptimizer::optimizeBackgroundServices() {
+    if (!SystemCore::requireFeature(Feature::BackgroundServices)) return 0;
     struct SvcCheck { string name; string desc; };
     vector<SvcCheck> svcs = {
         {"MapsBroker", "Bản đồ ngoại tuyến Windows"},
@@ -362,6 +366,7 @@ int SystemOptimizer::optimizeBackgroundServices() {
 
 // Nhiệm vụ 3: Tối ưu Giao diện, Taskbar & Độ nhạy Windows (Ghi file tạm thực thi script nhúng)
 bool SystemOptimizer::optimizeVisualEffectsAndUI() {
+    if (!SystemCore::requireFeature(Feature::Visuals)) return false;
     bool userSettingsOk = SystemCore::runEmbeddedBatch(EmbeddedScripts::OPTIMIZE_REGISTRY_BAT, "user", false);
     bool machineSettingsOk = SystemCore::runEmbeddedBatch(EmbeddedScripts::OPTIMIZE_REGISTRY_BAT, "machine", true);
     return userSettingsOk && machineSettingsOk;
@@ -374,6 +379,8 @@ void SystemOptimizer::runOptimizeChoice(int choice) {
         return;
     }
     if (choice < 1 || choice > 4) return;
+    const Feature features[] = {Feature::Startup, Feature::BackgroundServices, Feature::Visuals, Feature::OptimizeAll};
+    if (!SystemCore::requireFeature(features[choice-1])) { sc.waitEnter(); return; }
 
     sc.cls();
     static const char* scopes[] = {
@@ -489,6 +496,7 @@ bool SystemOptimizer::ServiceControlAPI(std::string serviceName, DWORD startupTy
 
 // Quản lý 40 dịch vụ theo từng mục; xem ảnh hưởng trước khi chọn Manual/Disabled.
 void SystemOptimizer::turnOffServicesMenu() {
+    if (!SystemCore::requireFeature(Feature::AdvancedServices)) { SystemCore::waitEnter(); return; }
     sc.cls();
     struct SvcInfo { std::string name; std::string desc; };
     

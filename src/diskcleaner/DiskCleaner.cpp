@@ -152,6 +152,7 @@ void DiskCleaner::printBanner() {
 
 CleanStats DiskCleaner::runScope(CleanScope scope, bool dryRun) {
     CleanStats total;
+    if (!SystemCore::requireFeature(Feature::BasicClean)) return total;
 
     if (scope == CleanScope::SurfaceAndTemp || scope == CleanScope::All) {
         std::cout << CleanerCore::C_CYAN << " [*] Đang xử lý: Temp & Cache hệ thống cơ bản...\n" << CleanerCore::C_RESET;
@@ -171,7 +172,7 @@ CleanStats DiskCleaner::runScope(CleanScope scope, bool dryRun) {
                   << " (" << s.filesDeleted << " files, " << s.dirsDeleted << " dirs)\n\n";
     }
 
-    if (scope == CleanScope::DeepSystem || scope == CleanScope::All) {
+    if ((scope == CleanScope::DeepSystem || scope == CleanScope::All) && SystemCore::profiles().allowed(Feature::DeepClean)) {
         std::cout << CleanerCore::C_CYAN << " [*] Đang xử lý: Hệ thống sâu & Windows Update...\n" << CleanerCore::C_RESET;
         CleanStats s = SystemDeepCleaner::clean(dryRun, false);
         total.add(s);
@@ -210,6 +211,7 @@ CleanStats DiskCleaner::runScope(CleanScope scope, bool dryRun) {
 
 
 void DiskCleaner::runAutomaticCleanup(bool waitAtEnd) {
+    if (!SystemCore::requireFeature(Feature::BasicClean)) return;
     std::cout << "Dọn cache và đưa file Downloads trùng vào Thùng rác. Tiếp tục? (y/N): ";
     std::string answer;
     if (!std::getline(std::cin, answer) || (answer != "y" && answer != "Y")) return;
@@ -225,7 +227,8 @@ void DiskCleaner::runAutomaticCleanup(bool waitAtEnd) {
     auto executeStage = [&](int idx, const std::function<CleanStats()>& cleaner) {
         renderAutoDashboard(stages, idx, false);
         try {
-            stages[idx].stats = cleaner();
+            if (SystemCore::profiles().allowed(idx == 2 ? Feature::DeepClean : Feature::BasicClean)) stages[idx].stats = cleaner();
+            else stages[idx].skipped = true;
         } catch (const std::exception&) {
             stages[idx].stats.errorsCount++;
         } catch (...) {
@@ -240,7 +243,7 @@ void DiskCleaner::runAutomaticCleanup(bool waitAtEnd) {
     executeStage(0, [] { return TempCleaner::clean(false); });
     executeStage(1, [] { return BrowserCleaner::clean(false); });
 
-    if (SystemCore::isElevated()) {
+    if (SystemCore::isElevated() && SystemCore::profiles().allowed(Feature::DeepClean)) {
         executeStage(2, [] { return SystemDeepCleaner::clean(false, true); });
     } else {
         stages[2].skipped = true;

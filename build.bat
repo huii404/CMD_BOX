@@ -46,93 +46,12 @@ echo %C_YELLOW%%C_BOLD%  =======================================================
 echo       %BG_PURPLE%  * THẦN CHÚ ĐỘ CODE: NAM MÔ A DI ĐÀ PHẬT - COMPILE KHÔNG LỖI *  %C_RESET%
 echo.
 
-:: 1. Soi trinh bien dich g++
-echo %C_CYAN%[📿] Đang thỉnh pháp bảo Compiler...%C_RESET%
-set "GXX="
-where g++ >nul 2>nul
-if %errorlevel% equ 0 (
-    for /f "delims=" %%g in ('where g++ 2^>nul') do if not defined GXX set "GXX=%%g"
-) else if exist "C:\msys64\ucrt64\bin\g++.exe" (
-    set "GXX=C:\msys64\ucrt64\bin\g++.exe"
-) else if exist "C:\msys64\mingw64\bin\g++.exe" (
-    set "GXX=C:\msys64\mingw64\bin\g++.exe"
-)
-
-if "!GXX!"=="" (
-    echo.
-    echo %BG_RED% [!] NGHIỆP TỤ! %C_RESET% %C_RED%%C_BOLD%Chưa có g++! Hãy cài MinGW/MSYS2 để tích đức tu luyện!%C_RESET%
-    echo.
-    pause
-    exit /b 1
-)
-
-echo %C_GREEN%  [🙏] Pháp bảo: %C_YELLOW%!GXX! %C_GREEN%[Đã khai quang và chứng giám]%C_RESET%
-
-:: 2. Thu muc bin va Icon resource
-if not exist "bin" mkdir "bin"
-
-set "RES_PARAM="
-set "RC_FILE="
-if exist "assets\resource.rc" (
-    set "RC_FILE=assets\resource.rc"
-) else if exist "resource.rc" (
-    set "RC_FILE=resource.rc"
-)
-
-if not "!RC_FILE!"=="" (
-    set "WINDRES="
-    where windres >nul 2>nul
-    if !errorlevel! equ 0 (
-        set "WINDRES=windres"
-    ) else if exist "C:\msys64\ucrt64\bin\windres.exe" (
-        set "WINDRES=C:\msys64\ucrt64\bin\windres.exe"
-    ) else if exist "C:\msys64\mingw64\bin\windres.exe" (
-        set "WINDRES=C:\msys64\mingw64\bin\windres.exe"
-    )
-    if not "!WINDRES!"=="" (
-        "!WINDRES!" !RC_FILE! -O coff -o bin\resource.o >nul 2>nul
-        if exist "bin\resource.o" set "RES_PARAM=bin\resource.o"
-    )
-)
-
-rem 3. Bien dich truc tiep de tranh loi bien moi truong cua PowerShell Start-Process.
-echo.
-if exist "%TEMP%\cmd_build_err.log" del /f /q "%TEMP%\cmd_build_err.log" 2>nul
-
-:: Giai phong tien trinh main.exe neu dang mo de tranh bi khoa file
-:: Không kết thúc các tiến trình main.exe không liên quan.
-
-echo   [BUILD] Dang bien dich CMD BOX...
-"!GXX!" -std=c++17 -O3 -fopenmp -Iinclude src\*.cpp src\core\*.cpp src\optimizer\*.cpp src\diskcleaner\*.cpp src\network\*.cpp src\tools\*.cpp src\media\*.cpp !RES_PARAM! -o bin\main.next.exe -lbcrypt -lws2_32 -liphlpapi -lole32 -lwindowscodecs -loleaut32 -luuid -lversion -static-libgcc -static-libstdc++ -static -s 2>"%TEMP%\cmd_build_err.log"
-
-set BUILD_RET=%errorlevel%
-if exist "bin\resource.o" del /f /q "bin\resource.o"
-
-if not "!BUILD_RET!"=="0" (
-    echo.
-    echo %C_RED%%C_BOLD%  Nghiệp báo biên dịch hiện hình ở đây:%C_RESET%
-    echo %C_YELLOW%
-    if exist "%TEMP%\cmd_build_err.log" type "%TEMP%\cmd_build_err.log"
-    echo %C_RESET%
-    del /f /q "%TEMP%\cmd_build_err.log" 2>nul
-    pause
-    exit /b 1
-)
-
-del /f /q "%TEMP%\cmd_build_err.log" 2>nul
-move /y "bin\main.next.exe" "bin\main.exe" >nul 2>nul
-if errorlevel 1 (
-    echo [!] Dong CMD BOX va chay lai build. Ban moi duoc giu tai bin\main.next.exe.
-    exit /b 1
-)
-
-echo %C_GREEN%  [☸] Đã độ thành công: %C_YELLOW%bin\main.exe %C_GREEN%[Viên mãn - Vạn bug tiêu tán]%C_RESET%
-echo.
-
-:: 4. Tu dong khoi dong lai app
-echo %C_PINK%  ========================================================================%C_RESET%
-echo %C_GREEN%  [⚡] Vạn sự hanh thông! Đang tự động khởi động lại main.exe... A Di Đà Phật!%C_RESET%
-echo.
-timeout /t 1 >nul 2>nul
-start "" "bin\main.exe"
+:: Build engine: cache object/header dependencies, cached icon, bounded parallelism.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\build.ps1" %*
+if errorlevel 1 goto build_failed
 exit /b 0
+
+:build_failed
+for %%A in (%*) do if /i "%%~A"=="-NoRun" exit /b 1
+pause
+exit /b 1
