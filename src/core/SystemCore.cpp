@@ -97,7 +97,6 @@ void SystemCore::setupMenu() {
         cls();
         header("SETUP · HỒ SƠ SỬ DỤNG", SKY);
         info("Hồ sơ hiện tại", SecurityProfiles::tierName(config.currentTier()), config.currentTier() ? MINT : AMBER);
-        info("File cấu hình", config.currentTier() ? (config.hideConfig() ? "cmd_box.json · Ẩn" : "cmd_box.json · Hiện") : "Chưa thiết lập", SKY);
         section("CHỌN HỒ SƠ");
         for (int tier = 1; tier <= 4; ++tier) {
             item(tier, SecurityProfiles::tierName(tier), accents[tier-1], tier == config.currentTier() ? "  · Đang dùng" : "");
@@ -105,8 +104,7 @@ void SystemCore::setupMenu() {
         }
         section("CẤU HÌNH & TRA CỨU");
         item(5, "Xem ma trận 27 tính năng", SKY);
-        item(6, !config.currentTier() ? "Hiện/ẩn file cấu hình (cần Setup)" : config.hideConfig() ? "Hiện file cấu hình trong Explorer" : "Ẩn file cấu hình trong Explorer", AMBER);
-        item(7, "Xóa cấu hình và thiết lập lại", ROSE);
+        item(6, "Xóa cấu hình và thiết lập lại", ROSE);
         blank();
         setupLine("Quyền Admin vẫn tuân theo hồ sơ đã chọn.", {MUTED});
         footer("Quay lại", SKY);
@@ -135,12 +133,6 @@ void SystemCore::setupMenu() {
         } else if (choice == 5) {
             setupMatrix(config.currentTier()); continue;
         } else if (choice == 6) {
-            if (!config.currentTier()) {
-                setupResult("CHƯA THIẾT LẬP", "Chọn một hồ sơ trước khi hiện/ẩn cấu hình.", AMBER);
-                continue;
-            }
-            ok = config.save(config.currentTier(), !config.hideConfig(), message);
-        } else if (choice == 7) {
             cls();
             header("THIẾT LẬP LẠI", ROSE);
             setupLine("Xóa cấu hình và trở về Chưa thiết lập.", ROSE);
@@ -149,13 +141,12 @@ void SystemCore::setupMenu() {
             if (!confirm("  Xóa cấu hình? (y/N): ")) continue;
             ok = config.reset(message);
         } else {
-            setupResult("LỰA CHỌN KHÔNG HỢP LỆ", "Chọn một mục từ 0 đến 7.", AMBER);
+            setupResult("LỰA CHỌN KHÔNG HỢP LỆ", "Chọn một mục từ 0 đến 6.", AMBER);
             continue;
         }
         cls();
         header(ok ? "ĐÃ ÁP DỤNG" : "KHÔNG ÁP DỤNG ĐƯỢC", ok ? MINT : ROSE);
         info("Hồ sơ", SecurityProfiles::tierName(config.currentTier()), ok ? MINT : AMBER);
-        if (ok && config.currentTier()) info("Cấu hình", config.hideConfig() ? "Ẩn trong Explorer" : "Hiện trong Explorer", SKY);
         if (!message.empty()) setupLine(message, AMBER);
         setupClose();
         waitEnter();

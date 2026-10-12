@@ -54,8 +54,7 @@ Setup — Hồ sơ hiện tại: Standard
 [3] Developer     — Thêm công cụ dev, gỡ ứng dụng, sửa update
 [4] Technician    — Toàn bộ tính năng
 [5] Xem ma trận tính năng
-[6] Hiện/ẩn file cấu hình trong Explorer
-[7] Xóa cấu hình và thiết lập lại
+[6] Xóa cấu hình và thiết lập lại
 [0] Quay lại
 ```
 
@@ -65,7 +64,7 @@ Khi nâng hồ sơ, hiện thông báo ngắn:
 
 Xác nhận rồi lưu thành công thì áp dụng ngay; hạ hồ sơ không cần cảnh báo nâng cấp. Nếu tính năng bị giới hạn, báo tên hồ sơ hiện tại và hướng dẫn vào Setup. Không chuyển hồ sơ trong lúc một tác vụ sửa hệ thống đang chạy.
 
-Setup dùng cùng khung màu với menu chính, có mô tả phạm vi, đánh dấu hồ sơ đang dùng và trạng thái hiện/ẩn cấu hình. Bảng 27 tính năng căn cột và tô sáng cột hồ sơ hiện tại. Chọn lại hồ sơ đang dùng chỉ hiển thị thông tin, không ghi lại file.
+Setup dùng cùng khung màu với menu chính, có mô tả phạm vi và đánh dấu hồ sơ đang dùng. Menu không hiển thị tên file cấu hình hoặc tùy chọn hiện/ẩn file trong Explorer. Bảng 27 tính năng căn cột và tô sáng cột hồ sơ hiện tại. Chọn lại hồ sơ đang dùng chỉ hiển thị thông tin, không ghi lại file.
 
 ## 4. File cấu hình đơn giản
 

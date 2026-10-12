@@ -128,7 +128,7 @@ void SecurityProfiles::load() {
         hidden = data["hide_config"].get<bool>();
         input.close();
         // Khôi phục thuộc tính hiển thị khi file được sao chép hoặc bị đổi bên ngoài.
-        // Tôn trọng hide_config=false nếu người dùng chủ động chọn Hiện trong Setup.
+        // Tôn trọng giá trị hide_config đã lưu trong JSON.
         if (!applyVisibility()) {
             std::cerr << "[!] Đã nạp hồ sơ; không đổi được thuộc tính Hidden của cmd_box.json.\n";
         }
