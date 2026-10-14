@@ -286,30 +286,6 @@ bool CleanerCore::moveToRecycleBin(const fs::path& filePath, bool dryRun, CleanS
     return false;
 }
 
-bool CleanerCore::emptyRecycleBin(bool dryRun, CleanStats& stats) {
-    SHQUERYRBINFO rbi{};
-    rbi.cbSize = sizeof(rbi);
-    if (SUCCEEDED(SHQueryRecycleBinW(NULL, &rbi))) {
-        if (dryRun) {
-            stats.bytesFreed += rbi.i64Size;
-            stats.filesDeleted += static_cast<int>(rbi.i64NumItems);
-            return true;
-        }
-        HRESULT hr = SHEmptyRecycleBinW(NULL, NULL, SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND);
-        if (SUCCEEDED(hr)) {
-            stats.bytesFreed += rbi.i64Size;
-            stats.filesDeleted += static_cast<int>(rbi.i64NumItems);
-            return true;
-        }
-    }
-    // Fallback qua powershell nếu API lỗi
-    if (!dryRun && runCommand("powershell -NoProfile -Command \"Clear-RecycleBin -Force -ErrorAction Stop\"", true)) {
-        return true;
-    }
-    stats.errorsCount++;
-    return false;
-}
-
 bool CleanerCore::flushDns() {
     HMODULE dnsApi = LoadLibraryW(L"dnsapi.dll");
     if (dnsApi) {
@@ -325,11 +301,6 @@ bool CleanerCore::flushDns() {
         FreeLibrary(dnsApi);
     }
     return runCommand("ipconfig /flushdns >nul 2>&1", true);
-}
-
-bool CleanerCore::takeOwnershipAndGrantAdmin(const fs::path& targetPath) {
-    (void)targetPath;
-    return false; // No recursive ACL takeover in a cache cleaner.
 }
 
 bool CleanerCore::filesHaveSameContent(const fs::path& first, const fs::path& second) {

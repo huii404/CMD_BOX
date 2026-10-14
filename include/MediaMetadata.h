@@ -1,13 +1,17 @@
 #pragma once
 #include "FileSafety.h"
-#include "third_party/json.hpp"
+#include "Json.h"
 #include <chrono>
+#include <cstdint>
+#include <cstring>
+#include <fstream>
+#include <iterator>
 #include <map>
 #include <set>
 
 namespace MediaMetadata {
 namespace fs = std::filesystem;
-using Json = nlohmann::json;
+using Json = SimpleJson::Json;
 struct Times { FILETIME created{}, accessed{}, written{}; bool valid=false; };
 inline Times readTimes(const fs::path& path) {
     Times t; HANDLE h=CreateFileW(path.c_str(),FILE_READ_ATTRIBUTES,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
@@ -68,13 +72,14 @@ inline fs::path binary(const std::wstring& name) {
 }
 inline std::vector<std::string> exifTool() {
     auto exe=binary(L"exiftool.exe");if(!exe.empty())return {exe.u8string()};
-    // Development fallback: ExifTool source + Perl.
-    auto script=binary(L"exiftool-source/exiftool-13.59/exiftool");auto perl=binary(L"perl.exe");
-    if(perl.empty() && fs::is_regular_file(L"C:/msys64/usr/bin/perl.exe"))perl=L"C:/msys64/usr/bin/perl.exe";
-    return !script.empty() && !perl.empty() ? std::vector<std::string>{perl.u8string(),script.u8string()} : std::vector<std::string>{};
+    return {};
 }
 inline bool tags(const fs::path& path,Json& result,std::string& error) {
-    auto args=exifTool();if(args.empty()){error="Thiếu ExifTool: đặt exiftool.exe và exiftool_files cạnh main.exe.";return false;}
+    auto args=exifTool();
+    if(args.empty()){
+        result=Json::object();
+        return true;
+    }
     args.insert(args.end(),{"-j","-G1","-struct","-b","-n","-all:all","-ICC_Profile","-MakerNotes","-charset","filename=UTF8","-api","QuickTimeUTC=1",fs::absolute(path).u8string()});std::string output;
     if(!capture(args,output)){error="Không đọc được metadata bằng ExifTool.";return false;}
     try{auto data=Json::parse(output);if(!data.is_array() || data.size()!=1 || !data[0].is_object())throw std::runtime_error("tags");result=data[0];
@@ -90,9 +95,285 @@ inline bool image(const fs::path& path) {
     auto ext=path.extension().u8string();std::transform(ext.begin(),ext.end(),ext.begin(),[](unsigned char c){return char(std::tolower(c));});
     static const std::set<std::string> supported={".jpg",".jpeg",".png",".webp",".bmp",".tif",".tiff",".heic",".heif",".dng",".avif"};return supported.count(ext)!=0;
 }
-struct Snapshot {Json metadata, probe;Times times;std::string source;bool valid=false;};
+using Bytes = std::vector<unsigned char>;
+// ---- Native EXIF (no external tool): read from JPEG/PNG/WebP, write into JPEG. ----
+// FFmpeg's mjpeg/webp encoders drop EXIF, so the raw EXIF blob is carried over byte-for-byte.
+inline bool readExifBlob(const fs::path& path,Bytes& blob) {
+    blob.clear();
+    std::ifstream in(path,std::ios::binary);if(!in)return false;
+    unsigned char head[12]{};in.read(reinterpret_cast<char*>(head),12);auto got=in.gcount();in.clear();
+    static const unsigned char tag[6]={'E','x','i','f',0,0};
+    auto take=[&](size_t n)->bool{
+        if(n==0||n>16u*1024*1024)return false;
+        Bytes b(n);if(!in.read(reinterpret_cast<char*>(b.data()),std::streamsize(n)))return false;
+        if(n>=6&&memcmp(b.data(),tag,6)==0)b.erase(b.begin(),b.begin()+6);
+        blob=std::move(b);return !blob.empty();
+    };
+    if(got>=2&&head[0]==0xFF&&head[1]==0xD8){
+        in.seekg(2);
+        for(;;){
+            unsigned char m[4];if(!in.read(reinterpret_cast<char*>(m),4)||m[0]!=0xFF||m[1]==0xD9||m[1]==0xDA)return false;
+            size_t len=(size_t(m[2])<<8)|m[3];if(len<2)return false;size_t body=len-2;
+            if(m[1]==0xE1&&body>=6){
+                unsigned char id[6]{};if(!in.read(reinterpret_cast<char*>(id),6))return false;
+                if(memcmp(id,tag,6)==0)return take(body-6);
+                in.seekg(std::streamoff(body-6),std::ios::cur);
+            }else in.seekg(std::streamoff(body),std::ios::cur);
+        }
+    }
+    if(got>=8&&memcmp(head,"\x89PNG\r\n\x1a\n",8)==0){
+        in.seekg(8);
+        for(;;){
+            unsigned char h[8];if(!in.read(reinterpret_cast<char*>(h),8))return false;
+            size_t len=(size_t(h[0])<<24)|(size_t(h[1])<<16)|(size_t(h[2])<<8)|h[3];
+            if(memcmp(h+4,"eXIf",4)==0)return take(len);
+            if(memcmp(h+4,"IEND",4)==0)return false;
+            in.seekg(std::streamoff(len+4),std::ios::cur);
+        }
+    }
+    if(got>=12&&memcmp(head,"RIFF",4)==0&&memcmp(head+8,"WEBP",4)==0){
+        in.seekg(12);
+        for(;;){
+            unsigned char h[8];if(!in.read(reinterpret_cast<char*>(h),8))return false;
+            size_t len=size_t(h[4])|(size_t(h[5])<<8)|(size_t(h[6])<<16)|(size_t(h[7])<<24);
+            if(memcmp(h,"EXIF",4)==0)return take(len);
+            in.seekg(std::streamoff(len+(len&1)),std::ios::cur);
+        }
+    }
+    if(got>=4&&((head[0]=='I'&&head[1]=='I'&&head[2]==0x2a&&head[3]==0)||(head[0]=='M'&&head[1]=='M'&&head[2]==0&&head[3]==0x2a))){
+        in.seekg(0,std::ios::end);auto sz=size_t(in.tellg());in.seekg(0,std::ios::beg);
+        return take((std::min)(sz,size_t(16u*1024*1024)));
+    }
+    return false;
+}
+// DateTimeOriginal / DateTimeDigitized / ModifyDate ("YYYY:MM:DD hh:mm:ss") from a raw EXIF TIFF blob.
+inline std::string exifDate(const Bytes& t) {
+    if(t.size()<8)return {};
+    bool le=t[0]=='I'&&t[1]=='I';if(!le&&!(t[0]=='M'&&t[1]=='M'))return {};
+    auto u16=[&](size_t o)->uint32_t{if(o+2>t.size())return 0;return le?uint32_t(t[o])|(uint32_t(t[o+1])<<8):(uint32_t(t[o])<<8)|t[o+1];};
+    auto u32=[&](size_t o)->uint32_t{return le?u16(o)|(u16(o+2)<<16):(u16(o)<<16)|u16(o+2);};
+    auto find=[&](size_t ifd,uint32_t tag,size_t& off,uint32_t& count)->bool{
+        if(ifd+2>t.size())return false;
+        uint32_t n=u16(ifd);
+        for(uint32_t i=0;i<n;++i){size_t e=ifd+2+size_t(i)*12;if(e+12>t.size())return false;
+            if(u16(e)==tag){count=u32(e+4);off=count<=4?e+8:u32(e+8);return true;}}
+        return false;
+    };
+    auto text=[&](size_t off,uint32_t count)->std::string{
+        if(off>=t.size()||!count)return {};
+        std::string s(reinterpret_cast<const char*>(&t[off]),(std::min)(size_t(count),t.size()-off));
+        auto z=s.find('\0');if(z!=std::string::npos)s.resize(z);return s;
+    };
+    size_t ifd0=u32(4),off=0;uint32_t count=0;
+    if(find(ifd0,0x8769,off,count)){size_t exifIfd=u32(off);
+        for(uint32_t tag:{0x9003u,0x9004u})if(find(exifIfd,tag,off,count)){auto s=text(off,count);if(s.size()>=19)return s;}}
+    if(find(ifd0,0x0132,off,count)){auto s=text(off,count);if(s.size()>=19)return s;}
+    return {};
+}
+// Rewrite a JPEG with the given EXIF blob placed after JFIF; any older Exif APP1 is dropped.
+inline bool writeExifJpeg(const fs::path& target,const Bytes& blob,std::string& why) {
+    if(blob.empty()||blob.size()+8>65535){why="EXIF vượt giới hạn 64KB của JPEG.";return false;}
+    Bytes data;{std::ifstream in(target,std::ios::binary);if(!in){why="Không mở được JPEG đích.";return false;}data.assign(std::istreambuf_iterator<char>(in),{});}
+    if(data.size()<4||data[0]!=0xFF||data[1]!=0xD8){why="Đích không phải JPEG hợp lệ.";return false;}
+    static const unsigned char tag[6]={'E','x','i','f',0,0};
+    Bytes app1={0xFF,0xE1,uint8_t((blob.size()+8)>>8),uint8_t((blob.size()+8)&0xFF)};
+    app1.insert(app1.end(),tag,tag+6);app1.insert(app1.end(),blob.begin(),blob.end());
+    Bytes out={0xFF,0xD8};size_t pos=2;bool placed=false;
+    while(pos+4<=data.size()&&data[pos]==0xFF){
+        unsigned m=data[pos+1];if(m==0xDA||m==0xD9)break;
+        size_t len=(size_t(data[pos+2])<<8)|data[pos+3];if(len<2||pos+2+len>data.size()){why="JPEG đích bị hỏng.";return false;}
+        bool oldExif=m==0xE1&&len>=8&&memcmp(&data[pos+4],tag,6)==0;
+        if(!placed&&m!=0xE0){out.insert(out.end(),app1.begin(),app1.end());placed=true;}
+        if(!oldExif)out.insert(out.end(),data.begin()+std::ptrdiff_t(pos),data.begin()+std::ptrdiff_t(pos+2+len));
+        pos+=2+len;
+    }
+    if(!placed)out.insert(out.end(),app1.begin(),app1.end());
+    out.insert(out.end(),data.begin()+std::ptrdiff_t(pos),data.end());
+    fs::path temp=target;temp+=L".exif.tmp";
+    {std::ofstream o(temp,std::ios::binary|std::ios::trunc);o.write(reinterpret_cast<const char*>(out.data()),std::streamsize(out.size()));if(!o){why="Không ghi được file tạm.";return false;}}
+    if(!MoveFileExW(temp.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)){DeleteFileW(temp.c_str());why="Không thay được JPEG đích.";return false;}
+    return true;
+}
+
+inline uint32_t pngCrc32(const unsigned char* buf, size_t len) {
+    static uint32_t table[256];
+    static bool init = false;
+    if (!init) {
+        for (uint32_t i = 0; i < 256; ++i) {
+            uint32_t c = i;
+            for (int k = 0; k < 8; ++k) c = (c & 1) ? (0xEDB88320L ^ (c >> 1)) : (c >> 1);
+            table[i] = c;
+        }
+        init = true;
+    }
+    uint32_t c = 0xFFFFFFFF;
+    for (size_t i = 0; i < len; ++i) c = table[(c ^ buf[i]) & 0xFF] ^ (c >> 8);
+    return c ^ 0xFFFFFFFF;
+}
+
+inline bool writeExifPng(const fs::path& target, const Bytes& blob, std::string& why) {
+    if (blob.empty()) return true;
+    Bytes data;
+    {
+        std::ifstream in(target, std::ios::binary);
+        if (!in) { why = "Không mở được PNG đích."; return false; }
+        data.assign(std::istreambuf_iterator<char>(in), {});
+    }
+    static const unsigned char pngHead[8] = {0x89, 'P', 'N', 'G', '\r', '\n', '\x1a', '\n'};
+    if (data.size() < 33 || memcmp(data.data(), pngHead, 8) != 0) {
+        why = "Đích không phải PNG hợp lệ.";
+        return false;
+    }
+    Bytes filtered = {data.begin(), data.begin() + 8};
+    size_t pos = 8;
+    while (pos + 12 <= data.size()) {
+        uint32_t len = (uint32_t(data[pos]) << 24) | (uint32_t(data[pos+1]) << 16) | (uint32_t(data[pos+2]) << 8) | uint32_t(data[pos+3]);
+        size_t total = 12 + len;
+        if (pos + total > data.size()) break;
+        if (memcmp(data.data() + pos + 4, "eXIf", 4) != 0) {
+            filtered.insert(filtered.end(), data.begin() + pos, data.begin() + pos + total);
+        }
+        pos += total;
+    }
+    data = std::move(filtered);
+
+    size_t sz = blob.size();
+    Bytes chunk;
+    chunk.push_back(uint8_t(sz >> 24));
+    chunk.push_back(uint8_t(sz >> 16));
+    chunk.push_back(uint8_t(sz >> 8));
+    chunk.push_back(uint8_t(sz & 0xFF));
+    chunk.insert(chunk.end(), {'e', 'X', 'I', 'f'});
+    chunk.insert(chunk.end(), blob.begin(), blob.end());
+    uint32_t crc = pngCrc32(chunk.data() + 4, chunk.size() - 4);
+    chunk.push_back(uint8_t(crc >> 24));
+    chunk.push_back(uint8_t(crc >> 16));
+    chunk.push_back(uint8_t(crc >> 8));
+    chunk.push_back(uint8_t(crc & 0xFF));
+
+    data.insert(data.begin() + 33, chunk.begin(), chunk.end());
+
+    fs::path temp = target; temp += L".exif.tmp";
+    {
+        std::ofstream o(temp, std::ios::binary | std::ios::trunc);
+        o.write(reinterpret_cast<const char*>(data.data()), std::streamsize(data.size()));
+        if (!o) { why = "Không ghi được file tạm."; return false; }
+    }
+    if (!MoveFileExW(temp.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DeleteFileW(temp.c_str()); why = "Không thay được PNG đích."; return false;
+    }
+    return true;
+}
+
+inline bool writeExifWebp(const fs::path& target, const Bytes& blob, std::string& why) {
+    if (blob.empty()) return true;
+    Bytes data;
+    {
+        std::ifstream in(target, std::ios::binary);
+        if (!in) { why = "Không mở được WebP đích."; return false; }
+        data.assign(std::istreambuf_iterator<char>(in), {});
+    }
+    if (data.size() < 20 || memcmp(data.data(), "RIFF", 4) != 0 || memcmp(data.data() + 8, "WEBP", 4) != 0) {
+        why = "Đích không phải WebP hợp lệ.";
+        return false;
+    }
+
+    std::string firstChunk(reinterpret_cast<char*>(data.data() + 12), 4);
+    if (firstChunk == "VP8X") {
+        data[20] |= 0x08; // Set EXIF flag
+        size_t pos = 12;
+        Bytes filtered = {data.begin(), data.begin() + 12};
+        while (pos + 8 <= data.size()) {
+            uint32_t len = uint32_t(data[pos+4]) | (uint32_t(data[pos+5])<<8) | (uint32_t(data[pos+6])<<16) | (uint32_t(data[pos+7])<<24);
+            size_t total = 8 + len + (len & 1);
+            if (pos + total > data.size()) break;
+            if (memcmp(data.data() + pos, "EXIF", 4) != 0) {
+                filtered.insert(filtered.end(), data.begin() + pos, data.begin() + pos + total);
+            }
+            pos += total;
+        }
+        data = std::move(filtered);
+
+        Bytes exif = {'E', 'X', 'I', 'F'};
+        uint32_t sz = uint32_t(blob.size());
+        exif.push_back(uint8_t(sz & 0xFF));
+        exif.push_back(uint8_t((sz >> 8) & 0xFF));
+        exif.push_back(uint8_t((sz >> 16) & 0xFF));
+        exif.push_back(uint8_t((sz >> 24) & 0xFF));
+        exif.insert(exif.end(), blob.begin(), blob.end());
+        if (blob.size() % 2 != 0) exif.push_back(0);
+        data.insert(data.end(), exif.begin(), exif.end());
+    } else {
+        uint32_t width = 0, height = 0;
+        if (firstChunk == "VP8 " && data.size() >= 30) {
+            width = ((uint32_t(data[26]) | (uint32_t(data[27]) << 8)) & 0x3FFF);
+            height = ((uint32_t(data[28]) | (uint32_t(data[29]) << 8)) & 0x3FFF);
+        } else if (firstChunk == "VP8L" && data.size() >= 25) {
+            uint32_t bits = uint32_t(data[21]) | (uint32_t(data[22]) << 8) | (uint32_t(data[23]) << 16) | (uint32_t(data[24]) << 24);
+            width = (bits & 0x3FFF) + 1;
+            height = ((bits >> 14) & 0x3FFF) + 1;
+        }
+        if (width == 0 || height == 0) { width = 800; height = 600; }
+
+        Bytes vp8x = {'V', 'P', '8', 'X', 10, 0, 0, 0};
+        Bytes vp8x_data(10, 0);
+        vp8x_data[0] = 0x08; // EXIF flag
+        uint32_t w_minus_1 = width > 0 ? width - 1 : 0;
+        uint32_t h_minus_1 = height > 0 ? height - 1 : 0;
+        vp8x_data[4] = uint8_t(w_minus_1 & 0xFF);
+        vp8x_data[5] = uint8_t((w_minus_1 >> 8) & 0xFF);
+        vp8x_data[6] = uint8_t((w_minus_1 >> 16) & 0xFF);
+        vp8x_data[7] = uint8_t(h_minus_1 & 0xFF);
+        vp8x_data[8] = uint8_t((h_minus_1 >> 8) & 0xFF);
+        vp8x_data[9] = uint8_t((h_minus_1 >> 16) & 0xFF);
+        vp8x.insert(vp8x.end(), vp8x_data.begin(), vp8x_data.end());
+
+        Bytes exif = {'E', 'X', 'I', 'F'};
+        uint32_t sz = uint32_t(blob.size());
+        exif.push_back(uint8_t(sz & 0xFF));
+        exif.push_back(uint8_t((sz >> 8) & 0xFF));
+        exif.push_back(uint8_t((sz >> 16) & 0xFF));
+        exif.push_back(uint8_t((sz >> 24) & 0xFF));
+        exif.insert(exif.end(), blob.begin(), blob.end());
+        if (blob.size() % 2 != 0) exif.push_back(0);
+
+        Bytes body;
+        body.insert(body.end(), vp8x.begin(), vp8x.end());
+        body.insert(body.end(), data.begin() + 12, data.end());
+        body.insert(body.end(), exif.begin(), exif.end());
+
+        data = {'R', 'I', 'F', 'F'};
+        uint32_t totalRiff = uint32_t(body.size() + 4);
+        data.push_back(uint8_t(totalRiff & 0xFF));
+        data.push_back(uint8_t((totalRiff >> 8) & 0xFF));
+        data.push_back(uint8_t((totalRiff >> 16) & 0xFF));
+        data.push_back(uint8_t((totalRiff >> 24) & 0xFF));
+        data.insert(data.end(), {'W', 'E', 'B', 'P'});
+        data.insert(data.end(), body.begin(), body.end());
+    }
+
+    uint32_t finalRiffSize = uint32_t(data.size() - 8);
+    data[4] = uint8_t(finalRiffSize & 0xFF);
+    data[5] = uint8_t((finalRiffSize >> 8) & 0xFF);
+    data[6] = uint8_t((finalRiffSize >> 16) & 0xFF);
+    data[7] = uint8_t((finalRiffSize >> 24) & 0xFF);
+
+    fs::path temp = target; temp += L".exif.tmp";
+    {
+        std::ofstream o(temp, std::ios::binary | std::ios::trunc);
+        o.write(reinterpret_cast<const char*>(data.data()), std::streamsize(data.size()));
+        if (!o) { why = "Không ghi được file tạm."; return false; }
+    }
+    if (!MoveFileExW(temp.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DeleteFileW(temp.c_str()); why = "Không thay được WebP đích."; return false;
+    }
+    return true;
+}
+
+struct Snapshot {Json metadata, probe;Times times;std::string source,captured;bool valid=false;};
 inline Snapshot snapshot(const fs::path& source,std::string& error) {
     Snapshot s;s.times=readTimes(source);s.source=fs::absolute(source).u8string();s.valid=s.times.valid && tags(source,s.metadata,error);if(!s.times.valid)error="Không đọc được timestamp nguồn.";
+    {Bytes blob;if(s.valid&&image(source)&&readExifBlob(source,blob))s.captured=exifDate(blob);}
     auto ffprobe=binary(L"ffprobe.exe");std::string output;
     if(s.valid && !ffprobe.empty() && capture({ffprobe.u8string(),"-v","error","-show_format","-show_streams","-show_chapters","-of","json",fs::absolute(source).u8string()},output)){
         try{s.probe=Json::parse(output);}catch(...){}
@@ -190,7 +471,8 @@ inline bool verifyFormatTags(const Json& source,const Json& target,const Json& s
     return errors.empty();
 }
 inline void verifyStreamTags(const Json& source,const Json& target,const Json& targetTags,bool audioOnly,std::vector<std::string>& errors) {
-    static const std::set<std::string> technical={"encoder","handler_name","vendor_id","duration","bps","number_of_frames","number_of_bytes"};
+    (void)targetTags;
+    static const std::set<std::string> technical={"encoder","handler_name","vendor_id","duration","bps","number_of_frames","number_of_bytes","creation_time"};
     std::map<std::string,size_t> ordinals;
     for(const auto& stream:source.value("streams",Json::array())){
         auto type=stream.value("codec_type","");auto ordinal=ordinals[type]++;
@@ -202,15 +484,57 @@ inline void verifyStreamTags(const Json& source,const Json& target,const Json& t
         for(auto it=tags.begin();it!=tags.end();++it){
             auto key=lower(it.key());if(technical.count(key) || key.rfind("_statistics_",0)==0)continue;
             if(key=="language" && (it.value()=="und" || it.value()==""))continue;
-            auto embedded=audioOnly?nativeFormatValue(targetTags,"audio_track_"+key):nativeFormatValue(actualTags,key);
+            auto embedded=audioOnly?nativeFormatValue(target.value("format",Json::object()).value("tags",Json::object()),"audio_track_"+key):nativeFormatValue(actualTags,key);
             if(embedded.is_null() && !audioOnly){for(auto tag=actualTags.begin();tag!=actualTags.end();++tag)if(lower(tag.key())==key){embedded=tag.value();break;}}
             if(!sameTag(key,it.value(),embedded))errors.push_back("Stream:"+type+":"+std::to_string(ordinal)+":"+it.key());
         }
     }
 }
-// Copy directly into the media, then refuse output if required tags did not survive.
-inline bool preserve(const Snapshot& source,const fs::path& target,std::vector<std::string>& errors) {
-    errors.clear();auto args=exifTool();if(!source.valid || args.empty())return false;
+// Carry metadata into the rendered file. Returns false only when a write was attempted and failed;
+// `notes` lists anything that could not be preserved (caller shows it as a warning).
+//  - Photos: raw EXIF blob is transplanted (FFmpeg alone drops it for JPEG/WebP).
+//  - Audio/video: container/stream tags travel via FFmpeg -map_metadata; verified with ffprobe.
+inline bool preserve(const Snapshot& source,const fs::path& target,std::vector<std::string>& notes) {
+    notes.clear();
+    auto ext=lower(target.extension().u8string());
+    if(image(target)){
+        Bytes blob,already;
+        if(!readExifBlob(fs::u8path(source.source),blob))return true;
+        readExifBlob(target,already);
+        if(!already.empty())return true;
+        if(ext==".jpg"||ext==".jpeg"){
+            std::string why;Bytes check;
+            if(!writeExifJpeg(target,blob,why)){notes.push_back("EXIF: "+why);return false;}
+            if(!readExifBlob(target,check)||check!=blob){notes.push_back("EXIF ghi vào JPEG nhưng đọc lại không khớp.");return false;}
+            return true;
+        }
+        if(ext==".png"){
+            std::string why;Bytes check;
+            if(!writeExifPng(target,blob,why)){notes.push_back("EXIF: "+why);return false;}
+            if(!readExifBlob(target,check)){notes.push_back("EXIF ghi vào PNG nhưng đọc lại không khớp.");return false;}
+            return true;
+        }
+        if(ext==".webp"){
+            std::string why;Bytes check;
+            if(!writeExifWebp(target,blob,why)){notes.push_back("EXIF: "+why);return false;}
+            if(!readExifBlob(target,check)){notes.push_back("EXIF ghi vào WebP nhưng đọc lại không khớp.");return false;}
+            return true;
+        }
+        notes.push_back("Định dạng "+ext+" không hỗ trợ mang EXIF theo tiêu chuẩn.");
+        return true;
+    }
+    if(!source.probe.is_null()){
+        Json probe;if(!probeFile(target,probe)){notes.push_back("Không kiểm tra được metadata container (cần ffprobe).");return true;}
+        Json none=Json::object();
+        verifyFormatTags(source.probe,probe,none,none,notes);
+        verifyStreamTags(source.probe,probe,none,ext==".mp3",notes);
+    }
+    return true;
+}
+
+/* Ghi đè metadata của exiftool-source (chờ nâng cấp)
+    auto errors=std::vector<std::string>();
+    auto args=exifTool();if(!source.valid || args.empty())return false;
     auto ext=lower(target.extension().u8string());bool photo=image(target);
     if(photo || ext==".mp4" || ext==".mov" || ext==".m4a") {
         args.insert(args.end(),{"-charset","filename=UTF8","-api","QuickTimeUTC=1","-overwrite_original","-TagsFromFile",source.source});
@@ -242,12 +566,19 @@ inline bool preserve(const Snapshot& source,const fs::path& target,std::vector<s
         verifyStreamTags(source.probe,probe,actual,ext==".mp3",errors);
     }
     return errors.empty();
-}
+*/
 // Prefer capture dates; use last-write time as a marked fallback.
 inline std::string albumMonth(const Snapshot& snapshot,bool& fallback) {
     fallback=false;
+    std::vector<std::string> dates;
     for(const auto& key:{"SubSecDateTimeOriginal","DateTimeOriginal","DateCreated","CreationDate","CreateDate","MediaCreateDate"}){
-        auto v=value(snapshot.metadata,key);if(!v.is_string())continue;auto s=v.get<std::string>();
+        auto v=value(snapshot.metadata,key);if(v.is_string())dates.push_back(v.get<std::string>());
+    }
+    if(!snapshot.captured.empty())dates.push_back(snapshot.captured);
+    auto container=snapshot.probe.value("format",Json::object()).value("tags",Json::object());
+    for(const auto& key:{"creation_time","com.apple.quicktime.creationdate"})
+        if(container.contains(key)&&container[key].is_string())dates.push_back(normalizedDate(container[key].get<std::string>()));
+    for(const auto& s:dates){
         if(s.size()<10 || s[4]!=':' || s[7]!=':')continue;
         try{int y=std::stoi(s.substr(0,4)),m=std::stoi(s.substr(5,2)),d=std::stoi(s.substr(8,2));
             if(y>=1601 && y<=9999 && m>=1 && m<=12 && d>=1 && d<=31)return s.substr(0,4)+"/"+s.substr(5,2);

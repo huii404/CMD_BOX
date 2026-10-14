@@ -265,49 +265,6 @@ bool LocalDrop::removeFirewallRule(const string &ruleName) {
     return SystemCore::runRawCommand("netsh advfirewall firewall delete rule name=\"" + ruleName + "\"");
 }
 
-// ----------------------------------------------------------------------------------
-// Phân tích User-Agent để nhận diện thiết bị
-// ----------------------------------------------------------------------------------
-string LocalDrop::parseDeviceName(const string &userAgent, const string &clientIP) {
-    string name = "";
-    if (userAgent.find("iPhone") != string::npos) {
-        name = "Apple iPhone";
-    } else if (userAgent.find("iPad") != string::npos) {
-        name = "Apple iPad";
-    } else if (userAgent.find("Macintosh") != string::npos) {
-        name = "Apple Mac";
-    } else if (userAgent.find("Android") != string::npos) {
-        name = "Android Device";
-    } else if (userAgent.find("Windows") != string::npos) {
-        name = "Windows PC";
-    } else if (userAgent.find("Linux") != string::npos) {
-        name = "Linux Device";
-    } else if (userAgent.find("CMDBOX_CLI") != string::npos) {
-        name = "CMD Box";
-    } else {
-        name = "Thiết bị mạng";
-    }
-    return clientIP + " (" + name + ")";
-}
-
-string LocalDrop::sanitizeFilename(const string &filename) {
-    string safe = filename;
-    for (char &c : safe) {
-        if (static_cast<unsigned char>(c) < 32 || c == '/' || c == '\\' || c == ':' ||
-            c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|') {
-            c = '_';
-        }
-    }
-    while (!safe.empty() && (safe.back() == '.' || safe.back() == ' ')) safe.pop_back();
-    if (safe.empty() || safe == "." || safe == "..") safe = "received_file";
-    string stem = safe.substr(0, safe.find('.'));
-    transform(stem.begin(), stem.end(), stem.begin(), [](unsigned char c) { return static_cast<char>(toupper(c)); });
-    if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" ||
-        (stem.size() == 4 && (stem.rfind("COM", 0) == 0 || stem.rfind("LPT", 0) == 0) &&
-         stem[3] >= '1' && stem[3] <= '9')) safe = "received_" + safe;
-    return safe;
-}
-
 string LocalDrop::getDownloadsFolder() {
     PWSTR path = NULL;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Downloads, 0, NULL, &path))) {

@@ -22,8 +22,6 @@ private:
     static std::unordered_set<std::string> getAllLocalIPs();
     static bool addFirewallRule(int port, const std::string &ruleName);
     static bool removeFirewallRule(const std::string &ruleName);
-    static std::string parseDeviceName(const std::string &userAgent, const std::string &clientIP);
-    static std::string sanitizeFilename(const std::string &filename);
     static std::string getDownloadsFolder();
 
 public:

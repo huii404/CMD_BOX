@@ -88,25 +88,23 @@ void SystemCore::setupMenu() {
     auto& config = profiles();
     const Accent accents[] = {MINT, SKY, ORCHID, ROSE};
     const char* descriptions[] = {
-        "Tiện ích, media, dọn cache và Downloads",
-        "Thêm dọn sâu, sửa mạng và tinh chỉnh giao diện",
-        "Thêm dịch vụ nền, sửa Update và gỡ ứng dụng",
-        "Toàn bộ tính năng, gồm dịch vụ sâu và Firewall"
+        "Tiện ích, media, dọn cache",
+        "+ Dọn sâu, mạng, giao diện",
+        "+ Dịch vụ nền, Update, gỡ app",
+        "Toàn bộ, gồm Firewall"
     };
     while (true) {
         cls();
-        header("SETUP · HỒ SƠ SỬ DỤNG", SKY);
-        info("Hồ sơ hiện tại", SecurityProfiles::tierName(config.currentTier()), config.currentTier() ? MINT : AMBER);
-        section("CHỌN HỒ SƠ");
-        for (int tier = 1; tier <= 4; ++tier) {
-            item(tier, SecurityProfiles::tierName(tier), accents[tier-1], tier == config.currentTier() ? "  · Đang dùng" : "");
-            setupLine(std::string("     ") + descriptions[tier-1], {MUTED});
-        }
-        section("CẤU HÌNH & TRA CỨU");
-        item(5, "Xem ma trận 27 tính năng", SKY);
-        item(6, "Xóa cấu hình và thiết lập lại", ROSE);
+        header("SETUP · HỒ SƠ", SKY);
+        info("Hiện tại", SecurityProfiles::tierName(config.currentTier()), config.currentTier() ? MINT : AMBER);
         blank();
-        setupLine("Quyền Admin vẫn tuân theo hồ sơ đã chọn.", {MUTED});
+        for (int tier = 1; tier <= 4; ++tier) {
+            item(tier, SecurityProfiles::tierName(tier), accents[tier-1],
+                 (std::string(tier == config.currentTier() ? "  ● " : "  · ") + descriptions[tier-1]).c_str());
+        }
+        blank();
+        item(5, "Ma trận tính năng", SKY);
+        item(6, "Thiết lập lại", ROSE);
         footer("Quay lại", SKY);
         int choice = readInt("");
         if (!choice) return;
@@ -124,8 +122,7 @@ void SystemCore::setupMenu() {
                 info("Chuyển sang", SecurityProfiles::tierName(choice), accents[choice-1]);
                 blank();
                 setupLine("Hồ sơ mới mở thêm thao tác thay đổi hệ thống.", AMBER);
-                setupLine("Hãy đọc xác nhận của từng tác vụ trước khi chạy.", {MUTED});
-                setupLine("Bạn tự chọn hồ sơ và chịu trách nhiệm với thao tác.", {MUTED});
+                setupLine("Đọc kỹ xác nhận của từng tác vụ trước khi chạy.", {MUTED});
                 setupClose();
                 if (!confirm("  Tiếp tục? (y/N): ")) continue;
             }
@@ -135,8 +132,7 @@ void SystemCore::setupMenu() {
         } else if (choice == 6) {
             cls();
             header("THIẾT LẬP LẠI", ROSE);
-            setupLine("Xóa cấu hình và trở về Chưa thiết lập.", ROSE);
-            setupLine("Các tác vụ thay đổi dữ liệu sẽ yêu cầu Setup lại.", {MUTED});
+            setupLine("Xóa cấu hình, về trạng thái Chưa thiết lập.", ROSE);
             setupClose();
             if (!confirm("  Xóa cấu hình? (y/N): ")) continue;
             ok = config.reset(message);
@@ -179,22 +175,6 @@ void SystemCore::cls() {
     std::cout << "\x1b[3J\x1b[H" << std::flush;
 }
 
-std::string SystemCore::getTime(bool includeDate) {
-    time_t now = time(nullptr);
-    tm t;
-    localtime_s(&t, &now);
-    std::stringstream ss;
-    if (includeDate) {
-        ss << "[" << std::setfill('0') << std::setw(2) << t.tm_mday << "/" 
-           << std::setw(2) << t.tm_mon + 1 << "/" << t.tm_year + 1900 << " ";
-    } else {
-        ss << "[";
-    }
-    ss << std::setfill('0') << std::setw(2) << t.tm_hour << ":" 
-       << std::setw(2) << t.tm_min << ":" 
-       << std::setw(2) << t.tm_sec << "]";
-    return ss.str();
-}
 
 std::string SystemCore::formatSize(long long b) {
     if (b < 0) b = 0;
@@ -277,32 +257,6 @@ std::vector<std::string> SystemCore::parsePaths(const std::string& rawInput) {
     return paths;
 }
 
-std::string SystemCore::urlDecode(const std::string& str) {
-    std::string decoded;
-    decoded.reserve(str.length());
-    for (size_t i = 0; i < str.length(); ++i) {
-        if (str[i] == '%') {
-            if (i + 2 < str.length() && 
-                isxdigit(static_cast<unsigned char>(str[i + 1])) && 
-                isxdigit(static_cast<unsigned char>(str[i + 2]))) {
-                int value = 0;
-                if (sscanf(str.substr(i + 1, 2).c_str(), "%x", &value) == 1 && value >= 0 && value <= 255) {
-                    decoded += static_cast<char>(static_cast<unsigned char>(value));
-                } else {
-                    decoded += '%';
-                }
-                i += 2;
-            } else {
-                decoded += '%';
-            }
-        } else if (str[i] == '+') {
-            decoded += ' ';
-        } else {
-            decoded += str[i];
-        }
-    }
-    return decoded;
-}
 
 bool SystemCore::runBatchAsAdmin(const std::string& batContent, const std::string& description) {
     (void)description;

@@ -33,9 +33,6 @@ public:
     void normalizeMediaFilenames();
     void organizeAlbumFolder();
     void processAnFileTrongFile();
-    void hideFileInImage();
-    void hideFileInVideo();
-    void extractHiddenFromMedia();
 };
 
 #endif

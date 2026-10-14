@@ -272,10 +272,6 @@ void UpdateManager::shutdown() {
     if (g_checkThread.joinable()) g_checkThread.join();
 }
 
-bool UpdateManager::isCheckingFinished() {
-    return g_checkFinished.load();
-}
-
 bool UpdateManager::hasNewVersion() {
     return g_hasNewVersion.load();
 }

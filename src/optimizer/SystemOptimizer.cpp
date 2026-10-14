@@ -311,10 +311,6 @@ void SystemOptimizer::runClean() {
     DiskCleaner::runAutomaticCleanup(true);
 }
 
-void SystemOptimizer::runCleanChoice(int /*choice*/) {
-    runClean();
-}
-
 // --- HỆ THỐNG TĂNG TỐC & TỐI ƯU HIỆU NĂNG THEO NHIỆM VỤ ---
 
 // Nhiệm vụ 1: Tối ưu Khởi động (Tắt app bên thứ ba làm chậm máy, bảo vệ 100% Bộ gõ & Driver)

@@ -27,7 +27,6 @@ public:
     ~SystemCore();
 
     static void cls();
-    static std::string getTime(bool includeDate = true);
     static void waitEnter();
     static bool confirm(const std::string& prompt);
     static std::string trim(const std::string& str);
@@ -35,7 +34,6 @@ public:
     static std::string formatSize(long long b);
     static bool runRawCommand(const std::string& command);
     static std::vector<std::string> parsePaths(const std::string& rawInput);
-    static std::string urlDecode(const std::string& str);
     static bool runBatchAsAdmin(const std::string& batContent, const std::string& description = "");
     static bool runEmbeddedBatch(const std::string& batContent,
                                  const std::string& arguments = "",

@@ -63,11 +63,7 @@ public:
     static bool forceDeleteFolder(const fs::path& dirPath, bool dryRun, CleanStats& stats);
     static bool safeDeleteFile(const fs::path& filePath, bool dryRun, CleanStats& stats);
     static bool moveToRecycleBin(const fs::path& filePath, bool dryRun, CleanStats& stats);
-    static bool emptyRecycleBin(bool dryRun, CleanStats& stats);
     static bool flushDns();
-
-    // Quyền sở hữu file (Take ownership cho Windows.old, $WINDOWS.~BT)
-    static bool takeOwnershipAndGrantAdmin(const fs::path& targetPath);
 
     // So sánh nhị phân 2 file để phát hiện trùng lặp chính xác
     static bool filesHaveSameContent(const fs::path& first, const fs::path& second);

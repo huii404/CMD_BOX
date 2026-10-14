@@ -106,7 +106,7 @@ public:
             int mainChoice = readInt("");
             
             if (mainChoice == 0) break;      
-            if (mainChoice < 1 || mainChoice > 7) continue;
+            if (mainChoice < 1 || mainChoice > 8) continue;
 
             int sub;
             switch (mainChoice) {

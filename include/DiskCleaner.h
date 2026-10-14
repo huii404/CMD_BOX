@@ -8,20 +8,9 @@
 #include "DevCleaner.h"
 #include "DownloadsCleaner.h"
 
-enum class CleanScope {
-    SurfaceAndTemp,
-    BrowserAndApps,
-    DeepSystem,
-    DevEnvironments,
-    DownloadsSmart,
-    All
-};
-
 class DiskCleaner {
 public:
     static void printBanner();
-    // Chạy dọn dẹp theo phạm vi cụ thể
-    static CleanStats runScope(CleanScope scope, bool dryRun);
 
 
     // Luồng một nút: tự kiểm tra, dọn từng tiêu chí và cập nhật dashboard.

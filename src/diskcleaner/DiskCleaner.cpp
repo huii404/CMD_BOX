@@ -150,66 +150,6 @@ void DiskCleaner::printBanner() {
               << CleanerCore::C_RESET << "\n\n";
 }
 
-CleanStats DiskCleaner::runScope(CleanScope scope, bool dryRun) {
-    CleanStats total;
-    if (!SystemCore::requireFeature(Feature::BasicClean)) return total;
-
-    if (scope == CleanScope::SurfaceAndTemp || scope == CleanScope::All) {
-        std::cout << CleanerCore::C_CYAN << " [*] Đang xử lý: Temp & Cache hệ thống cơ bản...\n" << CleanerCore::C_RESET;
-        CleanStats s = TempCleaner::clean(dryRun);
-        total.add(s);
-        std::cout << "     └── Giải phóng: " << CleanerCore::C_GREEN
-                  << SystemCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
-                  << " (" << s.filesDeleted << " files)\n\n";
-    }
-
-    if (scope == CleanScope::BrowserAndApps || scope == CleanScope::All) {
-        std::cout << CleanerCore::C_CYAN << " [*] Đang xử lý: Cache trình duyệt & Zalo PC...\n" << CleanerCore::C_RESET;
-        CleanStats s = BrowserCleaner::clean(dryRun);
-        total.add(s);
-        std::cout << "     └── Giải phóng: " << CleanerCore::C_GREEN
-                  << SystemCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
-                  << " (" << s.filesDeleted << " files, " << s.dirsDeleted << " dirs)\n\n";
-    }
-
-    if ((scope == CleanScope::DeepSystem || scope == CleanScope::All) && SystemCore::profiles().allowed(Feature::DeepClean)) {
-        std::cout << CleanerCore::C_CYAN << " [*] Đang xử lý: Hệ thống sâu & Windows Update...\n" << CleanerCore::C_RESET;
-        CleanStats s = SystemDeepCleaner::clean(dryRun, false);
-        total.add(s);
-        std::cout << "     └── Giải phóng: " << CleanerCore::C_GREEN
-                  << SystemCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
-                  << " (" << s.filesDeleted << " files, " << s.dirsDeleted << " dirs)\n\n";
-    }
-
-    if (scope == CleanScope::DevEnvironments || scope == CleanScope::All) {
-        std::cout << CleanerCore::C_CYAN << " [*] Đang xử lý: Môi trường Dev...\n" << CleanerCore::C_RESET;
-        CleanStats s = DevCleaner::clean(dryRun);
-        total.add(s);
-        std::cout << "     └── Giải phóng: " << CleanerCore::C_GREEN
-                  << SystemCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
-                  << " (" << s.filesDeleted << " files, " << s.dirsDeleted << " dirs)\n\n";
-    }
-
-    // Downloads luôn cuối — file vừa vào Recycle Bin không bị dọn tiếp.
-    if (scope == CleanScope::DownloadsSmart || scope == CleanScope::All) {
-        std::cout << CleanerCore::C_CYAN << " [*] Đang xử lý: Downloads thông minh (CHẠY CUỐI)...\n" << CleanerCore::C_RESET;
-        CleanStats s = DownloadsCleaner::clean(dryRun);
-        total.add(s);
-        if (s.filesDeleted > 0) {
-            std::cout << "     ├── [XÓA CỨNG] File tải dở/lỗi: "
-                      << CleanerCore::C_GREEN << SystemCore::formatSize(s.bytesFreed)
-                      << CleanerCore::C_RESET << " (" << s.filesDeleted << " files)\n";
-        }
-        std::cout << "     └── [RECYCLE]  File trùng & bộ cài đã cài: "
-                  << CleanerCore::C_YELLOW << SystemCore::formatSize(s.bytesRecycled)
-                  << CleanerCore::C_RESET
-                  << " (" << s.filesRecycled << " files)\n\n";
-    }
-
-    return total;
-}
-
-
 void DiskCleaner::runAutomaticCleanup(bool waitAtEnd) {
     if (!SystemCore::requireFeature(Feature::BasicClean)) return;
     std::cout << "Dọn cache và đưa file Downloads trùng vào Thùng rác. Tiếp tục? (y/N): ";

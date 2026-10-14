@@ -23,7 +23,6 @@ public:
     static void shutdown();
 
     // Trạng thái kiểm tra
-    static bool isCheckingFinished();
     static bool hasNewVersion();
     static std::string getRemoteVersion();
     static std::string getVersionStatusText();

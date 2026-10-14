@@ -1,5 +1,5 @@
 #include "SecurityProfiles.h"
-#include "third_party/json.hpp"
+#include "Json.h"
 #include <windows.h>
 #include <fstream>
 #include <iostream>
@@ -120,9 +120,9 @@ void SecurityProfiles::load() {
     hidden = true;
     try {
         std::ifstream input(file, std::ios::binary);
-        auto data = nlohmann::json::parse(input);
-        if (!data.is_object() || !data.contains("version") || !data["version"].is_number_integer() || data["version"] != 1 ||
-            !data.contains("tier") || !data["tier"].is_number_integer() || data["tier"] < 1 || data["tier"] > 4 ||
+        auto data = SimpleJson::Json::parse(input);
+        if (!data.is_object() || !data.contains("version") || !data["version"].is_number_integer() || data["version"].get<int>() != 1 ||
+            !data.contains("tier") || !data["tier"].is_number_integer() || data["tier"].get<int>() < 1 || data["tier"].get<int>() > 4 ||
             !data.contains("hide_config") || !data["hide_config"].is_boolean()) return;
         tier = data["tier"].get<int>();
         hidden = data["hide_config"].get<bool>();
@@ -144,7 +144,7 @@ bool SecurityProfiles::save(int newTier, bool hide, std::string& message) {
     bool written = false;
     try {
         std::ofstream output(std::filesystem::path(temporary), std::ios::binary | std::ios::trunc);
-        output << nlohmann::json({{"version",1},{"tier",newTier},{"hide_config",hide}}).dump(2) << '\n';
+        output << "{\n  \"version\": 1,\n  \"tier\": " << newTier << ",\n  \"hide_config\": " << (hide ? "true" : "false") << "\n}\n";
         output.close(); written = static_cast<bool>(output);
     } catch (...) {}
     if (!written || !MoveFileExW(temporary, file.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {

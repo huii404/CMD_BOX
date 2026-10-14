@@ -46,7 +46,7 @@ static bool isPrivateIPv4(const string& ip) {
     return false;
 }
 
-string NetworkScanner::getLocalIP(SystemCore &core) {
+string NetworkScanner::getLocalIP(SystemCore &/*core*/) {
     time_t now = time(nullptr);
     
     if (!cachedScannerIP.empty() && (now - lastScannerIPCheck) < IP_SCANNER_CACHE_TTL) {
@@ -301,7 +301,7 @@ string NetworkScanner::queryLocalDnsPtr(const string& ipStr, const string& route
     return hostname;
 }
 
-pair<string, string> NetworkScanner::classifyDevice(const string& ip, const string& mac, bool isLocal, bool isGw,
+pair<string, string> NetworkScanner::classifyDevice(const string& /*ip*/, const string& mac, bool isLocal, bool isGw,
                                                    const string& localHost, const string& netBios, const string& dnsHost) {
     if (isLocal) {
         return {localHost, "Máy tính này (This PC)"};

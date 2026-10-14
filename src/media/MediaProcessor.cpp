@@ -112,12 +112,15 @@ static bool safeVideoEncoder(const MediaMetadata::Json& info,const string& norma
 static bool finalizeMedia(const fs::path& temporary,const MediaMetadata::Snapshot& source,const fs::path& requested,fs::path& actual,string& error) {
     error.clear();error_code ec;
     if(!source.valid || !fs::is_regular_file(temporary,ec) || ec || fs::file_size(temporary,ec)==0 || ec){error="File render rỗng hoặc snapshot metadata không hợp lệ.";return false;}
-    vector<string> missing;
-    if(!MediaMetadata::preserve(source,temporary,missing)){
-        error="Không xuất: định dạng đích chưa giữ được metadata nhúng.";
-        for(const auto& tag:missing)error+="\n  "+tag;
+    vector<string> notes;
+    const bool preserved=MediaMetadata::preserve(source,temporary,notes);
+    if(!preserved){
+        error="Không xuất: không ghi được metadata nhúng vào file đích.";
+        for(const auto& note:notes)error+="\n  "+note;
         return false;
     }
+    string warning;
+    if(!notes.empty()){warning="Metadata chưa giữ đủ:";for(const auto& note:notes)warning+="\n  "+note;}
     actual=makeUniqueOutputPath(requested,fs::u8path(source.source));
     FileSafety::AncestorLocks parents;if(!parents.acquire(actual)){error="Thư mục xuất không an toàn.";return false;}
     struct Publication {
@@ -133,7 +136,7 @@ static bool finalizeMedia(const fs::path& temporary,const MediaMetadata::Snapsho
         error="Không lưu được file; nguồn giữ nguyên.";return false;
     }
     if(!SetFileTime(file.media,&source.times.created,&source.times.accessed,&source.times.written)){error="Không đồng bộ được timestamp Windows; đã hủy bản xuất.";return false;}
-    file.committed=true;return true;
+    file.committed=true;error=warning;return true;
 }
 
 static string escapeChapterText(const string& value) {
@@ -786,136 +789,6 @@ bool MediaProcessor::extractHiddenFromMediaCore(const string& containerPath,cons
         if(!out || !FileSafety::copyExact(in,out,payloadSize,true) || !out.commit()){errorMsg="Không trích được file; không ghi đè đầu ra.";return false;}
         if(modern && !restoreHiddenTimes(info,output)){errorMsg="Đã trích nhưng không khôi phục được timestamp.";return false;}return true;
     }catch(...){errorMsg="Không thể trích xuất file ẩn.";return false;}
-}
-
-void MediaProcessor::hideFileInImage() {
-    if (!SystemCore::requireFeature(Feature::Steganography)) { SystemCore::waitEnter(); return; }
-    SystemCore::cls();
-    std::cout << "\n \x1b[38;2;195;165;255m╭── GIẤU FILE TRONG ẢNH (STEGANOGRAPHY ≤10 MB) ───╮\x1b[0m\n"
-              << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"
-              << "Nhập đường dẫn Ảnh nền (jpg/png): ";
-    std::string imagePath;
-    std::getline(std::cin, imagePath);
-    imagePath = SystemCore::trim(imagePath);
-    if (!imagePath.empty() && imagePath.front() == '"' && imagePath.back() == '"') {
-        imagePath = imagePath.substr(1, imagePath.length() - 2);
-    }
-
-    std::cout << "Nhập đường dẫn File cần ẩn (zip/txt/exe): ";
-    std::string hiddenFilePath;
-    std::getline(std::cin, hiddenFilePath);
-    hiddenFilePath = SystemCore::trim(hiddenFilePath);
-    if (!hiddenFilePath.empty() && hiddenFilePath.front() == '"' && hiddenFilePath.back() == '"') {
-        hiddenFilePath = hiddenFilePath.substr(1, hiddenFilePath.length() - 2);
-    }
-
-    std::cout << "Nhập tên file đầu ra (vd: final.jpg): ";
-    std::string outputFileName;
-    std::getline(std::cin, outputFileName);
-    outputFileName = SystemCore::trim(outputFileName);
-    if (!outputFileName.empty() && outputFileName.front() == '"' && outputFileName.back() == '"') {
-        outputFileName = outputFileName.substr(1, outputFileName.length() - 2);
-    }
-
-    if (imagePath.empty() || hiddenFilePath.empty() || outputFileName.empty()) {
-        std::cout << "\nĐường dẫn không được để trống!\n";
-        return;
-    }
-
-    std::cout << "\nĐang nhúng file\n";
-    std::string errorMsg;
-    if (hideFileInImageCore(imagePath, hiddenFilePath, outputFileName, errorMsg)) {
-        uintmax_t outputSize = fs::file_size(outputFileName);
-        std::cout << "\nThành công! File đầu ra: " << outputFileName
-                  << " (" << SystemCore::formatSize(outputSize) << ")\n"
-                  << "File xem như ảnh thường. Dùng chức năng trích xuất để lấy file ẩn.\n";
-    } else {
-        std::cout << "\nLỗi: " << errorMsg << "\n";
-    }
-}
-
-void MediaProcessor::hideFileInVideo() {
-    if (!SystemCore::requireFeature(Feature::Steganography)) { SystemCore::waitEnter(); return; }
-    SystemCore::cls();
-    std::cout << "\n \x1b[38;2;195;165;255m╭── GIẤU FILE TRONG VIDEO (≤100 MB) ───────────────╮\x1b[0m\n"
-              << " \x1b[38;2;195;165;255m╰──────────────────────────────────────────────────╯\x1b[0m\n\n"
-              << "Nhập đường dẫn Video nền (mp4/mkv): ";
-    std::string videoPath;
-    std::getline(std::cin, videoPath);
-    videoPath = SystemCore::trim(videoPath);
-    if (!videoPath.empty() && videoPath.front() == '"' && videoPath.back() == '"') {
-        videoPath = videoPath.substr(1, videoPath.length() - 2);
-    }
-
-    std::cout << "Nhập đường dẫn File cần ẩn (zip/txt/exe): ";
-    std::string hiddenFilePath;
-    std::getline(std::cin, hiddenFilePath);
-    hiddenFilePath = SystemCore::trim(hiddenFilePath);
-    if (!hiddenFilePath.empty() && hiddenFilePath.front() == '"' && hiddenFilePath.back() == '"') {
-        hiddenFilePath = hiddenFilePath.substr(1, hiddenFilePath.length() - 2);
-    }
-
-    std::cout << "Nhập tên file đầu ra (vd: final.mp4): ";
-    std::string outputFileName;
-    std::getline(std::cin, outputFileName);
-    outputFileName = SystemCore::trim(outputFileName);
-    if (!outputFileName.empty() && outputFileName.front() == '"' && outputFileName.back() == '"') {
-        outputFileName = outputFileName.substr(1, outputFileName.length() - 2);
-    }
-
-    if (videoPath.empty() || hiddenFilePath.empty() || outputFileName.empty()) {
-        std::cout << "\nĐường dẫn không được để trống!\n";
-        return;
-    }
-
-    std::cout << "\nĐang nhúng file\n";
-    std::string errorMsg;
-    if (hideFileInVideoCore(videoPath, hiddenFilePath, outputFileName, errorMsg)) {
-        uintmax_t outputSize = fs::file_size(outputFileName);
-        std::cout << "\nThành công! File đầu ra: " << outputFileName
-                  << " (" << SystemCore::formatSize(outputSize) << ")\n"
-                  << "File xem bình thường. Dùng chức năng trích xuất để lấy file ẩn.\n";
-    } else {
-        std::cout << "\nLỗi: " << errorMsg << "\n";
-    }
-}
-
-void MediaProcessor::extractHiddenFromMedia() {
-    if (!SystemCore::requireFeature(Feature::Steganography)) { SystemCore::waitEnter(); return; }
-    SystemCore::cls();
-    std::cout << "\n   DÒ TÌM & TRÍCH XUẤT FILE ẨN TỪ MEDIA\n\n"
-              << "Nhập đường dẫn File chứa (ảnh/video): ";
-    std::string in;
-    std::getline(std::cin, in);
-    in = SystemCore::trim(in);
-    if (!in.empty() && in.front() == '"' && in.back() == '"') {
-        in = in.substr(1, in.length() - 2);
-    }
-
-    if (in.empty()) {
-        std::cout << "\nĐường dẫn không được để trống!\n";
-        return;
-    }
-
-    if (!fs::exists(in)) {
-        std::cout << "\nFile không tồn tại!\n";
-        return;
-    }
-
-    long long now = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::system_clock::now().time_since_epoch()
-    ).count();
-    fs::path containerPath(in);
-    std::string outputPath = (containerPath.parent_path() / ("extracted_" + std::to_string(now) + ".bin")).u8string();
-
-    std::cout << "\nĐang phân tích & trích xuất\n";
-    std::string errorMsg;
-    if (extractHiddenFromMediaCore(in, outputPath, errorMsg)) {
-        std::cout << "File lưu tại : " << outputPath << "\n";
-        std::cout << "Dung lượng   : " << SystemCore::formatSize(fs::file_size(outputPath)) << "\n\n";
-    } else {
-        std::cout << "\nLỗi: " << errorMsg << "\n";
-    }
 }
 
 void MediaProcessor::processAnFileTrongFile() {

@@ -14,17 +14,11 @@ public:
 
     // Dọn rác hệ thống (ủy quyền sang DiskCleaner)
     void runClean();
-    void runCleanChoice(int choice = 0);
 
     // Tối ưu hiệu năng
     int optimizeStartupApps();
     int optimizeBackgroundServices();
     bool optimizeVisualEffectsAndUI();
-
-    // Alias tương thích ngược
-    inline int runOptimizeTier1() { return optimizeStartupApps(); }
-    inline int runOptimizeTier2() { return optimizeBackgroundServices(); }
-    inline bool runOptimizeTier3() { return optimizeVisualEffectsAndUI(); }
     void runOptimizeChoice(int choice);
     void multiTierPerformanceOptimize();
 
