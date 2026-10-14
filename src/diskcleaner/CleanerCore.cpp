@@ -14,6 +14,8 @@
 #include <shellapi.h>
 #include <shlobj.h>
 
+#include <cwchar>
+
 const char* CleanerCore::C_RESET   = "\033[0m";
 const char* CleanerCore::C_BOLD    = "\033[1m";
 const char* CleanerCore::C_DIM     = "\033[2m";
@@ -35,7 +37,172 @@ void recordCleanupFailure(const std::error_code& ec, CleanStats& stats) {
     if (isExpectedCleanupFailure(ec)) stats.itemsSkipped++;
     else stats.errorsCount++;
 }
+
+struct CachedEnvPaths {
+    fs::path drive;
+    fs::path windows;
+    std::vector<fs::path> allowedCaches;
+    std::vector<fs::path> protectedRoots;
+    std::vector<fs::path> userRoots;
+    bool valid = false;
+};
+
+// Cache đường dẫn hệ thống 1 lần duy nhất thay vì gọi Win32 API hàng trăm nghìn lần
+const CachedEnvPaths& getEnvPaths() {
+    static const CachedEnvPaths env = [] {
+        CachedEnvPaths e;
+        wchar_t winBuf[MAX_PATH]{};
+        UINT count = GetWindowsDirectoryW(winBuf, MAX_PATH);
+        if (!count || count >= MAX_PATH) return e;
+        e.windows = fs::path(winBuf).lexically_normal();
+        e.drive = e.windows.root_path();
+
+        e.allowedCaches = {
+            e.windows / L"Temp", e.windows / L"Prefetch",
+            e.windows / L"SoftwareDistribution" / L"Download",
+            e.windows / L"LiveKernelReports", e.windows / L"Minidump",
+            e.windows / L"Logs" / L"CBS", e.windows / L"Logs" / L"DISM",
+            e.windows / L"Panther",
+            e.drive / L"ProgramData" / L"Microsoft" / L"Windows" / L"WER" / L"Temp",
+            e.drive / L"ProgramData" / L"Microsoft" / L"Windows" / L"DeliveryOptimization" / L"Cache"
+        };
+        for (const auto& name : {L"Program Files", L"Program Files (x86)", L"Recovery",
+                                 L"System Volume Information", L"Windows.old", L"$WINDOWS.~BT", L"$WINDOWS.~WS"}) {
+            e.protectedRoots.push_back(e.drive / name);
+        }
+        wchar_t profBuf[MAX_PATH]{};
+        DWORD len = GetEnvironmentVariableW(L"USERPROFILE", profBuf, MAX_PATH);
+        if (len > 0 && len < MAX_PATH) {
+            fs::path home(profBuf);
+            e.userRoots = {home, home / L"Desktop", home / L"Documents", home / L"Downloads", home / L"AppData"};
+        }
+        e.valid = true;
+        return e;
+    }();
+    return env;
 }
+
+// Kiem tra nhanh ten bao ve tai cho ma khong quet nguoc len o dia goc
+inline bool isProtectedName(const wchar_t* name) {
+    return _wcsicmp(name, L".git") == 0 ||
+           _wcsicmp(name, L".github") == 0 ||
+           _wcsicmp(name, L".cmd-box-protect") == 0;
+}
+
+// Xóa file siêu tốc khi thư mục cha ĐÃ ĐƯỢC KHÓA & XÁC THỰC AN TOÀN
+bool fastDeleteFileInLockedDir(const std::wstring& fullPath, const WIN32_FIND_DATAW& fd,
+                               bool dryRun, CleanStats& stats) {
+    if ((fd.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) ||
+        isProtectedName(fd.cFileName)) {
+        stats.itemsSkipped++;
+        return false;
+    }
+    if (!dryRun) {
+        HANDLE h = CreateFileW(fullPath.c_str(), DELETE,
+                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                               nullptr, OPEN_EXISTING,
+                               FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+        if (h == INVALID_HANDLE_VALUE) {
+            DWORD err = GetLastError();
+            if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND) return true;
+            stats.itemsSkipped++;
+            return false;
+        }
+        FILE_DISPOSITION_INFO remove{TRUE};
+        bool ok = SetFileInformationByHandle(h, FileDispositionInfo, &remove, sizeof(remove)) != FALSE;
+        CloseHandle(h);
+        if (!ok) {
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_READONLY) {
+                SetFileAttributesW(fullPath.c_str(), fd.dwFileAttributes & ~FILE_ATTRIBUTE_READONLY);
+                HANDLE h2 = CreateFileW(fullPath.c_str(), DELETE,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        nullptr, OPEN_EXISTING,
+                                        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+                if (h2 != INVALID_HANDLE_VALUE) {
+                    ok = SetFileInformationByHandle(h2, FileDispositionInfo, &remove, sizeof(remove)) != FALSE;
+                    CloseHandle(h2);
+                }
+            }
+        }
+        if (!ok) {
+            stats.itemsSkipped++;
+            return false;
+        }
+    }
+    uintmax_t size = (uintmax_t(fd.nFileSizeHigh) << 32) | fd.nFileSizeLow;
+    stats.bytesFreed += static_cast<long long>((std::min)(size, uintmax_t(LLONG_MAX - stats.bytesFreed)));
+    stats.filesDeleted++;
+    return true;
+}
+
+// Duyệt và xóa đệ quy bên trong thư mục ĐÃ ĐƯỢC KHÓA bằng FindFirstFileExW (LARGE_FETCH)
+bool fastWipeLockedSubtree(const std::wstring& dirPath, bool deleteSelf,
+                           bool dryRun, CleanStats& stats) {
+    if (GetFileAttributesW((dirPath + L"\\.git").c_str()) != INVALID_FILE_ATTRIBUTES ||
+        GetFileAttributesW((dirPath + L"\\.cmd-box-protect").c_str()) != INVALID_FILE_ATTRIBUTES) {
+        stats.itemsSkipped++;
+        return false;
+    }
+
+    std::wstring searchPattern = dirPath + L"\\*";
+    WIN32_FIND_DATAW fd{};
+    HANDLE hFind = FindFirstFileExW(searchPattern.c_str(), FindExInfoBasic, &fd,
+                                    FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        DWORD err = GetLastError();
+        if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND) return true;
+        stats.itemsSkipped++;
+        return false;
+    }
+
+    bool allSuccess = true;
+    do {
+        if (fd.cFileName[0] == L'.' &&
+            (fd.cFileName[1] == L'\0' || (fd.cFileName[1] == L'.' && fd.cFileName[2] == L'\0'))) {
+            continue;
+        }
+        if ((fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) || isProtectedName(fd.cFileName)) {
+            stats.itemsSkipped++;
+            allSuccess = false;
+            continue;
+        }
+
+        std::wstring childPath = dirPath + L"\\" + fd.cFileName;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            if (!fastWipeLockedSubtree(childPath, true, dryRun, stats)) {
+                allSuccess = false;
+            }
+        } else {
+            if (!fastDeleteFileInLockedDir(childPath, fd, dryRun, stats)) {
+                allSuccess = false;
+            }
+        }
+    } while (FindNextFileW(hFind, &fd));
+    FindClose(hFind);
+
+    if (deleteSelf && allSuccess) {
+        if (!dryRun) {
+            if (!RemoveDirectoryW(dirPath.c_str())) {
+                DWORD err = GetLastError();
+                if (err == ERROR_ACCESS_DENIED) {
+                    SetFileAttributesW(dirPath.c_str(), FILE_ATTRIBUTE_NORMAL);
+                    if (!RemoveDirectoryW(dirPath.c_str())) {
+                        err = GetLastError();
+                    } else {
+                        err = ERROR_SUCCESS;
+                    }
+                }
+                if (err != ERROR_SUCCESS && err != ERROR_FILE_NOT_FOUND && err != ERROR_PATH_NOT_FOUND) {
+                    stats.itemsSkipped++;
+                    return false;
+                }
+            }
+        }
+        stats.dirsDeleted++;
+    }
+    return allSuccess;
+}
+} // namespace
 
 void CleanerCore::initConsole() {
     SetConsoleOutputCP(CP_UTF8);
@@ -74,38 +241,33 @@ long long CleanerCore::getAvailableDiskSpace(const std::string& drivePath) {
 }
 
 bool CleanerCore::isCriticalPath(const fs::path& p) {
+    const auto& env = getEnvPaths();
+    if (!env.valid) return true;
+
     std::error_code ec;
     const fs::path absolute = fs::absolute(p, ec).lexically_normal();
     if (ec || absolute.empty() || absolute == absolute.root_path()) return true;
     const fs::path normalized = fs::weakly_canonical(absolute, ec);
-    if (ec) return true; // Cannot establish a safe path.
-    const auto drive = fs::path(getSystemDriveRoot());
-    wchar_t windowsBuffer[MAX_PATH]{};
-    UINT count = GetWindowsDirectoryW(windowsBuffer, MAX_PATH);
-    if (!count || count >= MAX_PATH) return true;
-    const fs::path windows(windowsBuffer);
-    const std::vector<fs::path> caches = {
-        windows / L"Temp", windows / L"Prefetch", windows / L"SoftwareDistribution" / L"Download",
-        windows / L"LiveKernelReports", windows / L"Minidump", windows / L"Logs" / L"CBS",
-        windows / L"Logs" / L"DISM", windows / L"Panther",
-        drive / L"ProgramData" / L"Microsoft" / L"Windows" / L"WER" / L"Temp",
-        drive / L"ProgramData" / L"Microsoft" / L"Windows" / L"DeliveryOptimization" / L"Cache"
-    };
+    if (ec) return true;
+
     bool cache = false;
-    for (const auto& allowed : caches) if (FileSafety::within(normalized, allowed)) cache = true;
-    if (FileSafety::within(normalized, windows) && !cache &&
-        normalized != windows / L"MEMORY.DMP" && normalized != windows / L"WindowsUpdate.log") return true;
-    for (const auto& name : {L"Program Files", L"Program Files (x86)", L"Recovery",
-                            L"System Volume Information", L"Windows.old", L"$WINDOWS.~BT", L"$WINDOWS.~WS"})
-        if (FileSafety::within(normalized, drive / name)) return true;
-    if (FileSafety::within(normalized, drive / L"ProgramData") && !cache) return true;
-    if (normalized == drive / L"Users") return true;
+    for (const auto& allowed : env.allowedCaches) {
+        if (FileSafety::within(normalized, allowed)) { cache = true; break; }
+    }
+    if (FileSafety::within(normalized, env.windows) && !cache &&
+        normalized != env.windows / L"MEMORY.DMP" && normalized != env.windows / L"WindowsUpdate.log") {
+        return true;
+    }
+    for (const auto& prot : env.protectedRoots) {
+        if (FileSafety::within(normalized, prot)) return true;
+    }
+    if (FileSafety::within(normalized, env.drive / L"ProgramData") && !cache) return true;
+    if (normalized == env.drive / L"Users") return true;
     if (GetFileAttributesW((absolute / L".git").c_str()) != INVALID_FILE_ATTRIBUTES) return true;
-    // Never operate on a repository, protected subtree, or a complete user profile.
+
     for (fs::path parent = absolute; !parent.empty();) {
         std::wstring name = parent.filename().wstring();
-        for (auto& c : name) c = std::towlower(c);
-        if (name == L".git" || name == L".github") return true;
+        if (isProtectedName(name.c_str())) return true;
         auto marker = parent / L".cmd-box-protect";
         DWORD attrs = GetFileAttributesW(marker.c_str());
         if (attrs != INVALID_FILE_ATTRIBUTES) return true;
@@ -114,17 +276,9 @@ bool CleanerCore::isCriticalPath(const fs::path& p) {
         if (next == parent) break;
         parent = next;
     }
-    std::wstring profile;
-    DWORD length = GetEnvironmentVariableW(L"USERPROFILE", nullptr, 0);
-    if (length) {
-        profile.resize(length);
-        DWORD read = GetEnvironmentVariableW(L"USERPROFILE", profile.data(), length);
-        if (read && read < length) {
-            profile.resize(read);
-            const fs::path home(profile);
-            for (const auto& root : {home, home / L"Desktop", home / L"Documents", home / L"Downloads", home / L"AppData"})
-                if (FileSafety::within(normalized, root) && FileSafety::within(root, normalized)) return true;
-        }
+
+    for (const auto& root : env.userRoots) {
+        if (FileSafety::within(normalized, root) && FileSafety::within(root, normalized)) return true;
     }
     return false;
 }
@@ -152,9 +306,27 @@ bool CleanerCore::runCommand(const std::string& cmd, bool hideWindow, DWORD time
 
 bool CleanerCore::wipeFolderContents(const fs::path& dirPath, bool dryRun, CleanStats& stats) {
     try {
+        std::error_code ec;
+        fs::path absPath = fs::absolute(dirPath, ec).lexically_normal();
+        if (ec) { stats.errorsCount++; return false; }
+
+        // Kiểm tra tồn tại cực nhanh trước khi khóa AncestorLocks
+        DWORD rootAttr = GetFileAttributesW(absPath.c_str());
+        if (rootAttr == INVALID_FILE_ATTRIBUTES) {
+            DWORD err = GetLastError();
+            if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND) return true;
+            stats.itemsSkipped++; return false;
+        }
+        if (!(rootAttr & FILE_ATTRIBUTE_DIRECTORY) || (rootAttr & FILE_ATTRIBUTE_REPARSE_POINT)) {
+            stats.itemsSkipped++; return false;
+        }
+
+        // Khóa toàn bộ nhánh cha 1 LẦN DUY NHẤT cho cả cây thư mục
         FileSafety::AncestorLocks parents;
-        if (!parents.acquire(dirPath) || isCriticalPath(dirPath)) { stats.itemsSkipped++; return false; }
-        HANDLE directory = CreateFileW(dirPath.c_str(), FILE_READ_ATTRIBUTES,
+        if (!parents.acquire(absPath) || isCriticalPath(absPath)) {
+            stats.itemsSkipped++; return false;
+        }
+        HANDLE directory = CreateFileW(absPath.c_str(), FILE_READ_ATTRIBUTES,
             FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
             FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
         if (directory == INVALID_HANDLE_VALUE) {
@@ -166,23 +338,15 @@ bool CleanerCore::wipeFolderContents(const fs::path& dirPath, bool dryRun, Clean
         BY_HANDLE_FILE_INFORMATION info{};
         if (!GetFileInformationByHandle(directory, &info) ||
             !(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
-            (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) { stats.itemsSkipped++; return false; }
-        std::error_code ec;
-        auto it = fs::directory_iterator(dirPath, ec);
-        if (ec) { recordCleanupFailure(ec, stats); return false; }
-        bool success = true;
-        while (it != fs::directory_iterator()) {
-            const auto path = it->path();
-            DWORD attributes = GetFileAttributesW(path.c_str());
-            if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
-                stats.itemsSkipped++; success = false;
-            } else if (attributes & FILE_ATTRIBUTE_DIRECTORY) {
-                if (!forceDeleteFolder(path, dryRun, stats)) success = false;
-            } else if (!safeDeleteFile(path, dryRun, stats)) success = false;
-            it.increment(ec);
-            if (ec) { recordCleanupFailure(ec, stats); return false; }
+            (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+            stats.itemsSkipped++; return false;
         }
-        return success;
+
+        std::wstring cleanPath = absPath.wstring();
+        while (!cleanPath.empty() && (cleanPath.back() == L'\\' || cleanPath.back() == L'/')) {
+            cleanPath.pop_back();
+        }
+        return fastWipeLockedSubtree(cleanPath, false, dryRun, stats);
     } catch (const std::exception&) { stats.errorsCount++; return false; }
 }
 

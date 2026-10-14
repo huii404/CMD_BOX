@@ -490,6 +490,22 @@ bool SystemOptimizer::ServiceControlAPI(std::string serviceName, DWORD startupTy
     CloseServiceHandle(service); CloseServiceHandle(manager); return ok;
 }
 
+static std::string truncateUtf8(const std::string& str, size_t maxChars) {
+    size_t chars = 0, byteIdx = 0;
+    while (byteIdx < str.size() && chars < maxChars) {
+        unsigned char c = static_cast<unsigned char>(str[byteIdx]);
+        size_t len = 1;
+        if ((c & 0x80) == 0) len = 1;
+        else if ((c & 0xE0) == 0xC0) len = 2;
+        else if ((c & 0xF0) == 0xE0) len = 3;
+        else if ((c & 0xF8) == 0xF0) len = 4;
+        if (byteIdx + len > str.size()) break;
+        byteIdx += len;
+        chars++;
+    }
+    return byteIdx < str.size() ? str.substr(0, byteIdx) + "..." : str;
+}
+
 // Quản lý 40 dịch vụ theo từng mục; xem ảnh hưởng trước khi chọn Manual/Disabled.
 void SystemOptimizer::turnOffServicesMenu() {
     if (!SystemCore::requireFeature(Feature::AdvancedServices)) { SystemCore::waitEnter(); return; }
@@ -547,14 +563,15 @@ void SystemOptimizer::turnOffServicesMenu() {
         
         for (size_t i = 0; i < targetSvcs.size(); ++i) {
             std::cout << " [" << std::setw(2) << i + 1 << "] " 
-                      << std::left << std::setw(30) << (targetSvcs[i].desc.substr(0, 45) + "...") 
-                      << " [" << targetSvcs[i].name << "]\n";
+                      << std::left << std::setw(20) << targetSvcs[i].name << " : "
+                      << truncateUtf8(targetSvcs[i].desc, 45) << "\n";
         }
         std::cout << "\n [A] Hướng dẫn về cấu hình hàng loạt\n"
                   << " [0] Quay lại\n\n"
                   << "Chọn dịch vụ, hoặc [A]/[0]: ";
         std::string input;
-        std::cin >> input;
+        if (!std::getline(std::cin, input)) return;
+        input = SystemCore::trim(input);
 
         if (input == "0") return;
 
@@ -564,7 +581,6 @@ void SystemOptimizer::turnOffServicesMenu() {
         // --- CẤU HÌNH HÀNG LOẠT TẤT CẢ DỊCH VỤ ---
         if (input == "A" || input == "a") {
             cout << "Cấu hình hàng loạt có thể tắt cập nhật/thông báo. Hãy chọn từng dịch vụ để kiểm tra trước.\n";
-            cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
             sc.waitEnter();
         }
         // --- CẤU HÌNH TỪNG DỊCH VỤ RIÊNG LẺ THEO SỐ THỨ TỰ ---

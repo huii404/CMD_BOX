@@ -179,13 +179,13 @@ void UtilityTools::spamText() {
     
     bool stopped = false;
     int executed = 0;
+    sc.setClipboard(content);
     for (int i = 0; i < times; i++) { 
         if (SystemCore::checkEmergencyStop()) {
             stopped = true;
             break;
         }
 
-        sc.setClipboard(content); 
         sc.pressCtrlV();
         Sleep(15);
         sc.pressEnter();

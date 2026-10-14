@@ -54,7 +54,7 @@ GpuCodecInfo MediaProcessor::getGpuEncoder() {
     cachedGpuInfo = {"libx264", "-c:v libx264 -crf 21 -preset medium -pix_fmt yuv420p",
                      "-c:v libx264 -crf 23 -preset fast -pix_fmt yuv420p", "CPU (libx264 Software Encoder)"};
     for (const auto& candidate : candidates) {
-        string command = ffmpeg + " -hide_banner -loglevel error -f lavfi -i color=s=64x64:d=0.1 -c:v " +
+        string command = ffmpeg + " -nostdin -hide_banner -loglevel error -f lavfi -i color=s=64x64:d=0.1 -c:v " +
                          candidate.encoder + " -f null -";
         if (SystemCore::runRawCommand(command)) {
             cachedGpuInfo = candidate;
@@ -183,7 +183,7 @@ static string audioMemoryFlags(const fs::path& source) {
 }
 
 bool MediaProcessor::extractAudioCore(const string& inputPath,const string& outputPath) {
-    auto cmd=getFFmpegPath()+" -n -hide_banner -loglevel error -i "+MediaMetadata::quote(inputPath)+" -map 0:a:0 -map_metadata 0 -vn -id3v2_version 4 -q:a 2 "+audioMemoryFlags(fs::u8path(inputPath))+" "+MediaMetadata::quote(outputPath);
+    auto cmd=getFFmpegPath()+" -nostdin -n -hide_banner -loglevel error -i "+MediaMetadata::quote(inputPath)+" -map 0:a:0 -map_metadata 0 -vn -id3v2_version 4 -q:a 2 "+audioMemoryFlags(fs::u8path(inputPath))+" "+MediaMetadata::quote(outputPath);
     return SystemCore::runRawCommand(cmd);
 }
 bool MediaProcessor::changeSpeedCore(const string& inputPath,const string& outputPath,float speed) {
@@ -193,7 +193,7 @@ bool MediaProcessor::changeSpeedCore(const string& inputPath,const string& outpu
     auto chapters=fs::u8path(outputPath).parent_path()/L"scaled-chapters.ffmetadata";
     if(!writeScaledChapters(info,speed,chapters))return false;
     ostringstream s,pts;s<<setprecision(9)<<speed;pts<<setprecision(12)<<(1.0/double(speed));
-    string command=getFFmpegPath()+" -n -hide_banner -loglevel error -i "+MediaMetadata::quote(inputPath)+" -f ffmetadata -i "+MediaMetadata::quote(chapters.u8string())+
+    string command=getFFmpegPath()+" -nostdin -n -hide_banner -loglevel error -i "+MediaMetadata::quote(inputPath)+" -f ffmetadata -i "+MediaMetadata::quote(chapters.u8string())+
         streamFlags(fs::u8path(outputPath))+" -map_metadata 0 -map_chapters 1 -vf "+MediaMetadata::quote("setpts="+pts.str()+"*PTS")+" -af "+MediaMetadata::quote("atempo="+s.str())+
         " "+encoder+" -c:a aac "+containerMetadataFlags(fs::u8path(outputPath))+MediaMetadata::quote(outputPath);
     return SystemCore::runRawCommand(command);
@@ -319,10 +319,10 @@ void MediaProcessor::processMediaAuto() {
                 string ffmpeg = getFFmpegPath();
                 string cmd;
                 if (finalOutPath.extension() == ".png") {
-                    cmd = ffmpeg + " -n -hide_banner -loglevel error -noautorotate -i \"" + input + "\" -map_metadata 0 -c:v png -compression_level 9 -pred mixed \"" + tempOutPath.u8string() + "\"";
+                    cmd = ffmpeg + " -nostdin -n -hide_banner -loglevel error -noautorotate -i \"" + input + "\" -map_metadata 0 -c:v png -compression_level 9 -pred mixed \"" + tempOutPath.u8string() + "\"";
                     cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu PNG";
                 } else {
-                    cmd = ffmpeg + " -n -hide_banner -loglevel error -noautorotate -i \"" + input + "\" -map_metadata 0 -q:v 2 \"" + tempOutPath.u8string() + "\"";
+                    cmd = ffmpeg + " -nostdin -n -hide_banner -loglevel error -noautorotate -i \"" + input + "\" -map_metadata 0 -q:v 2 \"" + tempOutPath.u8string() + "\"";
                     cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu JPG";
                 }
                 renderSuccess = SystemCore::runRawCommand(cmd) && fs::exists(tempOutPath);
@@ -331,7 +331,7 @@ void MediaProcessor::processMediaAuto() {
                 string ffmpeg = getFFmpegPath();
                 string encoder;
                 if(!safeVideoEncoder(mediaInfo,gpu.compressParams,encoder,metadataError)){cout<<metadataError<<"\n";continue;}
-                string cmd=ffmpeg+" -n -hide_banner -loglevel error -i "+MediaMetadata::quote(input)+streamFlags(tempOutPath)+" -map_metadata 0 -map_chapters 0 "+encoder+" -c:a aac -b:a 160k "+containerMetadataFlags(tempOutPath)+MediaMetadata::quote(tempOutPath.u8string());
+                string cmd=ffmpeg+" -nostdin -n -hide_banner -loglevel error -i "+MediaMetadata::quote(input)+streamFlags(tempOutPath)+" -map_metadata 0 -map_chapters 0 "+encoder+" -c:a aac -b:a 160k "+containerMetadataFlags(tempOutPath)+MediaMetadata::quote(tempOutPath.u8string());
                 cout << " \x1b[35m[Media]\x1b[0m Đang tối ưu Video (" << gpu.encoder << ")";
                 renderSuccess = SystemCore::runRawCommand(cmd) && fs::exists(tempOutPath);
             }
@@ -379,7 +379,7 @@ void MediaProcessor::processMediaAuto() {
                 cout << "\nRender thất bại!\n\n";
             }
 
-            fflush(stdout);
+            std::cout << std::flush;
         }
 
         totalBytesSaved += currentBytesSaved;
@@ -594,7 +594,7 @@ void MediaProcessor::processConvertFormatBatch() {
             if(!snapshot.valid || !probeMedia(source,info,error)){cout<<error<<'\n';continue;}
             auto dir=getMediaOutputDirectory(source);FileSafety::TemporaryDirectory scratch(dir);if(dir.empty() || !scratch){cout<<"Không tạo được thư mục xuất.\n";continue;}
             auto temporary=scratch.path()/fs::u8path("render"+extension);auto requested=dir/fs::u8path(source.stem().u8string()+extension);
-            string prefix=getFFmpegPath()+" -n -hide_banner -loglevel error ";bool rendered=false;
+            string prefix=getFFmpegPath()+" -nostdin -n -hide_banner -loglevel error ";bool rendered=false;
             if(photos){
                 string pixel;
                 // PNG preserves sample depth; JPG/WebP may reduce it.
@@ -684,10 +684,6 @@ void MediaProcessor::normalizeMediaFilenames() {
     std::cout << "\nBắt đầu chuẩn hóa\n";
     int successCount = 0;
 
-    auto now = std::chrono::high_resolution_clock::now();
-    auto timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
-    std::mt19937_64 rng(timestamp);
-
     for (const auto& oldPath : filesToRename) {
         std::string ext = oldPath.extension().u8string();
         std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return char(std::tolower(c)); });
@@ -698,16 +694,37 @@ void MediaProcessor::normalizeMediaFilenames() {
         else if (std::find(audExts.begin(), audExts.end(), ext) != audExts.end()) prefix = "MP3_";
         else continue;
 
-        long long uniqueNumber = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
-        uniqueNumber += rng() % 1000;
+        std::string dateStamp;
+        MediaMetadata::Bytes blob;
+        if (MediaMetadata::image(oldPath) && MediaMetadata::readExifBlob(oldPath, blob)) {
+            std::string exif = MediaMetadata::exifDate(blob); // "YYYY:MM:DD hh:mm:ss"
+            if (exif.size() >= 19 && std::isdigit(static_cast<unsigned char>(exif[0]))) {
+                dateStamp = exif.substr(0, 4) + exif.substr(5, 2) + exif.substr(8, 2) + "_" +
+                            exif.substr(11, 2) + exif.substr(14, 2) + exif.substr(17, 2);
+            }
+        }
+        if (dateStamp.empty()) {
+            MediaMetadata::Times t = MediaMetadata::readTimes(oldPath);
+            FILETIME local{};
+            SYSTEMTIME st{};
+            if (t.valid && FileTimeToLocalFileTime(&t.written, &local) && FileTimeToSystemTime(&local, &st)) {
+                char buf[32];
+                std::snprintf(buf, sizeof(buf), "%04u%02u%02u_%02u%02u%02u",
+                              st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+                dateStamp = buf;
+            }
+        }
+        if (dateStamp.empty()) {
+            dateStamp = std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count());
+        }
 
-        std::string newName = prefix + std::to_string(uniqueNumber) + ext;
+        std::string newName = prefix + dateStamp + ext;
         std::filesystem::path newPath = oldPath.parent_path() / newName;
 
         int counter = 1;
         while (std::filesystem::exists(newPath)) {
-            newName = prefix + std::to_string(uniqueNumber) + "_" + std::to_string(counter) + ext;
+            newName = prefix + dateStamp + "_" + std::to_string(counter) + ext;
             newPath = oldPath.parent_path() / newName;
             counter++;
         }
@@ -791,6 +808,46 @@ bool MediaProcessor::extractHiddenFromMediaCore(const string& containerPath,cons
     }catch(...){errorMsg="Không thể trích xuất file ẩn.";return false;}
 }
 
+static bool detectHiddenPayload(const fs::path& p, std::string& outOriginalName) {
+    outOriginalName.clear();
+    std::error_code ec;
+    auto size = fs::file_size(p, ec);
+    if (ec || size < 8) return false;
+
+    std::ifstream in(p, std::ios::binary);
+    if (!in) return false;
+
+    // 1. Kiểm tra chuẩn CBOXHID2 (32-byte footer)
+    if (size >= 32) {
+        unsigned char end[32]{};
+        in.seekg(static_cast<std::streamoff>(size - 32));
+        if (in.read(reinterpret_cast<char*>(end), 32) && std::memcmp(end + 24, "CBOXHID2", 8) == 0) {
+            uint64_t coverSize = wideSize(end);
+            uint64_t payloadSize = wideSize(end + 8);
+            uint64_t metaSize = wideSize(end + 16);
+            if (payloadSize > 0 && metaSize <= 1024 * 1024 &&
+                coverSize <= size - 32 && payloadSize <= size - 32 - coverSize &&
+                metaSize == size - 32 - coverSize - payloadSize) {
+                in.seekg(static_cast<std::streamoff>(coverSize + payloadSize));
+                std::string metadata(static_cast<size_t>(metaSize), '\0');
+                if (in.read(metadata.data(), static_cast<std::streamsize>(metaSize))) {
+                    try {
+                        auto info = MediaMetadata::Json::parse(metadata);
+                        outOriginalName = fs::u8path(info.value("originalName", "")).filename().u8string();
+                    } catch (...) {}
+                }
+                return true;
+            }
+        }
+    }
+
+    // 2. Kiểm tra chuẩn cũ HIDE (8-byte footer)
+    in.clear();
+    in.seekg(static_cast<std::streamoff>(size - 4));
+    char tag[4]{};
+    return in.read(tag, 4) && std::memcmp(tag, "HIDE", 4) == 0;
+}
+
 void MediaProcessor::processAnFileTrongFile() {
     if (!SystemCore::requireFeature(Feature::Steganography)) { SystemCore::waitEnter(); return; }
     SystemCore::cls();
@@ -821,27 +878,28 @@ void MediaProcessor::processAnFileTrongFile() {
             return;
         }
 
-        bool hasHidden = false;
-        try {
-            uintmax_t sz = fs::file_size(p);
-            if (sz >= 8) {
-                std::ifstream f(p, std::ios::binary);
-                f.seekg(-4, std::ios::end);
-                char tag[4] = {0};
-                f.read(tag, 4);
-                if (tag[0] == 'H' && tag[1] == 'I' && tag[2] == 'D' && tag[3] == 'E') {
-                    hasHidden = true;
-                }
-            }
-        } catch (...) {}
+        std::string origName;
+        bool hasHidden = detectHiddenPayload(p, origName);
 
         if (hasHidden) {
             std::cout << "\n[*] Phát hiện dữ liệu ẩn trong file: " << p.filename().u8string() << "\n"
                       << "[*] Đang tiến hành trích xuất...\n";
-            long long now = std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::system_clock::now().time_since_epoch()
-            ).count();
-            std::string outPath = (p.parent_path() / ("extracted_" + std::to_string(now) + ".bin")).u8string();
+            fs::path outPathFs;
+            if (!origName.empty()) {
+                fs::path desired = p.parent_path() / fs::u8path(origName);
+                outPathFs = desired;
+                int counter = 1;
+                while (fs::exists(outPathFs)) {
+                    outPathFs = desired.parent_path() /
+                        (desired.stem().u8string() + "_" + std::to_string(counter++) + desired.extension().u8string());
+                }
+            } else {
+                long long now = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()
+                ).count();
+                outPathFs = p.parent_path() / ("extracted_" + std::to_string(now) + ".bin");
+            }
+            std::string outPath = outPathFs.u8string();
             std::string err;
             if (extractHiddenFromMediaCore(paths[0], outPath, err)) {
                 std::cout << "\n[✓] Trích xuất thành công!\n"

@@ -2,7 +2,7 @@
 
 > **Nền tảng:** Windows (x64) | **Ngôn ngữ:** C++17 | **Biên dịch:** MinGW-w64 (GCC / UCRT64)
 >
-> **Phiên bản:** 2.1.1
+> **Phiên bản:** 2.3.0
 
 Các tác vụ media giữ nguyên file nguồn và ghi kết quả vào thư mục `CMD_BOX_Output` nằm cạnh file nguồn. Dọn tự động yêu cầu xác nhận, giữ Thùng rác và thư mục rollback Windows.
 
@@ -10,7 +10,7 @@ Lần đầu dùng, chọn hồ sơ trong **Setup** hoặc `main.exe setup`. Men
 
 Có thể mở menu như cũ hoặc gọi nhanh từ terminal:
 
-Trong menu tương tác, dùng **↑/↓** để chọn và **Enter** để mở. Có thể gõ số rồi nhấn **Enter** để chọn nhanh; **Esc** hoặc **0 + Enter** để quay lại. Menu giữ nguyên khung khi di chuyển lựa chọn. Các màn hình tác vụ vẫn nhận đường dẫn và nội dung văn bản như trước.
+Trong menu tương tác, gõ số lựa chọn và nhấn **Enter** để mở. Nhấn **0 + Enter** để quay lại hoặc thoát. Các màn hình tác vụ vẫn nhận đường dẫn và nội dung văn bản như trước.
 
 ```cmd
 main.exe --help
@@ -210,7 +210,7 @@ Chạy từ thư mục dự án:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-media.ps1
 ```
 
-Script tải bản **release essentials ZIP** mới nhất từ [Gyan](https://www.gyan.dev/ffmpeg/builds/), kiểm tra SHA-256 trước giải nén và kiểm tra chạy `ffmpeg.exe` trước khi chép vào `bin\`. Chỉ cài `ffmpeg.exe` từ gói, không cài `ffprobe.exe`. Giấy phép và README của gói nằm trong `bin\ffmpeg-docs`. Nếu FFmpeg đã chạy được, script bỏ qua tải; dùng `-ForceFFmpeg` để tải lại/cập nhật. Không cần quyền Administrator và không thay đổi PATH.
+Script tải bản **release essentials ZIP** mới nhất từ [Gyan](https://www.gyan.dev/ffmpeg/builds/), kiểm tra SHA-256 trước giải nén và kiểm tra chạy trước khi chép `ffmpeg.exe` cùng `ffprobe.exe` vào `bin\`. Giấy phép và README của gói nằm trong `bin\ffmpeg-docs`. Nếu các công cụ đã sẵn sàng, script bỏ qua tải; dùng `-ForceFFmpeg` để tải lại/cập nhật. Không cần quyền Administrator và không thay đổi PATH.
 
 Script cũng chuẩn bị ExifTool; xem [hướng dẫn media](docs/MEDIA.md). Code media hiện vẫn dùng ffprobe để kiểm tra stream/chapter và metadata video; các tác vụ đó cần ffprobe có sẵn cạnh `main.exe` hoặc trong PATH.
 

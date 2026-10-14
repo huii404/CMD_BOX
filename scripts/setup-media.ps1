@@ -5,7 +5,7 @@ function Initialize-FFmpeg {
     param([switch]$Force)
     $ffmpegProjectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
     $ffmpegBin = Join-Path $ffmpegProjectRoot 'bin'
-    $ffmpegNames = @('ffmpeg.exe')
+    $ffmpegNames = @('ffmpeg.exe', 'ffprobe.exe')
 
     function Test-FFmpegBinary([string]$BinaryPath) {
         if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) { return $false }
@@ -26,7 +26,7 @@ function Initialize-FFmpeg {
         if (-not (Test-FFmpegBinary (Join-Path $ffmpegBin $ffmpegName))) { $ffmpegReady = $false }
     }
     if ($ffmpegReady -and -not $Force) {
-        Write-Output 'Using bin/ffmpeg.exe. Use -ForceFFmpeg to download again.'
+        Write-Output 'Using bin/ffmpeg.exe and bin/ffprobe.exe. Use -ForceFFmpeg to download again.'
         return
     }
     if (-not [Environment]::Is64BitOperatingSystem) { throw 'Gyan FFmpeg builds require 64-bit Windows.' }
@@ -72,7 +72,7 @@ function Initialize-FFmpeg {
         foreach ($ffmpegName in $ffmpegNames) {
             Copy-Item -LiteralPath (Join-Path $ffmpegPackageRoot "bin/$ffmpegName") -Destination $ffmpegBin -Force
         }
-        Write-Output "FFmpeg $ffmpegVersion ready in bin. License and README: bin/ffmpeg-docs."
+        Write-Output "FFmpeg and ffprobe $ffmpegVersion ready in bin. License and README: bin/ffmpeg-docs."
     } finally {
         $ffmpegResolvedStage = [IO.Path]::GetFullPath($ffmpegStage)
         if ((Split-Path -Parent $ffmpegResolvedStage) -eq $ffmpegTempRoot.TrimEnd('\', '/') -and

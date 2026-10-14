@@ -150,7 +150,7 @@ CleanStats DevCleaner::clean(bool dryRun, bool scanProjects) {
     if (!baseLocal.empty()) {
         CleanerCore::wipeFolderContents(baseLocal + "\\npm-cache", dryRun, stats);
         CleanerCore::wipeFolderContents(baseLocal + "\\Yarn\\Cache", dryRun, stats);
-        CleanerCore::wipeFolderContents(baseLocal + "\\pnpm\\store", dryRun, stats);
+        // Bỏ qua kho hard-link pnpm\store (chỉ xóa cache tạm)
         CleanerCore::wipeFolderContents(baseLocal + "\\pnpm\\cache", dryRun, stats);
         CleanerCore::wipeFolderContents(baseLocal + "\\electron\\Cache", dryRun, stats);
         CleanerCore::wipeFolderContents(baseLocal + "\\Microsoft\\TypeScript", dryRun, stats);
@@ -167,7 +167,6 @@ CleanStats DevCleaner::clean(bool dryRun, bool scanProjects) {
         CleanerCore::wipeFolderContents(baseUser + "\\.turbo", dryRun, stats);
         CleanerCore::wipeFolderContents(baseUser + "\\.npm", dryRun, stats);
         CleanerCore::wipeFolderContents(baseUser + "\\.yarn", dryRun, stats);
-        CleanerCore::wipeFolderContents(baseUser + "\\.pnpm-store", dryRun, stats);
     }
 
     // Quét project là chế độ chuyên sâu vì bắt buộc phải duyệt cây thư mục.
